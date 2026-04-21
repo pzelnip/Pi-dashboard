@@ -5,11 +5,15 @@ and rotating RSS feeds.
 
 ## Running
 
-```
+```shell
 python3 server.py
 ```
 
 Then open <http://localhost:8080>. Port can be overridden with `DASHBOARD_PORT=9000`.
+
+Screenshot:
+
+![screenshot](screenshot.png)
 
 ## Configuration
 
