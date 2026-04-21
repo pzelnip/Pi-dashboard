@@ -1,12 +1,13 @@
 // Dashboard client: polls /api/* on independent schedules and renders into panels.
 
-const REFRESH_NHL_MS = 60 * 1000;
+const REFRESH_NHL_MS = 30 * 1000;
 const REFRESH_WEATHER_MS = 10 * 60 * 1000;
 const REFRESH_RSS_MS = 15 * 60 * 1000;
 
 let rssIndex = 0;
 let rssTotal = 1;
 let rssRotationMs = 30 * 1000;
+let rssRotationTimer = null;
 
 function setUpdated(panel) {
   const el = document.querySelector(`[data-updated-for="${panel}"]`);
@@ -44,6 +45,7 @@ function renderNHL(games) {
 
   const row = (t, isHome) => `
     <div class="game-team ${isHome ? "home" : "away"}">
+      ${t.logo ? `<img class="team-logo" src="${t.logo}" alt="" onerror="this.remove()">` : ""}
       <span class="team-name">${t.name || t.abbrev}</span>
       <span class="team-score">${t.score ?? ""}</span>
     </div>`;
@@ -164,14 +166,31 @@ async function refreshWeather() {
 
 // ---------- RSS ----------
 
+// Default RSS icon: orange square with two arcs + dot, standard recognizable mark.
+window.DEFAULT_RSS_ICON = `
+<svg class="feed-logo feed-logo-default" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <rect width="24" height="24" rx="4" fill="#f26522"/>
+  <circle cx="6.5" cy="17.5" r="2" fill="#fff"/>
+  <path d="M4 4a16 16 0 0 1 16 16h-3A13 13 0 0 0 4 7z" fill="#fff"/>
+  <path d="M4 10a10 10 0 0 1 10 10h-3a7 7 0 0 0-7-7z" fill="#fff"/>
+</svg>`.trim();
+
 function renderRSS(payload) {
   rssTotal = payload.total || 1;
-  document.getElementById("rss-title").innerHTML =
-    `${payload.name} <span class="rss-dots">${
+  const logo = payload.feedImage
+    ? `<img class="feed-logo" src="${payload.feedImage}" alt="" onerror="this.outerHTML=window.DEFAULT_RSS_ICON">`
+    : window.DEFAULT_RSS_ICON;
+  const titleEl = document.getElementById("rss-title");
+  titleEl.innerHTML =
+    `${logo}<span>${payload.name}</span> <span class="rss-dots">${
       Array.from({length: rssTotal}, (_, i) =>
-        `<span class="rss-dot ${i === payload.index ? 'active' : ''}"></span>`
+        `<button class="rss-dot ${i === payload.index ? 'active' : ''}" data-feed-index="${i}" aria-label="Feed ${i + 1}"></button>`
       ).join("")
     }</span>`;
+
+  titleEl.querySelectorAll(".rss-dot").forEach(btn => {
+    btn.addEventListener("click", () => jumpToFeed(Number(btn.dataset.feedIndex)));
+  });
 
   const el = bodyEl("rss");
   el.classList.remove("error");
@@ -181,7 +200,12 @@ function renderRSS(payload) {
   }
   el.innerHTML = `<ul class="rss-list">${
     payload.items.map(i => `
-      <li class="rss-item"><a href="${i.link}" target="_blank" rel="noopener">${i.title}</a></li>
+      <li class="rss-item">
+        <a href="${i.link}" target="_blank" rel="noopener">
+          ${i.image ? `<img class="rss-thumb" src="${i.image}" alt="" loading="lazy" onerror="this.remove()">` : ""}
+          <span class="rss-title">${i.title}</span>
+        </a>
+      </li>
     `).join("")
   }</ul>`;
 }
@@ -205,6 +229,18 @@ function rotateRSS() {
   refreshRSS();
 }
 
+function startRssRotationTimer() {
+  if (rssRotationTimer) clearInterval(rssRotationTimer);
+  rssRotationTimer = setInterval(rotateRSS, rssRotationMs);
+}
+
+function jumpToFeed(i) {
+  if (i === rssIndex) return;
+  rssIndex = ((i % rssTotal) + rssTotal) % rssTotal;
+  refreshRSS();
+  startRssRotationTimer();  // reset the timer so user gets a full cycle on the chosen feed
+}
+
 // ---------- Bootstrap ----------
 
 async function start() {
@@ -217,7 +253,7 @@ async function start() {
   refreshNHL(); setInterval(refreshNHL, REFRESH_NHL_MS);
   refreshWeather(); setInterval(refreshWeather, REFRESH_WEATHER_MS);
   refreshRSS(); setInterval(refreshRSS, REFRESH_RSS_MS);
-  setInterval(rotateRSS, rssRotationMs);
+  startRssRotationTimer();
 }
 
 start();

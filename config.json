@@ -1,8 +1,8 @@
 {
   "weather": {
-    "latitude": 45.4215,
-    "longitude": -75.6972,
-    "label": "Ottawa"
+    "latitude": 48.4284,
+    "longitude": -123.3656,
+    "label": "Victoria"
   },
   "nhl": {
     "teams": []
@@ -19,6 +19,14 @@
     {
       "name": "BBC World",
       "url": "http://feeds.bbci.co.uk/news/world/rss.xml"
+    },
+    {
+      "name": "NY Times",
+      "url": "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml"
+    },
+    {
+      "name": "TrueAchievements",
+      "url": "https://www.trueachievements.com/newsrss.aspx"
     }
   ],
   "rotation": {

@@ -4,6 +4,7 @@
 import json
 import mimetypes
 import os
+import re
 import sys
 import threading
 import time
@@ -111,7 +112,7 @@ def _series_text(s: dict | None) -> str:
 def fetch_nhl(date: str | None, teams: list[str]) -> list[dict]:
     path = f"schedule/{date}" if date else "schedule/now"
     url = f"https://api-web.nhle.com/v1/{path}"
-    raw = fetch_cached(url, ttl_seconds=60)
+    raw = fetch_cached(url, ttl_seconds=20)
     data = json.loads(raw)
 
     # API returns a full week; filter to requested date (or first week entry = today).
@@ -168,10 +169,67 @@ def fetch_weather(lat: float, lon: float) -> dict:
 # ---------- RSS ----------
 
 ATOM_NS = "{http://www.w3.org/2005/Atom}"
+MEDIA_NS = "{http://search.yahoo.com/mrss/}"
+
+_IMG_SRC_RE = re.compile(r"""<img\b[^>]*\bsrc=["']([^"']+)["']""", re.IGNORECASE)
 
 
-def parse_rss(xml_bytes: bytes, limit: int = 5) -> list[dict]:
+def _extract_image(el, html_fields: list[str]) -> str:
+    # 1. Yahoo media namespace: <media:thumbnail url="..."> or <media:content url="...">
+    for tag in ("thumbnail", "content"):
+        m = el.find(f"{MEDIA_NS}{tag}")
+        if m is not None:
+            url = m.get("url") or m.get("href")
+            if url:
+                return url
+
+    # 2. <enclosure url="..." type="image/..."> (RSS 2.0)
+    enc = el.find("enclosure")
+    if enc is not None and (enc.get("type") or "").startswith("image/"):
+        url = enc.get("url")
+        if url:
+            return url
+
+    # 3. First <img> inside an HTML-bearing field like description/summary/content.
+    for field in html_fields:
+        html = el.findtext(field)
+        if html:
+            match = _IMG_SRC_RE.search(html)
+            if match:
+                return match.group(1)
+
+    return ""
+
+
+def _extract_feed_image(root) -> str:
+    # RSS 2.0: <rss><channel><image><url>...</url></image>
+    ch = root.find("channel")
+    if ch is not None:
+        img = ch.find("image")
+        if img is not None:
+            url = (img.findtext("url") or "").strip()
+            if url:
+                return url
+        # Also try <itunes:image href="..."> and channel-level <media:thumbnail>
+        for tag in (f"{MEDIA_NS}thumbnail", f"{MEDIA_NS}image"):
+            m = ch.find(tag)
+            if m is not None:
+                url = m.get("url") or m.get("href") or ""
+                if url:
+                    return url
+
+    # Atom: <feed><logo> (preferred) or <icon>
+    for tag in ("logo", "icon"):
+        el = root.find(f"{ATOM_NS}{tag}")
+        if el is not None and el.text:
+            return el.text.strip()
+
+    return ""
+
+
+def parse_rss(xml_bytes: bytes, limit: int = 5) -> tuple[str, list[dict]]:
     root = ET.fromstring(xml_bytes)
+    feed_image = _extract_feed_image(root)
     items = []
 
     # RSS 2.0: <rss><channel><item>
@@ -179,8 +237,11 @@ def parse_rss(xml_bytes: bytes, limit: int = 5) -> list[dict]:
         title = (item.findtext("title") or "").strip()
         link = (item.findtext("link") or "").strip()
         published = (item.findtext("pubDate") or "").strip()
+        image = _extract_image(item, ["description", "content:encoded"])
         if title:
-            items.append({"title": title, "link": link, "published": published})
+            items.append({
+                "title": title, "link": link, "published": published, "image": image,
+            })
 
     # Atom: <feed><entry>
     if not items:
@@ -193,13 +254,16 @@ def parse_rss(xml_bytes: bytes, limit: int = 5) -> list[dict]:
                 or entry.findtext(f"{ATOM_NS}updated")
                 or ""
             ).strip()
+            image = _extract_image(entry, [f"{ATOM_NS}summary", f"{ATOM_NS}content"])
             if title:
-                items.append({"title": title, "link": link, "published": published})
+                items.append({
+                    "title": title, "link": link, "published": published, "image": image,
+                })
 
-    return items[:limit]
+    return feed_image, items[:limit]
 
 
-def fetch_rss(url: str) -> list[dict]:
+def fetch_rss(url: str) -> tuple[str, list[dict]]:
     raw = fetch_cached(url, ttl_seconds=900)
     return parse_rss(raw)
 
@@ -294,11 +358,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
             idx %= len(feeds)
             feed = feeds[idx]
             try:
-                items = fetch_rss(feed["url"])
+                feed_image, items = fetch_rss(feed["url"])
                 self._send_json({
                     "index": idx,
                     "total": len(feeds),
                     "name": feed.get("name", feed["url"]),
+                    "feedImage": feed_image,
                     "items": items,
                 })
             except Exception as e:

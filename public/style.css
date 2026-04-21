@@ -46,6 +46,31 @@ html, body {
 .panel-header h2 {
   font-size: 1.6em;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.header-logo {
+  height: 1.2em;
+  width: auto;
+}
+
+.feed-logo {
+  height: 1.4em;
+  width: auto;
+  max-width: 4em;
+  object-fit: contain;
+  background: #eee;
+  border-radius: 3px;
+  padding: 2px 4px;
+}
+
+.feed-logo.feed-logo-default {
+  background: transparent;
+  padding: 0;
+  width: 1.4em;
+  max-width: 1.4em;
 }
 
 .updated {
@@ -98,9 +123,18 @@ html, body {
 }
 .game-team {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
+  gap: 8px;
   font-size: 1.05em;
+}
+.team-logo {
+  width: 1.6em;
+  height: 1.6em;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.team-name {
+  flex: 1;
 }
 .team-score {
   font-weight: 700;
@@ -148,14 +182,34 @@ html, body {
   font-size: 1.05em;
 }
 .rss-item:last-child { border-bottom: none; }
-.rss-item a { color: #eee; text-decoration: none; }
+.rss-item a {
+  color: #eee;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.rss-thumb {
+  width: 72px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: #2c2c2e;
+}
+.rss-title { flex: 1; }
 .rss-dot {
   display: inline-block;
-  width: 10px;
-  height: 10px;
-  margin-right: 8px;
-  border-radius: 2px;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
   background: #888;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
 }
+.rss-dot:hover { background: #bbb; }
+.rss-dot:active { transform: scale(0.9); }
 .rss-dot.active { background: #4fc3f7; }
-.rss-dots { display: inline-flex; gap: 4px; margin-left: 12px; vertical-align: middle; }
+.rss-dots { display: inline-flex; gap: 6px; margin-left: 12px; vertical-align: middle; }
