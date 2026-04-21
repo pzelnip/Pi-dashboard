@@ -212,4 +212,10 @@ html, body {
 .rss-dot:hover { background: #bbb; }
 .rss-dot:active { transform: scale(0.9); }
 .rss-dot.active { background: #4fc3f7; }
-.rss-dots { display: inline-flex; gap: 6px; margin-left: 12px; vertical-align: middle; }
+.rss-dots { display: inline-flex; gap: 6px; vertical-align: middle; }
+
+.panel-header-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}

@@ -180,15 +180,14 @@ function renderRSS(payload) {
   const logo = payload.feedImage
     ? `<img class="feed-logo" src="${payload.feedImage}" alt="" onerror="this.outerHTML=window.DEFAULT_RSS_ICON">`
     : window.DEFAULT_RSS_ICON;
-  const titleEl = document.getElementById("rss-title");
-  titleEl.innerHTML =
-    `${logo}<span>${payload.name}</span> <span class="rss-dots">${
-      Array.from({length: rssTotal}, (_, i) =>
-        `<button class="rss-dot ${i === payload.index ? 'active' : ''}" data-feed-index="${i}" aria-label="Feed ${i + 1}"></button>`
-      ).join("")
-    }</span>`;
+  document.getElementById("rss-title").innerHTML =
+    `${logo}<span>${payload.name}</span>`;
 
-  titleEl.querySelectorAll(".rss-dot").forEach(btn => {
+  const dotsEl = document.getElementById("rss-dots");
+  dotsEl.innerHTML = Array.from({length: rssTotal}, (_, i) =>
+    `<button class="rss-dot ${i === payload.index ? 'active' : ''}" data-feed-index="${i}" aria-label="Feed ${i + 1}"></button>`
+  ).join("");
+  dotsEl.querySelectorAll(".rss-dot").forEach(btn => {
     btn.addEventListener("click", () => jumpToFeed(Number(btn.dataset.feedIndex)));
   });
 
