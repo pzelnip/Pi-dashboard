@@ -1,0 +1,27 @@
+{
+  "weather": {
+    "latitude": 45.4215,
+    "longitude": -75.6972,
+    "label": "Ottawa"
+  },
+  "nhl": {
+    "teams": []
+  },
+  "rss": [
+    {
+      "name": "CBC Top Stories",
+      "url": "https://www.cbc.ca/webfeed/rss/rss-topstories"
+    },
+    {
+      "name": "Simon Willison (AI)",
+      "url": "https://simonwillison.net/tags/ai.atom"
+    },
+    {
+      "name": "BBC World",
+      "url": "http://feeds.bbci.co.uk/news/world/rss.xml"
+    }
+  ],
+  "rotation": {
+    "rssSeconds": 10
+  }
+}

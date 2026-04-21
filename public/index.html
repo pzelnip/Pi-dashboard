@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="grid">
+    <section id="nhl" class="panel">
+      <header class="panel-header">
+        <h2>NHL Scores</h2>
+        <span class="updated" data-updated-for="nhl"></span>
+      </header>
+      <div class="panel-body" data-body="nhl">Loading…</div>
+    </section>
+
+    <section id="weather" class="panel">
+      <header class="panel-header">
+        <h2>Weather <span id="weather-label"></span></h2>
+        <span class="updated" data-updated-for="weather"></span>
+      </header>
+      <div class="panel-body" data-body="weather">Loading…</div>
+    </section>
+
+    <section id="rss" class="panel panel-wide">
+      <header class="panel-header">
+        <h2 id="rss-title">RSS</h2>
+        <span class="updated" data-updated-for="rss"></span>
+      </header>
+      <div class="panel-body" data-body="rss">Loading…</div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

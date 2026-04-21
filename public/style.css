@@ -1,0 +1,161 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  width: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #111;
+  color: #eee;
+  font-size: 22px;
+  line-height: 1.4;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 16px;
+  padding: 16px;
+  height: 100vh;
+  width: 100vw;
+}
+
+.panel {
+  background: #1c1c1e;
+  border: 1px solid #2c2c2e;
+  border-radius: 12px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-wide {
+  grid-column: 1 / -1;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid #2c2c2e;
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+}
+
+.panel-header h2 {
+  font-size: 1.6em;
+  font-weight: 600;
+}
+
+.updated {
+  font-size: 0.7em;
+  color: #888;
+}
+
+.panel-body {
+  flex: 1;
+  overflow: auto;
+}
+
+.panel-body.stale {
+  opacity: 0.6;
+}
+
+.panel-body.error {
+  color: #ff6b6b;
+}
+
+/* NHL */
+.games-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.game {
+  background: #2c2c2e;
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.game-header {
+  font-size: 0.75em;
+  color: #888;
+  min-height: 1em;
+}
+.game-body {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 16px;
+}
+.game-teams {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.game-team {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 1.05em;
+}
+.team-score {
+  font-weight: 700;
+  min-width: 1.5em;
+  text-align: right;
+}
+.game-status {
+  font-size: 0.85em;
+  color: #4fc3f7;
+  text-align: right;
+  min-width: 6em;
+}
+
+/* Weather */
+.wx-current {
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+.wx-temp { font-size: 3.5em; font-weight: 300; }
+.wx-meta { font-size: 0.9em; color: #aaa; }
+.wx-meta div { margin-bottom: 4px; }
+
+.wx-daily {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.wx-day {
+  background: #2c2c2e;
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+}
+.wx-day-label { font-size: 0.85em; color: #aaa; margin-bottom: 4px; }
+.wx-day-range { font-size: 1.1em; }
+.wx-day-icon { font-size: 1.8em; margin: 4px 0; }
+
+/* RSS */
+.rss-list { list-style: none; }
+.rss-item {
+  padding: 12px 0;
+  border-bottom: 1px solid #2c2c2e;
+  font-size: 1.05em;
+}
+.rss-item:last-child { border-bottom: none; }
+.rss-item a { color: #eee; text-decoration: none; }
+.rss-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 8px;
+  border-radius: 2px;
+  background: #888;
+}
+.rss-dot.active { background: #4fc3f7; }
+.rss-dots { display: inline-flex; gap: 4px; margin-left: 12px; vertical-align: middle; }
