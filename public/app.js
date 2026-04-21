@@ -37,37 +37,44 @@ function renderNHL(games) {
   const el = bodyEl("nhl");
   el.classList.remove("error");
   if (!games.length) {
-    el.innerHTML = '<p style="color:#888">No games today.</p>';
+    el.innerHTML = '<p style="color: var(--text-muted)">No games today.</p>';
     return;
   }
+
   const startTime = iso =>
     new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
-  const row = (t, isHome) => `
-    <div class="game-team ${isHome ? "home" : "away"}">
+  const isLive = g => g.state === "LIVE" || g.state === "CRIT";
+  const isScheduled = g => g.state === "FUT" || g.state === "PRE";
+
+  const pillFor = g => {
+    if (isLive(g)) return `<span class="status-pill live">${g.statusText || "LIVE"}</span>`;
+    if (isScheduled(g)) return `<span class="status-pill scheduled">${startTime(g.startTime)}</span>`;
+    return `<span class="status-pill final">${g.statusText || "Final"}</span>`;
+  };
+
+  const row = t => `
+    <div class="game-team">
       ${t.logo ? `<img class="team-logo" src="${t.logo}" alt="" onerror="this.remove()">` : ""}
       <span class="team-name">${t.name || t.abbrev}</span>
       <span class="team-score">${t.score ?? ""}</span>
     </div>`;
 
-  el.innerHTML = `<div class="games-grid">${
-    games.map(g => {
-      const right = g.state === "FUT" || g.state === "PRE"
-        ? startTime(g.startTime)
-        : g.statusText;
-      return `
-        <div class="game">
-          <div class="game-header">${g.seriesText || ""}</div>
-          <div class="game-body">
-            <div class="game-teams">
-              ${row(g.away, false)}
-              ${row(g.home, true)}
-            </div>
-            <div class="game-status">${right}</div>
-          </div>
-        </div>`;
-    }).join("")
-  }</div>`;
+  const renderGame = g => `
+    <div class="game ${isLive(g) ? "is-live" : ""}">
+      <div class="game-meta">
+        ${pillFor(g)}
+        ${g.seriesText ? `<span>${g.seriesText}</span>` : ""}
+      </div>
+      <div class="game-body">
+        <div class="game-teams">
+          ${row(g.away)}
+          ${row(g.home)}
+        </div>
+      </div>
+    </div>`;
+
+  el.innerHTML = `<div class="games-grid">${games.map(renderGame).join("")}</div>`;
 }
 
 async function refreshNHL() {
@@ -130,12 +137,15 @@ function renderWeather(data) {
   };
 
   el.innerHTML = `
-    <div class="wx-current">
-      <div class="wx-temp">${curIcon} ${Math.round(cur.temperature_2m)}${tempUnit}</div>
-      <div class="wx-meta">
-        <div>${curDesc}</div>
-        <div>Wind ${Math.round(cur.wind_speed_10m)} ${windUnit}</div>
-        <div>Humidity ${cur.relative_humidity_2m}%</div>
+    <div class="wx-hero">
+      <div class="wx-hero-icon">${curIcon}</div>
+      <div class="wx-hero-main">
+        <div class="wx-temp">${Math.round(cur.temperature_2m)}${tempUnit}</div>
+        <div class="wx-condition">${curDesc}</div>
+        <div class="wx-meta">
+          <span>Wind ${Math.round(cur.wind_speed_10m)} ${windUnit}</span>
+          <span>Humidity ${cur.relative_humidity_2m}%</span>
+        </div>
       </div>
     </div>
     <div class="wx-daily">
@@ -143,7 +153,7 @@ function renderWeather(data) {
         <div class="wx-day">
           <div class="wx-day-label">${dayLabel(d.date, i)}</div>
           <div class="wx-day-icon">${d.icon}</div>
-          <div class="wx-day-range">${Math.round(d.min)}° / ${Math.round(d.max)}°</div>
+          <div class="wx-day-range"><span class="wx-min">${Math.round(d.min)}°</span> ${Math.round(d.max)}°</div>
         </div>
       `).join("")}
     </div>
@@ -194,14 +204,17 @@ function renderRSS(payload) {
   const el = bodyEl("rss");
   el.classList.remove("error");
   if (!payload.items || !payload.items.length) {
-    el.innerHTML = '<p style="color:#888">No items.</p>';
+    el.innerHTML = '<p style="color: var(--text-muted)">No items.</p>';
     return;
   }
+
   el.innerHTML = `<ul class="rss-list">${
     payload.items.map(i => `
       <li class="rss-item">
         <a href="${i.link}" target="_blank" rel="noopener">
-          ${i.image ? `<img class="rss-thumb" src="${i.image}" alt="" loading="lazy" onerror="this.remove()">` : ""}
+          ${i.image
+            ? `<img class="rss-thumb" src="${i.image}" alt="" loading="lazy" onerror="this.remove()">`
+            : ""}
           <span class="rss-title">${i.title}</span>
         </a>
       </li>
