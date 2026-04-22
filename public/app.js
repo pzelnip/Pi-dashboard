@@ -214,10 +214,22 @@ async function refreshCalendar() {
   }
 }
 
+// ---------- Clock ----------
+
+function renderClock() {
+  const now = new Date();
+  const time = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const date = now.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+  const timeEl = document.querySelector("#weather .clock-time");
+  const dateEl = document.querySelector("#weather .clock-date");
+  if (timeEl) timeEl.textContent = time;
+  if (dateEl) dateEl.textContent = date;
+}
+
 // ---------- Weather panel rotation ----------
 
-const WEATHER_VIEWS = ["weather", "calendar"];
-const WEATHER_TITLES = { weather: "Weather", calendar: "Today" };
+const WEATHER_VIEWS = ["weather", "calendar", "clock"];
+const WEATHER_TITLES = { weather: "Weather", calendar: "Today", clock: "" };
 let weatherViewIndex = 0;
 let weatherRotationMs = 15000;
 let weatherRotationTimer = null;
@@ -373,11 +385,19 @@ async function start() {
   refreshRSS(); setInterval(refreshRSS, REFRESH_RSS_MS);
   startRssRotationTimer();
 
-  if (calendarEnabled) {
+  // Calendar view: only if a calendar URL is configured.
+  if (!calendarEnabled) {
+    WEATHER_VIEWS.splice(WEATHER_VIEWS.indexOf("calendar"), 1);
+  } else {
     refreshCalendar(); setInterval(refreshCalendar, 5 * 60 * 1000);
-    renderWeatherDots();
-    startWeatherRotationTimer();
   }
+
+  // Clock ticks every minute; render immediately so it's ready when rotation lands on it.
+  renderClock(); setInterval(renderClock, 60 * 1000);
+
+  // Rotate weather panel between all active views.
+  renderWeatherDots();
+  startWeatherRotationTimer();
 }
 
 start();
