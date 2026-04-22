@@ -27,9 +27,14 @@
     {
       "name": "TrueAchievements",
       "url": "https://www.trueachievements.com/newsrss.aspx"
+    },
+    {
+      "name": "Edmonton Oilers",
+      "url": "https://thehockeywriters.com/category/edmonton-oilers/feed"
     }
   ],
   "rotation": {
-    "rssSeconds": 10
+    "rssSeconds": 10,
+    "weatherPanelSeconds": 15
   }
 }
