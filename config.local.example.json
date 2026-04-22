@@ -1,0 +1,7 @@
+{
+  "calendar": {
+    "urls": [
+      "https://calendar.google.com/calendar/ical/<your-calendar-id>/private-<secret-hash>/basic.ics"
+    ]
+  }
+}
