@@ -8,6 +8,7 @@ let rssIndex = 0;
 let rssTotal = 1;
 let rssRotationMs = 30 * 1000;
 let rssRotationTimer = null;
+let rssFadeTimer = null;
 
 function setUpdated(panel) {
   const el = document.querySelector(`[data-updated-for="${panel}"]`);
@@ -226,7 +227,7 @@ function showWeatherView(i) {
   const active = WEATHER_VIEWS[weatherViewIndex];
 
   document.querySelectorAll("#weather .view").forEach(v => {
-    v.classList.toggle("hidden", !v.classList.contains(`view-${active}`));
+    v.classList.toggle("active", v.classList.contains(`view-${active}`));
   });
 
   document.getElementById("weather-title-text").textContent = WEATHER_TITLES[active];
@@ -279,36 +280,48 @@ function renderRSS(payload) {
   const logo = payload.feedImage
     ? `<img class="feed-logo" src="${payload.feedImage}" alt="" onerror="this.outerHTML=window.DEFAULT_RSS_ICON">`
     : window.DEFAULT_RSS_ICON;
-  document.getElementById("rss-title").innerHTML =
-    `${logo}<span>${payload.name}</span>`;
 
+  const rssPanel = document.getElementById("rss");
+  const titleEl = document.getElementById("rss-title");
   const dotsEl = document.getElementById("rss-dots");
-  dotsEl.innerHTML = Array.from({length: rssTotal}, (_, i) =>
-    `<button class="rss-dot ${i === payload.index ? 'active' : ''}" data-feed-index="${i}" aria-label="Feed ${i + 1}"></button>`
-  ).join("");
-  dotsEl.querySelectorAll(".rss-dot").forEach(btn => {
-    btn.addEventListener("click", () => jumpToFeed(Number(btn.dataset.feedIndex)));
-  });
-
   const el = bodyEl("rss");
-  el.classList.remove("error");
-  if (!payload.items || !payload.items.length) {
-    el.innerHTML = '<p style="color: var(--text-muted)">No items.</p>';
-    return;
-  }
 
-  el.innerHTML = `<ul class="rss-list">${
-    payload.items.map(i => `
-      <li class="rss-item">
-        <a href="${i.link}" target="_blank" rel="noopener">
-          ${i.image
-            ? `<img class="rss-thumb" src="${i.image}" alt="" loading="lazy" onerror="this.remove()">`
-            : ""}
-          <span class="rss-title">${i.title}</span>
-        </a>
-      </li>
-    `).join("")
-  }</ul>`;
+  const writeContent = () => {
+    titleEl.innerHTML = `${logo}<span>${payload.name}</span>`;
+    dotsEl.innerHTML = Array.from({length: rssTotal}, (_, i) =>
+      `<button class="rss-dot ${i === payload.index ? 'active' : ''}" data-feed-index="${i}" aria-label="Feed ${i + 1}"></button>`
+    ).join("");
+    dotsEl.querySelectorAll(".rss-dot").forEach(btn => {
+      btn.addEventListener("click", () => jumpToFeed(Number(btn.dataset.feedIndex)));
+    });
+
+    el.classList.remove("error");
+    if (!payload.items || !payload.items.length) {
+      el.innerHTML = '<p style="color: var(--text-muted)">No items.</p>';
+      return;
+    }
+    el.innerHTML = `<ul class="rss-list">${
+      payload.items.map(i => `
+        <li class="rss-item">
+          <a href="${i.link}" target="_blank" rel="noopener">
+            ${i.image
+              ? `<img class="rss-thumb" src="${i.image}" alt="" loading="lazy" onerror="this.remove()">`
+              : ""}
+            <span class="rss-title">${i.title}</span>
+          </a>
+        </li>
+      `).join("")
+    }</ul>`;
+  };
+
+  // Cross-fade: dim the panel body + header, swap content, fade back in.
+  if (rssFadeTimer) clearTimeout(rssFadeTimer);
+  rssPanel.classList.add("fading");
+  rssFadeTimer = setTimeout(() => {
+    writeContent();
+    requestAnimationFrame(() => rssPanel.classList.remove("fading"));
+    rssFadeTimer = null;
+  }, 200);
 }
 
 async function refreshRSS() {

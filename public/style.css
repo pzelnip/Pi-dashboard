@@ -281,7 +281,21 @@ html, body {
 
 /* ---------- Weather-panel view rotation + Calendar ---------- */
 
-.view.hidden { display: none; }
+/* Cross-fade between stacked views. Parent .panel-body must be positioned. */
+#weather .panel-body {
+  position: relative;
+}
+#weather .view {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 400ms ease-in-out;
+}
+#weather .view.active {
+  opacity: 1;
+  pointer-events: auto;
+}
 
 .cal-event {
   display: flex;
@@ -305,6 +319,18 @@ html, body {
 }
 
 /* ---------- RSS ---------- */
+
+/* Cross-fade on feed swap. Targets feed title, dots, and body (not .updated). */
+#rss #rss-title,
+#rss #rss-dots,
+#rss .panel-body {
+  transition: opacity 200ms ease-in-out;
+}
+#rss.fading #rss-title,
+#rss.fading #rss-dots,
+#rss.fading .panel-body {
+  opacity: 0;
+}
 
 .rss-list { list-style: none; }
 .rss-item {
