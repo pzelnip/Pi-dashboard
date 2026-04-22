@@ -274,7 +274,7 @@ html, body {
 }
 .wx-day-icon { font-size: 1.8em; }
 .wx-day-range {
-  font-size: 1em;
+  font-size: 1.3em;
   font-variant-numeric: tabular-nums;
 }
 .wx-day-range .wx-min { color: var(--text-dim); }
@@ -284,7 +284,7 @@ html, body {
 .rss-list { list-style: none; }
 .rss-item {
   padding: 14px 0;
-  font-size: 1.25em;
+  font-size: 1.45em;
 }
 .rss-item + .rss-item { border-top: 1px solid var(--border); }
 .rss-item a {
