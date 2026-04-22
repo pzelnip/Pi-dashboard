@@ -89,9 +89,13 @@ function renderNHL(games) {
 
   const renderGame = g => {
     let awayCls = "", homeCls = "";
-    if (isFinal(g) && g.away.score != null && g.home.score != null) {
+    const bothScores = g.away.score != null && g.home.score != null;
+    if (isFinal(g) && bothScores) {
       if (g.away.score > g.home.score) { awayCls = "winner"; homeCls = "loser"; }
       else if (g.home.score > g.away.score) { homeCls = "winner"; awayCls = "loser"; }
+    } else if (isLive(g) && bothScores) {
+      if (g.away.score > g.home.score) awayCls = "leading";
+      else if (g.home.score > g.away.score) homeCls = "leading";
     }
     const cls = isLive(g) ? "is-live" : isFinal(g) ? "is-final" : "";
     return `
