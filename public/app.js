@@ -454,6 +454,23 @@ async function start() {
 
   // Keep "X ago" labels accurate as time passes between data refreshes.
   setInterval(refreshUpdatedLabels, 5 * 1000);
+
+  watchVersion();
+}
+
+async function watchVersion() {
+  let initial;
+  try {
+    initial = (await fetchJson("/api/version"))?.version;
+  } catch { return; }
+  if (!initial) return;
+
+  setInterval(async () => {
+    try {
+      const { version } = await fetchJson("/api/version");
+      if (version && version !== initial) location.reload();
+    } catch { /* transient — try again next tick */ }
+  }, 30 * 1000);
 }
 
 start();

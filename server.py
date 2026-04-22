@@ -5,6 +5,7 @@ import json
 import mimetypes
 import os
 import re
+import subprocess
 import sys
 import threading
 import time
@@ -21,6 +22,19 @@ CONFIG_PATH = os.path.join(HERE, "config.json")
 LOCAL_CONFIG_PATH = os.path.join(HERE, "config.local.json")
 PORT = int(os.environ.get("DASHBOARD_PORT", "8080"))
 USER_AGENT = "Mozilla/5.0 (compatible; pi-dashboard/1.0)"
+
+
+def _current_version() -> str:
+    try:
+        sha = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=HERE, stderr=subprocess.DEVNULL, timeout=2,
+        )
+        return sha.decode().strip()
+    except Exception:
+        return str(int(time.time()))
+
+
+VERSION = _current_version()
 
 _cache: dict[str, tuple[float, bytes]] = {}
 _cache_lock = threading.Lock()
@@ -439,7 +453,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", ctype or "application/octet-stream")
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Cache-Control", "no-store, must-revalidate")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
         self.end_headers()
         self.wfile.write(body)
 
@@ -447,6 +463,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
         query = urllib.parse.parse_qs(parsed.query)
+
+        if path == "/api/version":
+            self._send_json({"version": VERSION})
+            return
 
         try:
             cfg = load_config()
