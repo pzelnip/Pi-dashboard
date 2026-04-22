@@ -279,6 +279,31 @@ html, body {
 }
 .wx-day-range .wx-min { color: var(--text-dim); }
 
+/* ---------- Weather-panel view rotation + Calendar ---------- */
+
+.view.hidden { display: none; }
+
+.cal-event {
+  display: flex;
+  gap: 14px;
+  padding: 12px 0;
+  font-size: 1.2em;
+}
+.cal-event + .cal-event { border-top: 1px solid var(--border); }
+.cal-time {
+  min-width: 4.5em;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.cal-allday .cal-time { color: var(--accent); font-weight: 600; }
+.cal-title { flex: 1; }
+.cal-empty {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 2em 0;
+  font-size: 1.1em;
+}
+
 /* ---------- RSS ---------- */
 
 .rss-list { list-style: none; }

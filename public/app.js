@@ -115,7 +115,7 @@ function wxLabel(code) {
 
 function renderWeather(data) {
   document.getElementById("weather-label").textContent = data.label ? `· ${data.label}` : "";
-  const el = bodyEl("weather");
+  const el = document.querySelector("#weather .view-weather");
   el.classList.remove("error");
 
   const cur = data.current || {};
@@ -172,6 +172,95 @@ async function refreshWeather() {
   } catch (e) {
     showError("weather", e.message);
   }
+}
+
+// ---------- Calendar ----------
+
+function renderCalendar(data) {
+  const el = document.querySelector("#weather .view-calendar");
+  el.classList.remove("error");
+
+  if (data.error) {
+    el.innerHTML = `<p class="cal-empty">⚠ ${data.error}</p>`;
+    return;
+  }
+  if (!data.events || !data.events.length) {
+    el.innerHTML = '<p class="cal-empty">No events today</p>';
+    return;
+  }
+
+  const timeLabel = ev => {
+    if (ev.allDay) return "All day";
+    const d = new Date(ev.start);
+    return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  };
+
+  el.innerHTML = data.events.map(ev => `
+    <div class="cal-event ${ev.allDay ? "cal-allday" : ""}">
+      <span class="cal-time">${timeLabel(ev)}</span>
+      <span class="cal-title">${ev.summary}</span>
+    </div>
+  `).join("");
+}
+
+async function refreshCalendar() {
+  try {
+    const data = await fetchJson("/api/calendar");
+    renderCalendar(data);
+    setUpdated("weather");
+  } catch (e) {
+    renderCalendar({ error: e.message });
+  }
+}
+
+// ---------- Weather panel rotation ----------
+
+const WEATHER_VIEWS = ["weather", "calendar"];
+const WEATHER_TITLES = { weather: "Weather", calendar: "Today" };
+let weatherViewIndex = 0;
+let weatherRotationMs = 15000;
+let weatherRotationTimer = null;
+
+function showWeatherView(i) {
+  weatherViewIndex = ((i % WEATHER_VIEWS.length) + WEATHER_VIEWS.length) % WEATHER_VIEWS.length;
+  const active = WEATHER_VIEWS[weatherViewIndex];
+
+  document.querySelectorAll("#weather .view").forEach(v => {
+    v.classList.toggle("hidden", !v.classList.contains(`view-${active}`));
+  });
+
+  document.getElementById("weather-title-text").textContent = WEATHER_TITLES[active];
+  document.getElementById("weather-label").style.display =
+    active === "weather" ? "" : "none";
+
+  document.querySelectorAll("#weather-dots .rss-dot").forEach((btn, idx) => {
+    btn.classList.toggle("active", idx === weatherViewIndex);
+  });
+}
+
+function renderWeatherDots() {
+  const dotsEl = document.getElementById("weather-dots");
+  dotsEl.innerHTML = WEATHER_VIEWS.map((_, i) =>
+    `<button class="rss-dot ${i === weatherViewIndex ? 'active' : ''}" data-weather-view="${i}" aria-label="View ${i + 1}"></button>`
+  ).join("");
+  dotsEl.querySelectorAll(".rss-dot").forEach(btn => {
+    btn.addEventListener("click", () => jumpToWeatherView(Number(btn.dataset.weatherView)));
+  });
+}
+
+function rotateWeatherPanel() {
+  showWeatherView(weatherViewIndex + 1);
+}
+
+function startWeatherRotationTimer() {
+  if (weatherRotationTimer) clearInterval(weatherRotationTimer);
+  weatherRotationTimer = setInterval(rotateWeatherPanel, weatherRotationMs);
+}
+
+function jumpToWeatherView(i) {
+  if (i === weatherViewIndex) return;
+  showWeatherView(i);
+  startWeatherRotationTimer();
 }
 
 // ---------- RSS ----------
@@ -256,16 +345,26 @@ function jumpToFeed(i) {
 // ---------- Bootstrap ----------
 
 async function start() {
+  let calendarEnabled = false;
   try {
     const cfg = await fetchJson("/api/config");
     const secs = cfg?.rotation?.rssSeconds;
     if (typeof secs === "number" && secs > 0) rssRotationMs = secs * 1000;
+    const wxSecs = cfg?.rotation?.weatherPanelSeconds;
+    if (typeof wxSecs === "number" && wxSecs > 0) weatherRotationMs = wxSecs * 1000;
+    calendarEnabled = !!cfg?.calendar?.enabled;
   } catch (e) { /* fall back to default */ }
 
   refreshNHL(); setInterval(refreshNHL, REFRESH_NHL_MS);
   refreshWeather(); setInterval(refreshWeather, REFRESH_WEATHER_MS);
   refreshRSS(); setInterval(refreshRSS, REFRESH_RSS_MS);
   startRssRotationTimer();
+
+  if (calendarEnabled) {
+    refreshCalendar(); setInterval(refreshCalendar, 5 * 60 * 1000);
+    renderWeatherDots();
+    startWeatherRotationTimer();
+  }
 }
 
 start();
