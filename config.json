@@ -11,6 +11,16 @@
       "MTL"
     ]
   },
+  "countdowns": [
+    {
+      "date": "2026-05-07",
+      "title": "Angela's Birthday"
+    },
+    {
+      "date": "2026-05-22",
+      "title": "Sue's Birthday"
+    }
+  ],
   "rss": [
     {
       "name": "CBC Top Stories",

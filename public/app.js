@@ -283,10 +283,65 @@ function renderClock() {
   if (dateEl) dateEl.textContent = date;
 }
 
+// ---------- Countdown ----------
+
+let countdowns = [];
+
+function daysBetween(fromYmd, toYmd) {
+  // Compare midnight-anchored dates to avoid DST / hour-of-day drift.
+  const [y1, m1, d1] = fromYmd.split("-").map(Number);
+  const [y2, m2, d2] = toYmd.split("-").map(Number);
+  const a = Date.UTC(y1, m1 - 1, d1);
+  const b = Date.UTC(y2, m2 - 1, d2);
+  return Math.round((b - a) / 86400000);
+}
+
+function todayYmd() {
+  const n = new Date();
+  const y = n.getFullYear();
+  const m = String(n.getMonth() + 1).padStart(2, "0");
+  const d = String(n.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function pickCountdown() {
+  if (!countdowns.length) return null;
+  const today = todayYmd();
+  const annotated = countdowns.map(c => ({ ...c, days: daysBetween(today, c.date) }));
+  const upcoming = annotated.filter(c => c.days >= 0).sort((a, b) => a.days - b.days);
+  if (upcoming.length) return upcoming[0];
+  // All in the past — pick the most recent.
+  return annotated.sort((a, b) => b.days - a.days)[0];
+}
+
+function renderCountdown() {
+  const numEl = document.querySelector("#weather .countdown-number");
+  const labelEl = document.querySelector("#weather .countdown-label");
+  if (!numEl || !labelEl) return;
+
+  const c = pickCountdown();
+  if (!c) {
+    numEl.textContent = "";
+    labelEl.textContent = "No countdowns configured";
+    return;
+  }
+
+  if (c.days === 0) {
+    numEl.textContent = "Today";
+    labelEl.textContent = `is ${c.title}`;
+  } else if (c.days > 0) {
+    numEl.textContent = `${c.days} ${c.days === 1 ? "day" : "days"}`;
+    labelEl.textContent = `until ${c.title}`;
+  } else {
+    numEl.textContent = c.title;
+    labelEl.textContent = "is past, what's next?";
+  }
+}
+
 // ---------- Weather panel rotation ----------
 
-const WEATHER_VIEWS = ["weather", "calendar", "clock"];
-const WEATHER_TITLES = { weather: "Weather", calendar: "Today", clock: "" };
+const WEATHER_VIEWS = ["weather", "calendar", "clock", "countdown"];
+const WEATHER_TITLES = { weather: "Weather", calendar: "Today", clock: "", countdown: "" };
 let weatherViewIndex = 0;
 let weatherRotationMs = 15000;
 let weatherRotationTimer = null;
@@ -435,6 +490,7 @@ async function start() {
     const wxSecs = cfg?.rotation?.weatherPanelSeconds;
     if (typeof wxSecs === "number" && wxSecs > 0) weatherRotationMs = wxSecs * 1000;
     calendarEnabled = !!cfg?.calendar?.enabled;
+    countdowns = Array.isArray(cfg?.countdowns) ? cfg.countdowns : [];
   } catch (e) { /* fall back to default */ }
 
   refreshNHL(); setInterval(refreshNHL, REFRESH_NHL_MS);
@@ -447,6 +503,14 @@ async function start() {
     WEATHER_VIEWS.splice(WEATHER_VIEWS.indexOf("calendar"), 1);
   } else {
     refreshCalendar(); setInterval(refreshCalendar, 5 * 60 * 1000);
+  }
+
+  // Countdown view: only if any countdowns are configured.
+  if (!countdowns.length) {
+    WEATHER_VIEWS.splice(WEATHER_VIEWS.indexOf("countdown"), 1);
+  } else {
+    // Re-render hourly so the day count rolls over at midnight without a page reload.
+    renderCountdown(); setInterval(renderCountdown, 60 * 60 * 1000);
   }
 
   // Clock ticks every minute; render immediately so it's ready when rotation lands on it.

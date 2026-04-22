@@ -484,6 +484,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json({
                 "rotation": cfg.get("rotation", {"rssSeconds": 30}),
                 "calendar": {"enabled": bool(cal_urls)},
+                "countdowns": cfg.get("countdowns", []) or [],
             })
             return
 
