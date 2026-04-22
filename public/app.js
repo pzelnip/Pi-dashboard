@@ -68,6 +68,11 @@ function renderNHL(games) {
 
   const isLive = g => g.state === "LIVE" || g.state === "CRIT";
   const isScheduled = g => g.state === "FUT" || g.state === "PRE";
+  const isFinal = g => !isLive(g) && !isScheduled(g);
+
+  // Sort: live → scheduled → final
+  const sortRank = g => (isLive(g) ? 0 : isScheduled(g) ? 1 : 2);
+  const sorted = [...games].sort((a, b) => sortRank(a) - sortRank(b));
 
   const pillFor = g => {
     if (isLive(g)) return `<span class="status-pill live">${g.statusText || "LIVE"}</span>`;
@@ -75,28 +80,36 @@ function renderNHL(games) {
     return `<span class="status-pill final">${g.statusText || "Final"}</span>`;
   };
 
-  const row = t => `
-    <div class="game-team">
+  const row = (t, outcome) => `
+    <div class="game-team ${outcome}">
       ${t.logo ? `<img class="team-logo" src="${t.logo}" alt="" onerror="this.remove()">` : ""}
       <span class="team-name">${t.name || t.abbrev}</span>
       <span class="team-score">${t.score ?? ""}</span>
     </div>`;
 
-  const renderGame = g => `
-    <div class="game ${isLive(g) ? "is-live" : ""}">
+  const renderGame = g => {
+    let awayCls = "", homeCls = "";
+    if (isFinal(g) && g.away.score != null && g.home.score != null) {
+      if (g.away.score > g.home.score) { awayCls = "winner"; homeCls = "loser"; }
+      else if (g.home.score > g.away.score) { homeCls = "winner"; awayCls = "loser"; }
+    }
+    const cls = isLive(g) ? "is-live" : isFinal(g) ? "is-final" : "";
+    return `
+    <div class="game ${cls}">
       <div class="game-meta">
         ${pillFor(g)}
         ${g.seriesText ? `<span>${g.seriesText}</span>` : ""}
       </div>
       <div class="game-body">
         <div class="game-teams">
-          ${row(g.away)}
-          ${row(g.home)}
+          ${row(g.away, awayCls)}
+          ${row(g.home, homeCls)}
         </div>
       </div>
     </div>`;
+  };
 
-  el.innerHTML = `<div class="games-grid">${games.map(renderGame).join("")}</div>`;
+  el.innerHTML = `<div class="games-grid">${sorted.map(renderGame).join("")}</div>`;
 }
 
 async function refreshNHL() {

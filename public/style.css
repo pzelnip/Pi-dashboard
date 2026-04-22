@@ -136,6 +136,24 @@ html, body {
   );
   box-shadow: inset 0 0 0 1px rgba(255, 91, 74, 0.22);
 }
+.game.is-final {
+  background: linear-gradient(
+    180deg,
+    rgba(76, 175, 80, 0.08) 0%,
+    var(--surface-raised) 60%
+  );
+  box-shadow: inset 0 0 0 1px rgba(76, 175, 80, 0.20);
+}
+
+.game-team.winner {
+  font-weight: 700;
+  color: #7fd184;
+  background: rgba(76, 175, 80, 0.12);
+  border-radius: 6px;
+  padding: 4px 8px;
+  margin: -4px -8px;
+}
+.game-team.loser { opacity: 0.55; }
 
 .game-meta {
   display: flex;
