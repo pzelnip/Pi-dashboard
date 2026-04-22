@@ -21,16 +21,24 @@
       "url": "http://feeds.bbci.co.uk/news/world/rss.xml"
     },
     {
-      "name": "NY Times",
-      "url": "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml"
-    },
-    {
       "name": "TrueAchievements",
       "url": "https://www.trueachievements.com/newsrss.aspx"
     },
     {
       "name": "Edmonton Oilers",
       "url": "https://thehockeywriters.com/category/edmonton-oilers/feed"
+    },
+    {
+      "name": "Victoria News",
+      "url": "https://www.vicnews.com/feed/"
+    },
+    {
+      "name": "BC Govt News",
+      "url": "https://news.gov.bc.ca/feed"
+    },
+    {
+      "name": "City of Saanich News",
+      "url": "https://www.saanich.ca/EN/main/news-events/news-archives/data/news.rss"
     }
   ],
   "rotation": {
