@@ -1,32 +1,38 @@
 # Raspberry Pi Dashboard Deployment
 
 ## Overview
-This Pi runs a Python HTTP server (`server.py`) serving:
-http://localhost:8080
 
-Chromium runs in kiosk mode:
-chromium --kiosk http://localhost:8080
+The Pi runs a Python HTTP server ([server.py](server.py)) on port 8080,
+displayed via Chromium in kiosk mode.
 
-Updates flow:
-- Push to GitHub
-- Pi polls every minute
-- If changes found → pulls + restarts service
+- **URL:** <http://localhost:8080>
+- **Kiosk command:** `chromium --kiosk http://localhost:8080`
+
+### Update flow
+
+1. Push to GitHub.
+2. A cron job on the Pi polls `origin/main` every minute.
+3. If the remote is ahead, the Pi pulls and restarts the systemd service.
 
 ---
 
-## Directory
-/home/pi/temp/sandbox/Pi-dashboard
+## Paths
 
-Key files:
-- server.py
-- update-dashboard.sh
-- update.log
+**Repo directory:** `/home/pi/temp/sandbox/Pi-dashboard`
+
+| File | Purpose |
+| --- | --- |
+| `server.py` | HTTP server serving the dashboard |
+| `update-dashboard.sh` | Poll + pull + restart script (run by cron) |
+| `update.log` | Output of the cron-driven update script |
 
 ---
 
 ## Systemd Service
-/etc/systemd/system/dashboard.service
 
+**File:** `/etc/systemd/system/dashboard.service`
+
+```ini
 [Unit]
 Description=Pi Dashboard server
 After=network-online.target
@@ -42,17 +48,23 @@ RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
+```
 
-Commands:
+### Common commands
+
+```bash
 systemctl status dashboard.service
 sudo systemctl restart dashboard.service
 journalctl -u dashboard.service -f
+```
 
 ---
 
 ## Update Script
-/home/pi/temp/sandbox/Pi-dashboard/update-dashboard.sh
 
+**File:** `/home/pi/temp/sandbox/Pi-dashboard/update-dashboard.sh`
+
+```bash
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -71,36 +83,62 @@ if [ "$LOCAL_REV" != "$REMOTE_REV" ]; then
   git pull --ff-only origin "$BRANCH"
   sudo systemctl restart "$SERVICE"
 fi
+```
 
 ---
 
 ## Cron Job
-crontab -e
 
+Edit with `crontab -e`:
+
+```cron
 * * * * * /home/pi/temp/sandbox/Pi-dashboard/update-dashboard.sh >> /home/pi/temp/sandbox/Pi-dashboard/update.log 2>&1
+```
 
 ---
 
 ## Sudo Config
-sudo visudo
 
+The `pi` user needs passwordless permission to restart the service, so the
+cron-driven update script can call `sudo systemctl restart`.
+
+Edit with `sudo visudo` and add:
+
+```text
 pi ALL=NOPASSWD: /bin/systemctl restart dashboard.service
+```
 
 ---
 
 ## Troubleshooting
 
-Check updates:
-tail -f update.log
+**Tail the update script log** (shows cron runs, pulls, failures):
 
-Check service:
+```bash
+tail -f /home/pi/temp/sandbox/Pi-dashboard/update.log
+```
+
+**Check the service status:**
+
+```bash
 systemctl status dashboard.service
+```
 
-Logs:
+**Follow service logs live:**
+
+```bash
 journalctl -u dashboard.service -f
+```
 
-Test server:
+**Confirm the server is responding:**
+
+```bash
 curl http://localhost:8080
+```
 
-Force update:
-./update-dashboard.sh
+**Force an update run manually** (bypasses cron timing):
+
+```bash
+/home/pi/temp/sandbox/Pi-dashboard/update-dashboard.sh
+```
+
