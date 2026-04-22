@@ -10,9 +10,30 @@ let rssRotationMs = 30 * 1000;
 let rssRotationTimer = null;
 let rssFadeTimer = null;
 
+const _lastUpdated = {};  // { panelName: Date }
+
+function formatAgo(ms) {
+  const secs = Math.max(0, Math.floor(ms / 1000));
+  if (secs < 5) return "just now";
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 function setUpdated(panel) {
-  const el = document.querySelector(`[data-updated-for="${panel}"]`);
-  if (el) el.textContent = new Date().toLocaleTimeString();
+  _lastUpdated[panel] = new Date();
+  refreshUpdatedLabels();
+}
+
+function refreshUpdatedLabels() {
+  const now = Date.now();
+  for (const [panel, when] of Object.entries(_lastUpdated)) {
+    const el = document.querySelector(`[data-updated-for="${panel}"]`);
+    if (el) el.textContent = formatAgo(now - when.getTime());
+  }
 }
 
 function bodyEl(panel) {
@@ -398,6 +419,9 @@ async function start() {
   // Rotate weather panel between all active views.
   renderWeatherDots();
   startWeatherRotationTimer();
+
+  // Keep "X ago" labels accurate as time passes between data refreshes.
+  setInterval(refreshUpdatedLabels, 5 * 1000);
 }
 
 start();
