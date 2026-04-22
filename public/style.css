@@ -127,6 +127,14 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  position: relative;
+}
+
+.fav-star {
+  color: #f5c419;
+  margin-left: 6px;
+  font-size: 0.85em;
+  vertical-align: middle;
 }
 .game.is-live {
   background: linear-gradient(

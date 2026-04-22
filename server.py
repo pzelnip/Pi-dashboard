@@ -115,12 +115,14 @@ def _status_text(game: dict) -> str:
     return ""  # scheduled / pre-game: frontend will show start time instead
 
 
-def _team(t: dict) -> dict:
+def _team(t: dict, favorites: set[str] | None = None) -> dict:
+    abbrev = t.get("abbrev", "")
     return {
-        "abbrev": t.get("abbrev", ""),
+        "abbrev": abbrev,
         "name": (t.get("commonName") or {}).get("default", ""),
         "score": t.get("score"),
         "logo": t.get("logo", ""),
+        "isFavorite": bool(favorites) and abbrev in favorites,
     }
 
 
@@ -140,7 +142,7 @@ def _series_text(s: dict | None) -> str:
     return f"Game {s.get('gameNumberOfSeries', '?')} (tied {top_w}-{bot_w})"
 
 
-def fetch_nhl(date: str | None, teams: list[str]) -> list[dict]:
+def fetch_nhl(date: str | None, favorites: list[str]) -> list[dict]:
     path = f"schedule/{date}" if date else "schedule/now"
     url = f"https://api-web.nhle.com/v1/{path}"
     raw = fetch_cached(url, ttl_seconds=20)
@@ -152,6 +154,7 @@ def fetch_nhl(date: str | None, teams: list[str]) -> list[dict]:
     if not target_date and weeks:
         target_date = weeks[0].get("date")
 
+    fav_set = set(favorites or [])
     games_out = []
     for week in weeks:
         if week.get("date") != target_date:
@@ -159,16 +162,17 @@ def fetch_nhl(date: str | None, teams: list[str]) -> list[dict]:
         for game in week.get("games", []):
             home = game.get("homeTeam", {})
             away = game.get("awayTeam", {})
-            if teams:
-                if home.get("abbrev") not in teams and away.get("abbrev") not in teams:
-                    continue
+            is_fav = bool(fav_set) and (
+                home.get("abbrev") in fav_set or away.get("abbrev") in fav_set
+            )
             games_out.append({
-                "home": _team(home),
-                "away": _team(away),
+                "home": _team(home, fav_set),
+                "away": _team(away, fav_set),
                 "state": game.get("gameState", ""),
                 "startTime": game.get("startTimeUTC", ""),
                 "statusText": _status_text(game),
                 "seriesText": _series_text(game.get("seriesStatus")),
+                "isFavorite": is_fav,
             })
     return games_out
 
@@ -485,9 +489,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         if path == "/api/nhl":
             date = query.get("date", [None])[0]
-            teams = cfg.get("nhl", {}).get("teams", []) or []
+            favorites = cfg.get("nhl", {}).get("favorites", []) or []
             try:
-                games = fetch_nhl(date, teams)
+                games = fetch_nhl(date, favorites)
                 self._send_json(games)
             except Exception as e:
                 self._send_error_json(str(e))

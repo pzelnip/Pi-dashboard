@@ -5,7 +5,11 @@
     "label": "Victoria"
   },
   "nhl": {
-    "teams": []
+    "favorites": [
+      "EDM",
+      "VAN",
+      "MTL"
+    ]
   },
   "rss": [
     {
