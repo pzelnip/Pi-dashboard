@@ -64,7 +64,7 @@ function renderNHL(games) {
   }
 
   const startTime = iso =>
-    new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
 
   const isLive = g => g.state === "LIVE" || g.state === "CRIT";
   const isScheduled = g => g.state === "FUT" || g.state === "PRE";
@@ -227,7 +227,7 @@ function renderCalendar(data) {
   const timeLabel = ev => {
     if (ev.allDay) return "All day";
     const d = new Date(ev.start);
-    return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
   };
 
   el.innerHTML = data.events.map(ev => `
@@ -252,7 +252,7 @@ async function refreshCalendar() {
 
 function renderClock() {
   const now = new Date();
-  const time = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const time = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
   const date = now.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
   const timeEl = document.querySelector("#weather .clock-time");
   const dateEl = document.querySelector("#weather .clock-date");

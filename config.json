@@ -35,6 +35,6 @@
   ],
   "rotation": {
     "rssSeconds": 10,
-    "weatherPanelSeconds": 15
+    "weatherPanelSeconds": 7
   }
 }
