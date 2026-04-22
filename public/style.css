@@ -165,12 +165,12 @@ html, body {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: var(--fs-primary);
+  font-size: 1.25em;
 }
 
 .team-logo {
-  width: 1.4em;
-  height: 1.4em;
+  width: 1.6em;
+  height: 1.6em;
   object-fit: contain;
   flex-shrink: 0;
 }
@@ -180,6 +180,7 @@ html, body {
 .team-score {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  font-size: 1.15em;
   min-width: 1.5em;
   text-align: right;
 }
@@ -282,8 +283,8 @@ html, body {
 
 .rss-list { list-style: none; }
 .rss-item {
-  padding: 10px 0;
-  font-size: var(--fs-primary);
+  padding: 14px 0;
+  font-size: 1.25em;
 }
 .rss-item + .rss-item { border-top: 1px solid var(--border); }
 .rss-item a {
@@ -294,8 +295,8 @@ html, body {
   gap: 14px;
 }
 .rss-thumb {
-  width: 64px;
-  height: 44px;
+  width: 80px;
+  height: 56px;
   object-fit: cover;
   border-radius: 4px;
   flex-shrink: 0;

@@ -227,7 +227,7 @@ def _extract_feed_image(root) -> str:
     return ""
 
 
-def parse_rss(xml_bytes: bytes, limit: int = 5) -> tuple[str, list[dict]]:
+def parse_rss(xml_bytes: bytes, limit: int = 4) -> tuple[str, list[dict]]:
     root = ET.fromstring(xml_bytes)
     feed_image = _extract_feed_image(root)
     items = []
