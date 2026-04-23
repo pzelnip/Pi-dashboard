@@ -361,17 +361,20 @@ html, body {
 /* ---------- Weather-panel view rotation + Calendar ---------- */
 
 /* Cross-fade between stacked views. Parent .panel-body must be positioned. */
-#weather .panel-body {
+#weather .panel-body,
+#nhl .panel-body {
   position: relative;
 }
-#weather .view {
+#weather .view,
+#nhl .view {
   position: absolute;
   inset: 0;
   opacity: 0;
   pointer-events: none;
   transition: opacity 400ms ease-in-out;
 }
-#weather .view.active {
+#weather .view.active,
+#nhl .view.active {
   opacity: 1;
   pointer-events: auto;
 }

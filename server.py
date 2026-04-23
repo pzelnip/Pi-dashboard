@@ -143,16 +143,14 @@ def _series_text(s: dict | None) -> str:
 
 
 def fetch_nhl(date: str | None, favorites: list[str]) -> list[dict]:
-    path = f"schedule/{date}" if date else "schedule/now"
-    url = f"https://api-web.nhle.com/v1/{path}"
+    # Use the Pi's local date when no explicit date is passed. The NHL API's
+    # /schedule/now endpoint lags the calendar rollover, so we anchor on the
+    # server clock instead.
+    target_date = date or dt.date.today().isoformat()
+    url = f"https://api-web.nhle.com/v1/schedule/{target_date}"
     raw = fetch_cached(url, ttl_seconds=20)
     data = json.loads(raw)
-
-    # API returns a full week; filter to requested date (or first week entry = today).
-    target_date = date
     weeks = data.get("gameWeek", [])
-    if not target_date and weeks:
-        target_date = weeks[0].get("date")
 
     fav_set = set(favorites or [])
     games_out = []
@@ -489,11 +487,29 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/nhl":
-            date = query.get("date", [None])[0]
+            date_override = query.get("date", [None])[0]
             favorites = cfg.get("nhl", {}).get("favorites", []) or []
             try:
-                games = fetch_nhl(date, favorites)
-                self._send_json(games)
+                if date_override:
+                    # Debug override: single-day response, no yesterday view.
+                    games = fetch_nhl(date_override, favorites)
+                    has_live = any(g["state"] in ("LIVE", "CRIT") for g in games)
+                    self._send_json({
+                        "today": {"date": date_override, "games": games},
+                        "yesterday": None,
+                        "hasLiveToday": has_live,
+                    })
+                else:
+                    today_iso = dt.date.today().isoformat()
+                    yesterday_iso = (dt.date.today() - dt.timedelta(days=1)).isoformat()
+                    today_games = fetch_nhl(today_iso, favorites)
+                    yesterday_games = fetch_nhl(yesterday_iso, favorites)
+                    has_live = any(g["state"] in ("LIVE", "CRIT") for g in today_games)
+                    self._send_json({
+                        "today": {"date": today_iso, "games": today_games},
+                        "yesterday": {"date": yesterday_iso, "games": yesterday_games},
+                        "hasLiveToday": has_live,
+                    })
             except Exception as e:
                 self._send_error_json(str(e))
             return

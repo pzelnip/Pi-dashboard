@@ -55,11 +55,12 @@ async function fetchJson(url) {
 
 // ---------- NHL ----------
 
-function renderNHL(games) {
-  const el = bodyEl("nhl");
+function renderNHL(games, containerSelector, emptyMessage = "No games.") {
+  const el = document.querySelector(containerSelector);
+  if (!el) return;
   el.classList.remove("error");
-  if (!games.length) {
-    el.innerHTML = '<p style="color: var(--text-muted)">No games today.</p>';
+  if (!games || !games.length) {
+    el.innerHTML = `<p style="color: var(--text-muted)">${emptyMessage}</p>`;
     return;
   }
 
@@ -120,19 +121,101 @@ function renderNHL(games) {
   el.innerHTML = `<div class="games-grid">${sorted.map(renderGame).join("")}</div>`;
 }
 
+// ---------- NHL panel rotation (today ↔ yesterday) ----------
+
+const NHL_VIEWS = ["today", "yesterday"];
+const NHL_TITLES = { today: "NHL Scores", yesterday: "Yesterday" };
+let nhlViewIndex = 0;
+let nhlRotationMs = 10000;
+let nhlRotationTimer = null;
+let nhlTwoViewMode = false;
+
+function showNhlView(i) {
+  nhlViewIndex = ((i % NHL_VIEWS.length) + NHL_VIEWS.length) % NHL_VIEWS.length;
+  const active = NHL_VIEWS[nhlViewIndex];
+
+  document.querySelectorAll("#nhl .view").forEach(v => {
+    v.classList.toggle("active", v.classList.contains(`view-nhl-${active}`));
+  });
+
+  document.getElementById("nhl-title-text").textContent = NHL_TITLES[active];
+
+  document.querySelectorAll("#nhl-dots .rss-dot").forEach((btn, idx) => {
+    btn.classList.toggle("active", idx === nhlViewIndex);
+  });
+}
+
+function renderNhlDots() {
+  const dotsEl = document.getElementById("nhl-dots");
+  dotsEl.innerHTML = NHL_VIEWS.map((_, i) =>
+    `<button class="rss-dot ${i === nhlViewIndex ? 'active' : ''}" data-nhl-view="${i}" aria-label="View ${i + 1}"></button>`
+  ).join("");
+  dotsEl.querySelectorAll(".rss-dot").forEach(btn => {
+    btn.addEventListener("click", () => jumpToNhlView(Number(btn.dataset.nhlView)));
+  });
+}
+
+function clearNhlDots() {
+  document.getElementById("nhl-dots").innerHTML = "";
+}
+
+function rotateNhlPanel() {
+  showNhlView(nhlViewIndex + 1);
+}
+
+function startNhlRotationTimer() {
+  if (nhlRotationTimer) clearInterval(nhlRotationTimer);
+  nhlRotationTimer = setInterval(rotateNhlPanel, nhlRotationMs);
+}
+
+function stopNhlRotationTimer() {
+  if (nhlRotationTimer) {
+    clearInterval(nhlRotationTimer);
+    nhlRotationTimer = null;
+  }
+}
+
+function jumpToNhlView(i) {
+  if (i === nhlViewIndex) return;
+  showNhlView(i);
+  startNhlRotationTimer();
+}
+
+function updateNhlMode(data) {
+  const canRotate = !!(data.yesterday && !data.hasLiveToday);
+  if (canRotate) {
+    if (!nhlTwoViewMode) {
+      nhlTwoViewMode = true;
+      renderNhlDots();
+      startNhlRotationTimer();
+    }
+  } else {
+    if (nhlTwoViewMode) {
+      nhlTwoViewMode = false;
+      stopNhlRotationTimer();
+      clearNhlDots();
+    }
+    // Force today view and reset title
+    nhlViewIndex = 0;
+    document.querySelectorAll("#nhl .view").forEach(v => {
+      v.classList.toggle("active", v.classList.contains("view-nhl-today"));
+    });
+    document.getElementById("nhl-title-text").textContent = "NHL Scores";
+  }
+}
+
 async function refreshNHL() {
   try {
     const data = await fetchJson("/api/nhl");
     if (data && data.error) {
-      if (data.stale) {
-        renderNHL(data.stale);
-        bodyEl("nhl").classList.add("stale");
-      } else {
-        showError("nhl", data.error);
-      }
-    } else {
-      renderNHL(data);
+      showError("nhl", data.error);
+      return;
     }
+    renderNHL(data.today?.games, "#nhl .view-nhl-today", "No games today.");
+    if (data.yesterday) {
+      renderNHL(data.yesterday.games, "#nhl .view-nhl-yesterday", "No games yesterday.");
+    }
+    updateNhlMode(data);
     setUpdated("nhl");
   } catch (e) {
     showError("nhl", e.message);
@@ -489,6 +572,9 @@ async function start() {
     if (typeof secs === "number" && secs > 0) rssRotationMs = secs * 1000;
     const wxSecs = cfg?.rotation?.weatherPanelSeconds;
     if (typeof wxSecs === "number" && wxSecs > 0) weatherRotationMs = wxSecs * 1000;
+    // Default nhlPanelSeconds to weatherPanelSeconds if not explicitly set.
+    const nhlSecs = cfg?.rotation?.nhlPanelSeconds ?? cfg?.rotation?.weatherPanelSeconds;
+    if (typeof nhlSecs === "number" && nhlSecs > 0) nhlRotationMs = nhlSecs * 1000;
     calendarEnabled = !!cfg?.calendar?.enabled;
     countdowns = Array.isArray(cfg?.countdowns) ? cfg.countdowns : [];
   } catch (e) { /* fall back to default */ }

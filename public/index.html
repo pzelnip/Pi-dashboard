@@ -10,10 +10,19 @@
   <main class="grid">
     <section id="nhl" class="panel">
       <header class="panel-header">
-        <h2><img src="nhl-logo.png" alt="" class="header-logo"> NHL Scores</h2>
-        <span class="updated" data-updated-for="nhl"></span>
+        <h2>
+          <img src="nhl-logo.png" alt="" class="header-logo">
+          <span id="nhl-title-text">NHL Scores</span>
+        </h2>
+        <div class="panel-header-right">
+          <span id="nhl-dots" class="rss-dots"></span>
+          <span class="updated" data-updated-for="nhl"></span>
+        </div>
       </header>
-      <div class="panel-body" data-body="nhl">Loading…</div>
+      <div class="panel-body" data-body="nhl">
+        <div class="view view-nhl-today active">Loading…</div>
+        <div class="view view-nhl-yesterday">Loading…</div>
+      </div>
     </section>
 
     <section id="weather" class="panel">
