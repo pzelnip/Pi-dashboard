@@ -107,7 +107,7 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.") {
     <div class="game ${stateCls}">
       <div class="game-meta">
         ${pillFor(g)}
-        ${g.seriesText ? `<span>${g.seriesText}</span>` : ""}
+        ${g.seriesText ? `<span class="series-tag">${g.seriesText}</span>` : ""}
       </div>
       <div class="game-body">
         <div class="game-teams">

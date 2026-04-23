@@ -244,6 +244,19 @@ html, body {
 .status-pill.scheduled { color: var(--scheduled); }
 .status-pill.final { color: var(--text-muted); }
 
+.series-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 1.1em;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
