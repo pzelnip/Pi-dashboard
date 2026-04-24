@@ -158,16 +158,16 @@ html, body {
   color: #7fd184;
   background: rgba(76, 175, 80, 0.12);
   border-radius: 6px;
-  padding: 4px 8px;
-  margin: -4px -8px;
+  padding: 4px 8px 4px 10px;
+  margin: -4px -8px -4px 0;
 }
 .game-team.loser { opacity: 0.55; }
 
 .game-team.leading {
   background: rgba(79, 195, 247, 0.15);
   border-radius: 6px;
-  padding: 4px 8px;
-  margin: -4px -8px;
+  padding: 4px 8px 4px 10px;
+  margin: -4px -8px -4px 0;
 }
 
 .game-meta {
@@ -199,7 +199,23 @@ html, body {
   align-items: center;
   gap: 10px;
   font-size: 1.45em;
+  position: relative;
+  padding-left: 10px;
 }
+
+.game-team::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 2px;
+  bottom: 2px;
+  width: 3px;
+  border-radius: 2px;
+  z-index: 1;
+}
+
+.game-team.home::before { background: var(--accent); }
+.game-team.away::before { background: var(--text-muted); }
 
 .team-logo {
   width: 1.6em;

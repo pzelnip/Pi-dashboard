@@ -85,8 +85,8 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.") {
     return `<span class="status-pill final">${g.statusText || "Final"}</span>`;
   };
 
-  const row = (t, outcome, isFav) => `
-    <div class="game-team ${outcome}">
+  const row = (t, outcome, isFav, venue) => `
+    <div class="game-team ${outcome} ${venue}">
       ${t.logo ? `<img class="team-logo" src="${t.logo}" alt="" onerror="this.remove()">` : ""}
       <span class="team-name">${t.name || t.abbrev}${isFav ? ' <span class="fav-star" aria-label="Favorite team">★</span>' : ""}</span>
       <span class="team-score">${t.score ?? ""}</span>
@@ -111,8 +111,8 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.") {
       </div>
       <div class="game-body">
         <div class="game-teams">
-          ${row(g.away, awayCls, g.away.isFavorite)}
-          ${row(g.home, homeCls, g.home.isFavorite)}
+          ${row(g.away, awayCls, g.away.isFavorite, "away")}
+          ${row(g.home, homeCls, g.home.isFavorite, "home")}
         </div>
       </div>
     </div>`;
