@@ -257,7 +257,10 @@ html, body {
   background: var(--live);
   animation: pulse 1.6s ease-in-out infinite;
 }
-.status-pill.scheduled { color: var(--scheduled); }
+.status-pill.scheduled {
+  color: var(--scheduled);
+  font-size: 1em;
+}
 .status-pill.final { color: var(--text-muted); }
 
 .series-tag {
