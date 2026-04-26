@@ -437,11 +437,13 @@ html, body {
 /* Cross-fade on feed swap. Targets feed title, dots, and body (not .updated). */
 #rss #rss-title,
 #rss #rss-dots,
+#rss #rss-nav,
 #rss .panel-body {
   transition: opacity 200ms ease-in-out;
 }
 #rss.fading #rss-title,
 #rss.fading #rss-dots,
+#rss.fading #rss-nav,
 #rss.fading .panel-body {
   opacity: 0;
 }

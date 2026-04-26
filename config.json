@@ -57,7 +57,7 @@
   ],
   "rotation": {
     "rssSeconds": 10,
-    "weatherPanelSeconds": 7,
+    "weatherPanelSeconds": 6,
     "nhlPanelSeconds": 10
   }
 }

@@ -53,6 +53,38 @@ async function fetchJson(url) {
   return resp.json();
 }
 
+// ---------- Rotation controls (dots + prev/next) ----------
+// Used by all three rotating panels (RSS, weather, NHL) so they share markup,
+// styles, and behavior. Pass null for `dotsEl` or `navEl` to skip that piece.
+function renderRotationControls({ dotsEl, navEl, count, activeIndex, getCurrent, jumpTo }) {
+  if (dotsEl) {
+    if (count > 1) {
+      dotsEl.innerHTML = Array.from({length: count}, (_, i) =>
+        `<button class="rss-dot ${i === activeIndex ? 'active' : ''}" data-rot-index="${i}" aria-label="View ${i + 1}"></button>`
+      ).join("");
+      dotsEl.querySelectorAll(".rss-dot").forEach(btn => {
+        btn.addEventListener("click", () => jumpTo(Number(btn.dataset.rotIndex)));
+      });
+    } else {
+      dotsEl.innerHTML = "";
+    }
+  }
+  if (navEl) {
+    if (count > 1) {
+      navEl.innerHTML = `
+        <button class="rss-nav" data-rot-step="-1" aria-label="Previous">‹</button>
+        <button class="rss-nav" data-rot-step="1" aria-label="Next">›</button>
+      `;
+      navEl.querySelectorAll(".rss-nav").forEach(btn => {
+        const step = Number(btn.dataset.rotStep);
+        btn.addEventListener("click", () => jumpTo(getCurrent() + step));
+      });
+    } else {
+      navEl.innerHTML = "";
+    }
+  }
+}
+
 // ---------- NHL ----------
 
 function renderNHL(games, containerSelector, emptyMessage = "No games.") {
@@ -146,17 +178,19 @@ function showNhlView(i) {
 }
 
 function renderNhlDots() {
-  const dotsEl = document.getElementById("nhl-dots");
-  dotsEl.innerHTML = NHL_VIEWS.map((_, i) =>
-    `<button class="rss-dot ${i === nhlViewIndex ? 'active' : ''}" data-nhl-view="${i}" aria-label="View ${i + 1}"></button>`
-  ).join("");
-  dotsEl.querySelectorAll(".rss-dot").forEach(btn => {
-    btn.addEventListener("click", () => jumpToNhlView(Number(btn.dataset.nhlView)));
+  renderRotationControls({
+    dotsEl: document.getElementById("nhl-dots"),
+    navEl: document.getElementById("nhl-nav"),
+    count: NHL_VIEWS.length,
+    activeIndex: nhlViewIndex,
+    getCurrent: () => nhlViewIndex,
+    jumpTo: jumpToNhlView,
   });
 }
 
 function clearNhlDots() {
   document.getElementById("nhl-dots").innerHTML = "";
+  document.getElementById("nhl-nav").innerHTML = "";
 }
 
 function rotateNhlPanel() {
@@ -447,12 +481,13 @@ function showWeatherView(i) {
 }
 
 function renderWeatherDots() {
-  const dotsEl = document.getElementById("weather-dots");
-  dotsEl.innerHTML = WEATHER_VIEWS.map((_, i) =>
-    `<button class="rss-dot ${i === weatherViewIndex ? 'active' : ''}" data-weather-view="${i}" aria-label="View ${i + 1}"></button>`
-  ).join("");
-  dotsEl.querySelectorAll(".rss-dot").forEach(btn => {
-    btn.addEventListener("click", () => jumpToWeatherView(Number(btn.dataset.weatherView)));
+  renderRotationControls({
+    dotsEl: document.getElementById("weather-dots"),
+    navEl: document.getElementById("weather-nav"),
+    count: WEATHER_VIEWS.length,
+    activeIndex: weatherViewIndex,
+    getCurrent: () => weatherViewIndex,
+    jumpTo: jumpToWeatherView,
   });
 }
 
@@ -491,16 +526,18 @@ function renderRSS(payload) {
   const rssPanel = document.getElementById("rss");
   const titleEl = document.getElementById("rss-title");
   const dotsEl = document.getElementById("rss-dots");
+  const navEl = document.getElementById("rss-nav");
   const el = bodyEl("rss");
 
   const writeContent = () => {
     titleEl.innerHTML = `${logo}<span>${payload.name}</span>`;
-    dotsEl.innerHTML = `
-      <button class="rss-nav" data-feed-step="-1" aria-label="Previous feed">‹</button>
-      <button class="rss-nav" data-feed-step="1" aria-label="Next feed">›</button>
-    `;
-    dotsEl.querySelectorAll(".rss-nav").forEach(btn => {
-      btn.addEventListener("click", () => jumpToFeed(rssIndex + Number(btn.dataset.feedStep)));
+    renderRotationControls({
+      dotsEl,
+      navEl,
+      count: rssTotal,
+      activeIndex: payload.index,
+      getCurrent: () => rssIndex,
+      jumpTo: jumpToFeed,
     });
 
     el.classList.remove("error");
