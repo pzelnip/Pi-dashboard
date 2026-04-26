@@ -477,7 +477,7 @@ html, body {
   overflow: hidden;
 }
 
-.rss-dot {
+.rot-dot {
   display: inline-block;
   width: 11px;
   height: 11px;
@@ -489,15 +489,15 @@ html, body {
   cursor: pointer;
   transition: background 0.15s, opacity 0.15s, transform 0.1s;
 }
-.rss-dot:hover { opacity: 1; }
-.rss-dot:active { transform: scale(0.9); }
-.rss-dot.active {
+.rot-dot:hover { opacity: 1; }
+.rot-dot:active { transform: scale(0.9); }
+.rot-dot.active {
   background: var(--accent);
   opacity: 1;
 }
-.rss-dots { display: inline-flex; gap: 6px; vertical-align: middle; }
+.rot-dots { display: inline-flex; gap: 6px; vertical-align: middle; }
 
-.rss-nav {
+.rot-nav {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -513,5 +513,5 @@ html, body {
   cursor: pointer;
   transition: background 0.15s, transform 0.1s;
 }
-.rss-nav:hover { background: rgba(255, 255, 255, 0.12); }
-.rss-nav:active { transform: scale(0.92); }
+.rot-nav:hover { background: rgba(255, 255, 255, 0.12); }
+.rot-nav:active { transform: scale(0.92); }

@@ -2,13 +2,6 @@
 
 const REFRESH_NHL_MS = 30 * 1000;
 const REFRESH_WEATHER_MS = 10 * 60 * 1000;
-const REFRESH_RSS_MS = 15 * 60 * 1000;
-
-let rssIndex = 0;
-let rssTotal = 1;
-let rssRotationMs = 30 * 1000;
-let rssRotationTimer = null;
-let rssFadeTimer = null;
 
 const _lastUpdated = {};  // { panelName: Date }
 
@@ -53,36 +46,103 @@ async function fetchJson(url) {
   return resp.json();
 }
 
-// ---------- Rotation controls (dots + prev/next) ----------
-// Used by all three rotating panels (RSS, weather, NHL) so they share markup,
-// styles, and behavior. Pass null for `dotsEl` or `navEl` to skip that piece.
-function renderRotationControls({ dotsEl, navEl, count, activeIndex, getCurrent, jumpTo }) {
-  if (dotsEl) {
-    if (count > 1) {
-      dotsEl.innerHTML = Array.from({length: count}, (_, i) =>
-        `<button class="rss-dot ${i === activeIndex ? 'active' : ''}" data-rot-index="${i}" aria-label="View ${i + 1}"></button>`
-      ).join("");
-      dotsEl.querySelectorAll(".rss-dot").forEach(btn => {
+const TIME_FMT = { hour: "numeric", minute: "2-digit", hour12: true };
+const formatTime = d => new Date(d).toLocaleTimeString("en-US", TIME_FMT);
+
+// ---------- Rotator ----------
+// Owns the index, timer, dots/nav, and active-view CSS class for one rotating
+// panel. Each panel calls createRotator once; setViews() can be called later
+// to swap the active set (e.g. NHL switching between today-only and today/yesterday).
+function createRotator({ dotsEl, navEl, viewsContainer, viewClassPrefix, titleEl, titles, views, getRotationMs, onShow }) {
+  let currentViews = views.slice();
+  let index = 0;
+  let timer = null;
+
+  const wrap = i => ((i % currentViews.length) + currentViews.length) % currentViews.length;
+
+  function renderControls() {
+    const count = currentViews.length;
+    if (dotsEl) {
+      dotsEl.innerHTML = count > 1
+        ? Array.from({length: count}, (_, i) =>
+            `<button class="rot-dot ${i === index ? 'active' : ''}" data-rot-index="${i}" aria-label="View ${i + 1}"></button>`
+          ).join("")
+        : "";
+      dotsEl.querySelectorAll(".rot-dot").forEach(btn => {
         btn.addEventListener("click", () => jumpTo(Number(btn.dataset.rotIndex)));
       });
-    } else {
-      dotsEl.innerHTML = "";
     }
-  }
-  if (navEl) {
-    if (count > 1) {
-      navEl.innerHTML = `
-        <button class="rss-nav" data-rot-step="-1" aria-label="Previous">‹</button>
-        <button class="rss-nav" data-rot-step="1" aria-label="Next">›</button>
-      `;
-      navEl.querySelectorAll(".rss-nav").forEach(btn => {
+    if (navEl) {
+      navEl.innerHTML = count > 1
+        ? `<button class="rot-nav" data-rot-step="-1" aria-label="Previous">‹</button>
+           <button class="rot-nav" data-rot-step="1" aria-label="Next">›</button>`
+        : "";
+      navEl.querySelectorAll(".rot-nav").forEach(btn => {
         const step = Number(btn.dataset.rotStep);
-        btn.addEventListener("click", () => jumpTo(getCurrent() + step));
+        btn.addEventListener("click", () => jumpTo(index + step));
       });
-    } else {
-      navEl.innerHTML = "";
     }
   }
+
+  function applyActiveView() {
+    const active = currentViews[index];
+    if (viewsContainer) {
+      viewsContainer.querySelectorAll(".view").forEach(v => {
+        v.classList.toggle("active", v.classList.contains(`${viewClassPrefix}${active}`));
+      });
+    }
+    if (titleEl && titles) {
+      titleEl.textContent = titles[active] ?? "";
+    }
+    if (dotsEl) {
+      dotsEl.querySelectorAll(".rot-dot").forEach((btn, i) => {
+        btn.classList.toggle("active", i === index);
+      });
+    }
+    if (onShow) onShow(active);
+  }
+
+  function showView(i) {
+    index = wrap(i);
+    applyActiveView();
+  }
+
+  function jumpTo(i) {
+    if (wrap(i) === index) return;
+    showView(i);
+    startTimer();
+  }
+
+  function rotate() { showView(index + 1); }
+
+  function startTimer() {
+    stopTimer();
+    if (currentViews.length > 1) {
+      timer = setInterval(rotate, getRotationMs());
+    }
+  }
+
+  function stopTimer() {
+    if (timer) { clearInterval(timer); timer = null; }
+  }
+
+  function setViews(newViews) {
+    const wasActive = currentViews[index];
+    currentViews = newViews.slice();
+    const reuseIdx = currentViews.indexOf(wasActive);
+    index = reuseIdx >= 0 ? reuseIdx : 0;
+    renderControls();
+    applyActiveView();
+    startTimer();
+  }
+
+  function start() {
+    renderControls();
+    applyActiveView();
+    startTimer();
+  }
+
+  return { start, setViews, jumpTo, rotate, getIndex: () => index };
 }
 
 // ---------- NHL ----------
@@ -95,9 +155,6 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.") {
     el.innerHTML = `<p style="color: var(--text-muted)">${emptyMessage}</p>`;
     return;
   }
-
-  const startTime = iso =>
-    new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
 
   const isLive = g => g.state === "LIVE" || g.state === "CRIT";
   const isScheduled = g => g.state === "FUT" || g.state === "PRE";
@@ -113,7 +170,7 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.") {
 
   const pillFor = g => {
     if (isLive(g)) return `<span class="status-pill live">${g.statusText || "LIVE"}</span>`;
-    if (isScheduled(g)) return `<span class="status-pill scheduled">${startTime(g.startTime)}</span>`;
+    if (isScheduled(g)) return `<span class="status-pill scheduled">${formatTime(g.startTime)}</span>`;
     return `<span class="status-pill final">${g.statusText || "Final"}</span>`;
   };
 
@@ -153,90 +210,9 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.") {
   el.innerHTML = `<div class="games-grid">${sorted.map(renderGame).join("")}</div>`;
 }
 
-// ---------- NHL panel rotation (today ↔ yesterday) ----------
-
-const NHL_VIEWS = ["today", "yesterday"];
 const NHL_TITLES = { today: "NHL Scores", yesterday: "Yesterday" };
-let nhlViewIndex = 0;
 let nhlRotationMs = 10000;
-let nhlRotationTimer = null;
-let nhlTwoViewMode = false;
-
-function showNhlView(i) {
-  nhlViewIndex = ((i % NHL_VIEWS.length) + NHL_VIEWS.length) % NHL_VIEWS.length;
-  const active = NHL_VIEWS[nhlViewIndex];
-
-  document.querySelectorAll("#nhl .view").forEach(v => {
-    v.classList.toggle("active", v.classList.contains(`view-nhl-${active}`));
-  });
-
-  document.getElementById("nhl-title-text").textContent = NHL_TITLES[active];
-
-  document.querySelectorAll("#nhl-dots .rss-dot").forEach((btn, idx) => {
-    btn.classList.toggle("active", idx === nhlViewIndex);
-  });
-}
-
-function renderNhlDots() {
-  renderRotationControls({
-    dotsEl: document.getElementById("nhl-dots"),
-    navEl: document.getElementById("nhl-nav"),
-    count: NHL_VIEWS.length,
-    activeIndex: nhlViewIndex,
-    getCurrent: () => nhlViewIndex,
-    jumpTo: jumpToNhlView,
-  });
-}
-
-function clearNhlDots() {
-  document.getElementById("nhl-dots").innerHTML = "";
-  document.getElementById("nhl-nav").innerHTML = "";
-}
-
-function rotateNhlPanel() {
-  showNhlView(nhlViewIndex + 1);
-}
-
-function startNhlRotationTimer() {
-  if (nhlRotationTimer) clearInterval(nhlRotationTimer);
-  nhlRotationTimer = setInterval(rotateNhlPanel, nhlRotationMs);
-}
-
-function stopNhlRotationTimer() {
-  if (nhlRotationTimer) {
-    clearInterval(nhlRotationTimer);
-    nhlRotationTimer = null;
-  }
-}
-
-function jumpToNhlView(i) {
-  if (i === nhlViewIndex) return;
-  showNhlView(i);
-  startNhlRotationTimer();
-}
-
-function updateNhlMode(data) {
-  const canRotate = !!(data.yesterday && !data.hasLiveToday);
-  if (canRotate) {
-    if (!nhlTwoViewMode) {
-      nhlTwoViewMode = true;
-      renderNhlDots();
-      startNhlRotationTimer();
-    }
-  } else {
-    if (nhlTwoViewMode) {
-      nhlTwoViewMode = false;
-      stopNhlRotationTimer();
-      clearNhlDots();
-    }
-    // Force today view and reset title
-    nhlViewIndex = 0;
-    document.querySelectorAll("#nhl .view").forEach(v => {
-      v.classList.toggle("active", v.classList.contains("view-nhl-today"));
-    });
-    document.getElementById("nhl-title-text").textContent = "NHL Scores";
-  }
-}
+let nhlRotator = null;
 
 async function refreshNHL() {
   try {
@@ -249,7 +225,8 @@ async function refreshNHL() {
     if (data.yesterday) {
       renderNHL(data.yesterday.games, "#nhl .view-nhl-yesterday", "No games yesterday.");
     }
-    updateNhlMode(data);
+    const canRotate = !!(data.yesterday && !data.hasLiveToday);
+    nhlRotator.setViews(canRotate ? ["today", "yesterday"] : ["today"]);
     setUpdated("nhl");
   } catch (e) {
     showError("nhl", e.message);
@@ -349,11 +326,7 @@ function renderCalendar(data) {
     return;
   }
 
-  const timeLabel = ev => {
-    if (ev.allDay) return "All day";
-    const d = new Date(ev.start);
-    return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
-  };
+  const timeLabel = ev => ev.allDay ? "All day" : formatTime(ev.start);
 
   el.innerHTML = data.events.map(ev => `
     <div class="cal-event ${ev.allDay ? "cal-allday" : ""}">
@@ -388,7 +361,6 @@ function ordinalSuffix(n) {
 
 function renderClock() {
   const now = new Date();
-  const time = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
   const weekday = now.toLocaleDateString("en-US", { weekday: "long" });
   const month = now.toLocaleDateString("en-US", { month: "long" });
   const day = now.getDate();
@@ -396,7 +368,7 @@ function renderClock() {
   const date = `${weekday}, ${month} ${day}${ordinalSuffix(day)}, ${year}`;
   const timeEl = document.querySelector("#weather .clock-time");
   const dateEl = document.querySelector("#weather .clock-date");
-  if (timeEl) timeEl.textContent = time;
+  if (timeEl) timeEl.textContent = formatTime(now);
   if (dateEl) dateEl.textContent = date;
 }
 
@@ -404,30 +376,18 @@ function renderClock() {
 
 let countdowns = [];
 
-function daysBetween(fromYmd, toYmd) {
-  // Compare midnight-anchored dates to avoid DST / hour-of-day drift.
-  const [y1, m1, d1] = fromYmd.split("-").map(Number);
-  const [y2, m2, d2] = toYmd.split("-").map(Number);
-  const a = Date.UTC(y1, m1 - 1, d1);
-  const b = Date.UTC(y2, m2 - 1, d2);
-  return Math.round((b - a) / 86400000);
-}
-
-function todayYmd() {
-  const n = new Date();
-  const y = n.getFullYear();
-  const m = String(n.getMonth() + 1).padStart(2, "0");
-  const d = String(n.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
 function pickCountdown() {
   if (!countdowns.length) return null;
-  const today = todayYmd();
-  const annotated = countdowns.map(c => ({ ...c, days: daysBetween(today, c.date) }));
+  const now = new Date();
+  const todayUtc = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  // Compare midnight-anchored dates to avoid DST / hour-of-day drift.
+  const annotated = countdowns.map(c => {
+    const [y, m, d] = c.date.split("-").map(Number);
+    const days = Math.round((Date.UTC(y, m - 1, d) - todayUtc) / 86400000);
+    return { ...c, days };
+  });
   const upcoming = annotated.filter(c => c.days >= 0).sort((a, b) => a.days - b.days);
   if (upcoming.length) return upcoming[0];
-  // All in the past — pick the most recent.
   return annotated.sort((a, b) => b.days - a.days)[0];
 }
 
@@ -457,56 +417,22 @@ function renderCountdown() {
 
 // ---------- Weather panel rotation ----------
 
-const WEATHER_VIEWS = ["weather", "calendar", "clock", "countdown"];
 const WEATHER_TITLES = { weather: "Weather", calendar: "Today", clock: "", countdown: "" };
-let weatherViewIndex = 0;
 let weatherRotationMs = 15000;
-let weatherRotationTimer = null;
+let weatherRotator = null;
 
-function showWeatherView(i) {
-  weatherViewIndex = ((i % WEATHER_VIEWS.length) + WEATHER_VIEWS.length) % WEATHER_VIEWS.length;
-  const active = WEATHER_VIEWS[weatherViewIndex];
-
-  document.querySelectorAll("#weather .view").forEach(v => {
-    v.classList.toggle("active", v.classList.contains(`view-${active}`));
-  });
-
-  document.getElementById("weather-title-text").textContent = WEATHER_TITLES[active];
-  document.getElementById("weather-label").style.display =
-    active === "weather" ? "" : "none";
-
-  document.querySelectorAll("#weather-dots .rss-dot").forEach((btn, idx) => {
-    btn.classList.toggle("active", idx === weatherViewIndex);
-  });
-}
-
-function renderWeatherDots() {
-  renderRotationControls({
-    dotsEl: document.getElementById("weather-dots"),
-    navEl: document.getElementById("weather-nav"),
-    count: WEATHER_VIEWS.length,
-    activeIndex: weatherViewIndex,
-    getCurrent: () => weatherViewIndex,
-    jumpTo: jumpToWeatherView,
-  });
-}
-
-function rotateWeatherPanel() {
-  showWeatherView(weatherViewIndex + 1);
-}
-
-function startWeatherRotationTimer() {
-  if (weatherRotationTimer) clearInterval(weatherRotationTimer);
-  weatherRotationTimer = setInterval(rotateWeatherPanel, weatherRotationMs);
-}
-
-function jumpToWeatherView(i) {
-  if (i === weatherViewIndex) return;
-  showWeatherView(i);
-  startWeatherRotationTimer();
+function onWeatherViewShown(active) {
+  // The weather "label" (city name) only makes sense on the weather view itself.
+  document.getElementById("weather-label").style.display = active === "weather" ? "" : "none";
 }
 
 // ---------- RSS ----------
+
+let rssIndex = 0;
+let rssTotal = 1;
+let rssRotationMs = 30 * 1000;
+let rssFadeTimer = null;
+let rssRotator = null;
 
 // Default RSS icon: orange square with two arcs + dot, standard recognizable mark.
 window.DEFAULT_RSS_ICON = `
@@ -519,27 +445,22 @@ window.DEFAULT_RSS_ICON = `
 
 function renderRSS(payload) {
   rssTotal = payload.total || 1;
+  rssIndex = payload.index;
   const logo = payload.feedImage
     ? `<img class="feed-logo" src="${payload.feedImage}" alt="" onerror="this.outerHTML=window.DEFAULT_RSS_ICON">`
     : window.DEFAULT_RSS_ICON;
 
   const rssPanel = document.getElementById("rss");
   const titleEl = document.getElementById("rss-title");
-  const dotsEl = document.getElementById("rss-dots");
-  const navEl = document.getElementById("rss-nav");
   const el = bodyEl("rss");
+
+  // RSS uses the rotator with a synthetic "view per feed" set so dots/nav match
+  // the count of feeds. We don't actually flip CSS classes — the body content
+  // is rewritten on each feed swap.
+  rssRotator.setViews(Array.from({length: rssTotal}, (_, i) => String(i)));
 
   const writeContent = () => {
     titleEl.innerHTML = `${logo}<span>${payload.name}</span>`;
-    renderRotationControls({
-      dotsEl,
-      navEl,
-      count: rssTotal,
-      activeIndex: payload.index,
-      getCurrent: () => rssIndex,
-      jumpTo: jumpToFeed,
-    });
-
     el.classList.remove("error");
     if (!payload.items || !payload.items.length) {
       el.innerHTML = '<p style="color: var(--text-muted)">No items.</p>';
@@ -583,21 +504,12 @@ async function refreshRSS() {
   }
 }
 
-function rotateRSS() {
-  rssIndex = (rssIndex + 1) % rssTotal;
+function onRssViewShown(active) {
+  // active is a stringified feed index; only fetch if it differs from current.
+  const target = Number(active);
+  if (target === rssIndex) return;
+  rssIndex = target;
   refreshRSS();
-}
-
-function startRssRotationTimer() {
-  if (rssRotationTimer) clearInterval(rssRotationTimer);
-  rssRotationTimer = setInterval(rotateRSS, rssRotationMs);
-}
-
-function jumpToFeed(i) {
-  if (i === rssIndex) return;
-  rssIndex = ((i % rssTotal) + rssTotal) % rssTotal;
-  refreshRSS();
-  startRssRotationTimer();  // reset the timer so user gets a full cycle on the chosen feed
 }
 
 // ---------- Bootstrap ----------
@@ -617,32 +529,60 @@ async function start() {
     countdowns = Array.isArray(cfg?.countdowns) ? cfg.countdowns : [];
   } catch (e) { /* fall back to default */ }
 
+  // Build the weather views list based on what's actually configured.
+  const weatherViews = ["weather"];
+  if (calendarEnabled) weatherViews.push("calendar");
+  weatherViews.push("clock");
+  if (countdowns.length) weatherViews.push("countdown");
+
+  nhlRotator = createRotator({
+    dotsEl: document.getElementById("nhl-dots"),
+    navEl: document.getElementById("nhl-nav"),
+    viewsContainer: document.getElementById("nhl"),
+    viewClassPrefix: "view-nhl-",
+    titleEl: document.getElementById("nhl-title-text"),
+    titles: NHL_TITLES,
+    views: ["today"],  // refreshNHL() expands to ["today","yesterday"] when appropriate
+    getRotationMs: () => nhlRotationMs,
+  });
+  nhlRotator.start();
+
+  weatherRotator = createRotator({
+    dotsEl: document.getElementById("weather-dots"),
+    navEl: document.getElementById("weather-nav"),
+    viewsContainer: document.getElementById("weather"),
+    viewClassPrefix: "view-",
+    titleEl: document.getElementById("weather-title-text"),
+    titles: WEATHER_TITLES,
+    views: weatherViews,
+    getRotationMs: () => weatherRotationMs,
+    onShow: onWeatherViewShown,
+  });
+  weatherRotator.start();
+
+  rssRotator = createRotator({
+    dotsEl: document.getElementById("rss-dots"),
+    navEl: document.getElementById("rss-nav"),
+    views: ["0"],  // renderRSS expands once we know the feed count
+    getRotationMs: () => rssRotationMs,
+    onShow: onRssViewShown,
+  });
+  rssRotator.start();
+
   refreshNHL(); setInterval(refreshNHL, REFRESH_NHL_MS);
   refreshWeather(); setInterval(refreshWeather, REFRESH_WEATHER_MS);
-  refreshRSS(); setInterval(refreshRSS, REFRESH_RSS_MS);
-  startRssRotationTimer();
+  refreshRSS();  // rotation timer takes over from here; each rotation fetches.
 
-  // Calendar view: only if a calendar URL is configured.
-  if (!calendarEnabled) {
-    WEATHER_VIEWS.splice(WEATHER_VIEWS.indexOf("calendar"), 1);
-  } else {
+  if (calendarEnabled) {
     refreshCalendar(); setInterval(refreshCalendar, 5 * 60 * 1000);
   }
-
-  // Countdown view: only if any countdowns are configured.
-  if (!countdowns.length) {
-    WEATHER_VIEWS.splice(WEATHER_VIEWS.indexOf("countdown"), 1);
-  } else {
+  if (countdowns.length) {
     // Re-render hourly so the day count rolls over at midnight without a page reload.
     renderCountdown(); setInterval(renderCountdown, 60 * 60 * 1000);
   }
 
   // Clock ticks every minute; render immediately so it's ready when rotation lands on it.
   renderClock(); setInterval(renderClock, 60 * 1000);
-
-  // Rotate weather panel between all active views.
-  renderWeatherDots();
-  startWeatherRotationTimer();
 
   // Keep "X ago" labels accurate as time passes between data refreshes.
   setInterval(refreshUpdatedLabels, 5 * 1000);

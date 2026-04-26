@@ -69,18 +69,19 @@ def fetch_cached(url: str, ttl_seconds: int) -> bytes:
 
     headers = {"User-Agent": USER_AGENT, "Accept": "*/*"}
     req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=10) as resp:
-        body = resp.read()
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            body = resp.read()
+    except Exception:
+        # On network failure, return any cached body we still have (even if expired).
+        # The frontend stays useful when upstream APIs blip.
+        if hit:
+            return hit[1]
+        raise
 
     with _cache_lock:
         _cache[url] = (now + ttl_seconds, body)
     return body
-
-
-def stale_cached(url: str) -> bytes | None:
-    with _cache_lock:
-        hit = _cache.get(url)
-        return hit[1] if hit else None
 
 
 # ---------- NHL ----------
@@ -260,38 +261,56 @@ def _extract_feed_image(root) -> str:
     return ""
 
 
+def _build_item(el, title_field, link_fn, published_fields, html_fields) -> dict | None:
+    title = (el.findtext(title_field) or "").strip()
+    if not title:
+        return None
+    link = link_fn(el)
+    published = ""
+    for f in published_fields:
+        if (val := el.findtext(f)):
+            published = val.strip()
+            break
+    return {
+        "title": title,
+        "link": link,
+        "published": published,
+        "image": _extract_image(el, html_fields),
+    }
+
+
 def parse_rss(xml_bytes: bytes, limit: int = 4) -> tuple[str, list[dict]]:
     root = ET.fromstring(xml_bytes)
     feed_image = _extract_feed_image(root)
-    items = []
 
     # RSS 2.0: <rss><channel><item>
-    for item in root.findall(".//item"):
-        title = (item.findtext("title") or "").strip()
-        link = (item.findtext("link") or "").strip()
-        published = (item.findtext("pubDate") or "").strip()
-        image = _extract_image(item, ["description", "content:encoded"])
-        if title:
-            items.append({
-                "title": title, "link": link, "published": published, "image": image,
-            })
+    items = [
+        item for el in root.findall(".//item")
+        if (item := _build_item(
+            el,
+            title_field="title",
+            link_fn=lambda e: (e.findtext("link") or "").strip(),
+            published_fields=["pubDate"],
+            html_fields=["description", "content:encoded"],
+        ))
+    ]
 
     # Atom: <feed><entry>
     if not items:
-        for entry in root.findall(f"{ATOM_NS}entry"):
-            title = (entry.findtext(f"{ATOM_NS}title") or "").strip()
-            link_el = entry.find(f"{ATOM_NS}link")
-            link = link_el.get("href", "") if link_el is not None else ""
-            published = (
-                entry.findtext(f"{ATOM_NS}published")
-                or entry.findtext(f"{ATOM_NS}updated")
-                or ""
-            ).strip()
-            image = _extract_image(entry, [f"{ATOM_NS}summary", f"{ATOM_NS}content"])
-            if title:
-                items.append({
-                    "title": title, "link": link, "published": published, "image": image,
-                })
+        def atom_link(e):
+            link_el = e.find(f"{ATOM_NS}link")
+            return link_el.get("href", "") if link_el is not None else ""
+
+        items = [
+            item for el in root.findall(f"{ATOM_NS}entry")
+            if (item := _build_item(
+                el,
+                title_field=f"{ATOM_NS}title",
+                link_fn=atom_link,
+                published_fields=[f"{ATOM_NS}published", f"{ATOM_NS}updated"],
+                html_fields=[f"{ATOM_NS}summary", f"{ATOM_NS}content"],
+            ))
+        ]
 
     return feed_image, items[:limit]
 
@@ -437,9 +456,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _send_error_json(self, message: str, stale=None):
-        # HTTP 200 with {error, stale} so the frontend can keep showing last-good data.
-        self._send_json({"error": message, "stale": stale}, status=200)
+    def _send_error_json(self, message: str):
+        # HTTP 200 with {error} so the frontend can render an inline error
+        # without losing whatever's already on screen. Last-good data is
+        # already served transparently via fetch_cached's stale fallback.
+        self._send_json({"error": message}, status=200)
 
     def _serve_static(self, rel_path: str):
         if rel_path in ("", "/"):
