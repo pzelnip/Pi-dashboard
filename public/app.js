@@ -495,11 +495,12 @@ function renderRSS(payload) {
 
   const writeContent = () => {
     titleEl.innerHTML = `${logo}<span>${payload.name}</span>`;
-    dotsEl.innerHTML = Array.from({length: rssTotal}, (_, i) =>
-      `<button class="rss-dot ${i === payload.index ? 'active' : ''}" data-feed-index="${i}" aria-label="Feed ${i + 1}"></button>`
-    ).join("");
-    dotsEl.querySelectorAll(".rss-dot").forEach(btn => {
-      btn.addEventListener("click", () => jumpToFeed(Number(btn.dataset.feedIndex)));
+    dotsEl.innerHTML = `
+      <button class="rss-nav" data-feed-step="-1" aria-label="Previous feed">‹</button>
+      <button class="rss-nav" data-feed-step="1" aria-label="Next feed">›</button>
+    `;
+    dotsEl.querySelectorAll(".rss-nav").forEach(btn => {
+      btn.addEventListener("click", () => jumpToFeed(rssIndex + Number(btn.dataset.feedStep)));
     });
 
     el.classList.remove("error");

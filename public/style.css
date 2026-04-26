@@ -494,3 +494,22 @@ html, body {
   opacity: 1;
 }
 .rss-dots { display: inline-flex; gap: 6px; vertical-align: middle; }
+
+.rss-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font-size: 1.4em;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.rss-nav:hover { background: rgba(255, 255, 255, 0.12); }
+.rss-nav:active { transform: scale(0.92); }
