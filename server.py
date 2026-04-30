@@ -134,13 +134,19 @@ def _series_text(s: dict | None) -> str:
     top_w = s.get("topSeedWins", 0)
     bot = s.get("bottomSeedTeamAbbrev")
     bot_w = s.get("bottomSeedWins", 0)
+    needed = s.get("neededToWin", 4)
+    game_num = s.get("gameNumberOfSeries", "?")
     if top_w == 0 and bot_w == 0:
-        return f"Game {s.get('gameNumberOfSeries', '?')}"
+        return f"Game {game_num}"
+    if top_w >= needed:
+        return f"Game {game_num} ({top} won {top_w}-{bot_w}) 🏆"
+    if bot_w >= needed:
+        return f"Game {game_num} ({bot} won {bot_w}-{top_w}) 🏆"
     if top_w > bot_w:
-        return f"Game {s.get('gameNumberOfSeries', '?')} ({top} leads {top_w}-{bot_w})"
+        return f"Game {game_num} ({top} leads {top_w}-{bot_w})"
     if bot_w > top_w:
-        return f"Game {s.get('gameNumberOfSeries', '?')} ({bot} leads {bot_w}-{top_w})"
-    return f"Game {s.get('gameNumberOfSeries', '?')} (tied {top_w}-{bot_w})"
+        return f"Game {game_num} ({bot} leads {bot_w}-{top_w})"
+    return f"Game {game_num} (tied {top_w}-{bot_w})"
 
 
 def fetch_nhl(date: str | None, favorites: list[str]) -> list[dict]:
