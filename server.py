@@ -27,7 +27,10 @@ USER_AGENT = "Mozilla/5.0 (compatible; pi-dashboard/1.0)"
 def _current_version() -> str:
     try:
         sha = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=HERE, stderr=subprocess.DEVNULL, timeout=2,
+            ["git", "rev-parse", "HEAD"],
+            cwd=HERE,
+            stderr=subprocess.DEVNULL,
+            timeout=2,
         )
         return sha.decode().strip()
     except Exception:
@@ -139,9 +142,9 @@ def _series_text(s: dict | None) -> str:
     if top_w == 0 and bot_w == 0:
         return f"Game {game_num}"
     if top_w >= needed:
-        return f"Game {game_num} ({top} won {top_w}-{bot_w}) 🏆"
+        return f"Game {game_num} ({top} won {top_w}-{bot_w}) ✅"
     if bot_w >= needed:
-        return f"Game {game_num} ({bot} won {bot_w}-{top_w}) 🏆"
+        return f"Game {game_num} ({bot} won {bot_w}-{top_w}) ✅"
     if top_w > bot_w:
         return f"Game {game_num} ({top} leads {top_w}-{bot_w})"
     if bot_w > top_w:
@@ -170,19 +173,22 @@ def fetch_nhl(date: str | None, favorites: list[str]) -> list[dict]:
             is_fav = bool(fav_set) and (
                 home.get("abbrev") in fav_set or away.get("abbrev") in fav_set
             )
-            games_out.append({
-                "home": _team(home, fav_set),
-                "away": _team(away, fav_set),
-                "state": game.get("gameState", ""),
-                "startTime": game.get("startTimeUTC", ""),
-                "statusText": _status_text(game),
-                "seriesText": _series_text(game.get("seriesStatus")),
-                "isFavorite": is_fav,
-            })
+            games_out.append(
+                {
+                    "home": _team(home, fav_set),
+                    "away": _team(away, fav_set),
+                    "state": game.get("gameState", ""),
+                    "startTime": game.get("startTimeUTC", ""),
+                    "statusText": _status_text(game),
+                    "seriesText": _series_text(game.get("seriesStatus")),
+                    "isFavorite": is_fav,
+                }
+            )
     return games_out
 
 
 # ---------- Weather ----------
+
 
 def fetch_weather(lat: float, lon: float) -> dict:
     params = {
@@ -274,7 +280,7 @@ def _build_item(el, title_field, link_fn, published_fields, html_fields) -> dict
     link = link_fn(el)
     published = ""
     for f in published_fields:
-        if (val := el.findtext(f)):
+        if val := el.findtext(f):
             published = val.strip()
             break
     return {
@@ -291,31 +297,38 @@ def parse_rss(xml_bytes: bytes, limit: int = 4) -> tuple[str, list[dict]]:
 
     # RSS 2.0: <rss><channel><item>
     items = [
-        item for el in root.findall(".//item")
-        if (item := _build_item(
-            el,
-            title_field="title",
-            link_fn=lambda e: (e.findtext("link") or "").strip(),
-            published_fields=["pubDate"],
-            html_fields=["description", "content:encoded"],
-        ))
+        item
+        for el in root.findall(".//item")
+        if (
+            item := _build_item(
+                el,
+                title_field="title",
+                link_fn=lambda e: (e.findtext("link") or "").strip(),
+                published_fields=["pubDate"],
+                html_fields=["description", "content:encoded"],
+            )
+        )
     ]
 
     # Atom: <feed><entry>
     if not items:
+
         def atom_link(e):
             link_el = e.find(f"{ATOM_NS}link")
             return link_el.get("href", "") if link_el is not None else ""
 
         items = [
-            item for el in root.findall(f"{ATOM_NS}entry")
-            if (item := _build_item(
-                el,
-                title_field=f"{ATOM_NS}title",
-                link_fn=atom_link,
-                published_fields=[f"{ATOM_NS}published", f"{ATOM_NS}updated"],
-                html_fields=[f"{ATOM_NS}summary", f"{ATOM_NS}content"],
-            ))
+            item
+            for el in root.findall(f"{ATOM_NS}entry")
+            if (
+                item := _build_item(
+                    el,
+                    title_field=f"{ATOM_NS}title",
+                    link_fn=atom_link,
+                    published_fields=[f"{ATOM_NS}published", f"{ATOM_NS}updated"],
+                    html_fields=[f"{ATOM_NS}summary", f"{ATOM_NS}content"],
+                )
+            )
         ]
 
     return feed_image, items[:limit]
@@ -327,6 +340,7 @@ def fetch_rss(url: str) -> tuple[str, list[dict]]:
 
 
 # ---------- Calendar (.ics) ----------
+
 
 def _ics_unfold(text: str) -> list[str]:
     # RFC 5545: lines that start with a space or tab are continuations.
@@ -355,8 +369,13 @@ def _ics_parse_dt(value: str, params: dict[str, str]) -> tuple[object, bool]:
 
 
 def _ics_unescape(text: str) -> str:
-    return (text.replace("\\n", " ").replace("\\N", " ")
-                .replace("\\,", ",").replace("\\;", ";").replace("\\\\", "\\"))
+    return (
+        text.replace("\\n", " ")
+        .replace("\\N", " ")
+        .replace("\\,", ",")
+        .replace("\\;", ";")
+        .replace("\\\\", "\\")
+    )
 
 
 def parse_ics(text: str) -> list[dict]:
@@ -411,8 +430,16 @@ def _event_occurs_today(ev: dict, today: dt.date) -> bool:
     start = ev["start"]
     end = ev.get("end", start)
     # All-day events: iCal DTEND is exclusive (next day). Treat missing end as same day.
-    start_d = start if isinstance(start, dt.date) and not isinstance(start, dt.datetime) else start.date()
-    end_d = end if isinstance(end, dt.date) and not isinstance(end, dt.datetime) else end.date()
+    start_d = (
+        start
+        if isinstance(start, dt.date) and not isinstance(start, dt.datetime)
+        else start.date()
+    )
+    end_d = (
+        end
+        if isinstance(end, dt.date) and not isinstance(end, dt.datetime)
+        else end.date()
+    )
     if ev.get("allDay"):
         # DTEND is exclusive for all-day per RFC 5545
         return start_d <= today < end_d if end_d > start_d else start_d == today
@@ -434,13 +461,15 @@ def fetch_calendar(urls: list[str]) -> list[dict]:
                 continue
             start = ev["start"]
             end = ev.get("end", start)
-            all_events.append({
-                "summary": ev["summary"],
-                "start": start.isoformat(),
-                "end": end.isoformat() if hasattr(end, "isoformat") else str(end),
-                "allDay": bool(ev.get("allDay")),
-                "source": idx,
-            })
+            all_events.append(
+                {
+                    "summary": ev["summary"],
+                    "start": start.isoformat(),
+                    "end": end.isoformat() if hasattr(end, "isoformat") else str(end),
+                    "allDay": bool(ev.get("allDay")),
+                    "source": idx,
+                }
+            )
 
     # All-day first, then by start time.
     all_events.sort(key=lambda e: (not e["allDay"], e["start"]))
@@ -448,6 +477,7 @@ def fetch_calendar(urls: list[str]) -> list[dict]:
 
 
 # ---------- HTTP handler ----------
+
 
 class DashboardHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
@@ -506,11 +536,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if path == "/api/config":
             # Expose only the client-relevant subset of config.
             cal_urls = (cfg.get("calendar") or {}).get("urls") or []
-            self._send_json({
-                "rotation": cfg.get("rotation", {"rssSeconds": 30}),
-                "calendar": {"enabled": bool(cal_urls)},
-                "countdowns": cfg.get("countdowns", []) or [],
-            })
+            self._send_json(
+                {
+                    "rotation": cfg.get("rotation", {"rssSeconds": 30}),
+                    "calendar": {"enabled": bool(cal_urls)},
+                    "countdowns": cfg.get("countdowns", []) or [],
+                }
+            )
             return
 
         if path == "/api/nhl":
@@ -521,22 +553,29 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     # Debug override: single-day response, no yesterday view.
                     games = fetch_nhl(date_override, favorites)
                     has_live = any(g["state"] in ("LIVE", "CRIT") for g in games)
-                    self._send_json({
-                        "today": {"date": date_override, "games": games},
-                        "yesterday": None,
-                        "hasLiveToday": has_live,
-                    })
+                    self._send_json(
+                        {
+                            "today": {"date": date_override, "games": games},
+                            "yesterday": None,
+                            "hasLiveToday": has_live,
+                        }
+                    )
                 else:
                     today_iso = dt.date.today().isoformat()
                     yesterday_iso = (dt.date.today() - dt.timedelta(days=1)).isoformat()
                     today_games = fetch_nhl(today_iso, favorites)
                     yesterday_games = fetch_nhl(yesterday_iso, favorites)
                     has_live = any(g["state"] in ("LIVE", "CRIT") for g in today_games)
-                    self._send_json({
-                        "today": {"date": today_iso, "games": today_games},
-                        "yesterday": {"date": yesterday_iso, "games": yesterday_games},
-                        "hasLiveToday": has_live,
-                    })
+                    self._send_json(
+                        {
+                            "today": {"date": today_iso, "games": today_games},
+                            "yesterday": {
+                                "date": yesterday_iso,
+                                "games": yesterday_games,
+                            },
+                            "hasLiveToday": has_live,
+                        }
+                    )
             except Exception as e:
                 self._send_error_json(str(e))
             return
@@ -567,13 +606,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
             feed = feeds[idx]
             try:
                 feed_image, items = fetch_rss(feed["url"])
-                self._send_json({
-                    "index": idx,
-                    "total": len(feeds),
-                    "name": feed.get("name", feed["url"]),
-                    "feedImage": feed_image,
-                    "items": items,
-                })
+                self._send_json(
+                    {
+                        "index": idx,
+                        "total": len(feeds),
+                        "name": feed.get("name", feed["url"]),
+                        "feedImage": feed_image,
+                        "items": items,
+                    }
+                )
             except Exception as e:
                 self._send_error_json(str(e))
             return
@@ -581,15 +622,23 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if path == "/api/calendar":
             cal_urls = (cfg.get("calendar") or {}).get("urls") or []
             if not cal_urls:
-                self._send_json({"enabled": False, "events": [], "date": dt.date.today().isoformat()})
+                self._send_json(
+                    {
+                        "enabled": False,
+                        "events": [],
+                        "date": dt.date.today().isoformat(),
+                    }
+                )
                 return
             try:
                 events = fetch_calendar(cal_urls)
-                self._send_json({
-                    "enabled": True,
-                    "events": events,
-                    "date": dt.date.today().isoformat(),
-                })
+                self._send_json(
+                    {
+                        "enabled": True,
+                        "events": events,
+                        "date": dt.date.today().isoformat(),
+                    }
+                )
             except Exception as e:
                 self._send_error_json(str(e))
             return
