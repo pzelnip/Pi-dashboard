@@ -718,7 +718,7 @@ function setupDebugOverlay() {
   document.addEventListener("keydown", (e) => {
     const tag = (document.activeElement?.tagName || "").toLowerCase();
     if (tag === "input" || tag === "textarea") return;
-    if (e.key === "d" || e.key === "D") {
+    if (e.key === "d" || e.key === "D" || e.key === "?") {
       e.preventDefault();
       open ? closeDebug() : openDebug();
     } else if (e.key === "Escape" && open) {
