@@ -539,15 +539,46 @@ html, body {
 
   .panel-wide { grid-column: auto; }
 
-  /* Make stacked-view panels grow to fit their tallest view, since absolute
-   * positioning otherwise collapses height to 0. */
-  #weather .panel-body, #nhl .panel-body { min-height: 320px; }
+  /* Drop the cross-fade stacking on phones — let the active view size the
+   * panel naturally so nothing gets clipped or pushed off the bottom.
+   * Inactive views go away entirely (no animation, but cleaner layout). */
+  #weather .panel-body,
+  #nhl .panel-body {
+    position: static;
+  }
+  #weather .view,
+  #nhl .view {
+    position: static;
+    inset: auto;
+    transition: none;
+    display: none;
+  }
+  #weather .view.active,
+  #nhl .view.active {
+    display: block;
+    opacity: 1;
+  }
+  #weather .view-clock.active,
+  #weather .view-countdown.active {
+    display: flex;
+  }
+
+  /* Allow the panel header to wrap when the title plus controls exceed the
+   * viewport. Right-side group drops to a new line. */
+  .panel-header {
+    flex-wrap: wrap;
+    gap: 6px;
+    row-gap: 8px;
+  }
 
   /* NHL: one game per row instead of two columns. */
   .games-grid { grid-template-columns: 1fr; }
 
-  /* Weather hero shrinks; forecast cards stay 4-up but smaller. */
+  /* Weather hero: tighten the gap and let it stack if very narrow. */
+  .wx-hero { gap: 12px; }
   .wx-hero-icon { font-size: 3em; }
+
+  /* Forecast cells: keep 4 up, trimmed font sizes. */
   .wx-day-icon { font-size: 2em; }
   .wx-day-range { font-size: 1.2em; }
   .wx-daily { gap: 10px; padding-top: 12px; }
@@ -557,6 +588,13 @@ html, body {
   .clock-date { font-size: 1.4em; }
   .countdown-number { font-size: 3.5em; }
   .countdown-label { font-size: 1.2em; }
+
+  /* Stacked clock/countdown views need explicit min-height since they were
+   * relying on the absolute-positioned parent for sizing. */
+  #weather .view-clock,
+  #weather .view-countdown {
+    min-height: 200px;
+  }
 
   /* Game-row text was 1.45em / 1.6em logos — fine at 16px root, but trim
    * padding so two-line cards aren't taller than necessary. */
