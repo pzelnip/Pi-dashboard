@@ -49,6 +49,19 @@ async function fetchJson(url) {
 const TIME_FMT = { hour: "numeric", minute: "2-digit", hour12: true };
 const formatTime = d => new Date(d).toLocaleTimeString("en-US", TIME_FMT);
 
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+function safeUrl(u) {
+  try {
+    const parsed = new URL(u, location.href);
+    return (parsed.protocol === "http:" || parsed.protocol === "https:") ? u : "";
+  } catch { return ""; }
+}
+
 // ---------- Rotator ----------
 // Owns the index, timer, dots/nav, and active-view CSS class for one rotating
 // panel. Each panel calls createRotator once; setViews() can be called later
@@ -169,17 +182,20 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.") {
   });
 
   const pillFor = g => {
-    if (isLive(g)) return `<span class="status-pill live">${g.statusText || "LIVE"}</span>`;
-    if (isScheduled(g)) return `<span class="status-pill scheduled">${formatTime(g.startTime)}</span>`;
-    return `<span class="status-pill final">${g.statusText || "Final"}</span>`;
+    if (isLive(g)) return `<span class="status-pill live">${escapeHtml(g.statusText || "LIVE")}</span>`;
+    if (isScheduled(g)) return `<span class="status-pill scheduled">${escapeHtml(formatTime(g.startTime))}</span>`;
+    return `<span class="status-pill final">${escapeHtml(g.statusText || "Final")}</span>`;
   };
 
-  const row = (t, outcome, isFav, venue) => `
+  const row = (t, outcome, isFav, venue) => {
+    const logoUrl = safeUrl(t.logo);
+    return `
     <div class="game-team ${outcome} ${venue}">
-      ${t.logo ? `<img class="team-logo" src="${t.logo}" alt="" onerror="this.remove()">` : ""}
-      <span class="team-name">${t.name || t.abbrev}${isFav ? ' <span class="fav-star" aria-label="Favorite team">★</span>' : ""}</span>
-      <span class="team-score">${t.score ?? ""}</span>
+      ${logoUrl ? `<img class="team-logo" src="${escapeHtml(logoUrl)}" alt="" onerror="this.remove()">` : ""}
+      <span class="team-name">${escapeHtml(t.name || t.abbrev || "")}${isFav ? ' <span class="fav-star" aria-label="Favorite team">★</span>' : ""}</span>
+      <span class="team-score">${escapeHtml(String(t.score ?? ""))}</span>
     </div>`;
+  };
 
   const renderGame = g => {
     let awayCls = "", homeCls = "";
@@ -196,7 +212,7 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.") {
     <div class="game ${stateCls}">
       <div class="game-meta">
         ${pillFor(g)}
-        ${g.seriesText ? `<span class="series-tag">${g.seriesText}</span>` : ""}
+        ${g.seriesText ? `<span class="series-tag">${escapeHtml(g.seriesText)}</span>` : ""}
       </div>
       <div class="game-body">
         <div class="game-teams">
@@ -320,7 +336,7 @@ function renderCalendar(data) {
   el.classList.remove("error");
 
   if (data.error) {
-    el.innerHTML = `<p class="cal-empty">⚠ ${data.error}</p>`;
+    el.innerHTML = `<p class="cal-empty">⚠ ${escapeHtml(data.error)}</p>`;
     return;
   }
   if (!data.events || !data.events.length) {
@@ -332,8 +348,8 @@ function renderCalendar(data) {
 
   el.innerHTML = data.events.map(ev => `
     <div class="cal-event ${ev.allDay ? "cal-allday" : ""}">
-      <span class="cal-time">${timeLabel(ev)}</span>
-      <span class="cal-title">${ev.summary}</span>
+      <span class="cal-time">${escapeHtml(timeLabel(ev))}</span>
+      <span class="cal-title">${escapeHtml(ev.summary)}</span>
     </div>
   `).join("");
 }
@@ -448,8 +464,9 @@ window.DEFAULT_RSS_ICON = `
 function renderRSS(payload) {
   rssTotal = payload.total || 1;
   rssIndex = payload.index;
-  const logo = payload.feedImage
-    ? `<img class="feed-logo" src="${payload.feedImage}" alt="" onerror="this.outerHTML=window.DEFAULT_RSS_ICON">`
+  const feedImageUrl = safeUrl(payload.feedImage);
+  const logo = feedImageUrl
+    ? `<img class="feed-logo" src="${escapeHtml(feedImageUrl)}" alt="" onerror="this.outerHTML=window.DEFAULT_RSS_ICON">`
     : window.DEFAULT_RSS_ICON;
 
   const rssPanel = document.getElementById("rss");
@@ -462,23 +479,27 @@ function renderRSS(payload) {
   rssRotator.setViews(Array.from({length: rssTotal}, (_, i) => String(i)));
 
   const writeContent = () => {
-    titleEl.innerHTML = `${logo}<span>${payload.name}</span>`;
+    titleEl.innerHTML = `${logo}<span>${escapeHtml(payload.name)}</span>`;
     el.classList.remove("error");
     if (!payload.items || !payload.items.length) {
       el.innerHTML = '<p style="color: var(--text-muted)">No items.</p>';
       return;
     }
     el.innerHTML = `<ul class="rss-list">${
-      payload.items.map(i => `
+      payload.items.map(i => {
+        const itemLink = safeUrl(i.link);
+        const itemImage = safeUrl(i.image);
+        return `
         <li class="rss-item">
-          <a href="${i.link}" target="_blank" rel="noopener">
-            ${i.image
-              ? `<img class="rss-thumb" src="${i.image}" alt="" loading="lazy" onerror="this.remove()">`
+          <a href="${escapeHtml(itemLink)}" target="_blank" rel="noopener">
+            ${itemImage
+              ? `<img class="rss-thumb" src="${escapeHtml(itemImage)}" alt="" loading="lazy" onerror="this.remove()">`
               : ""}
-            <span class="rss-title">${i.title}</span>
+            <span class="rss-title">${escapeHtml(i.title)}</span>
           </a>
         </li>
-      `).join("")
+      `;
+      }).join("")
     }</ul>`;
   };
 
@@ -594,12 +615,6 @@ async function start() {
 }
 
 // ---------- Debug overlay ----------
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-  }[c]));
-}
 
 function formatUptime(ms) {
   const secs = Math.max(0, Math.floor(ms / 1000));

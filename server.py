@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Dashboard server: serves ./public and proxies three API endpoints."""
 
+import hashlib
 import json
 import mimetypes
 import os
@@ -462,6 +463,11 @@ def _event_occurs_today(ev: dict, today: dt.date) -> bool:
     return start_d <= today <= end_d
 
 
+def _redact_url(url: str) -> str:
+    h = hashlib.sha256(url.encode()).hexdigest()[:8]
+    return f"<sha256:{h}>"
+
+
 def fetch_calendar(urls: list[str]) -> list[dict]:
     today = dt.date.today()
     all_events: list[dict] = []
@@ -469,7 +475,7 @@ def fetch_calendar(urls: list[str]) -> list[dict]:
         try:
             raw = fetch_cached(url, ttl_seconds=300)
         except Exception as e:
-            sys.stderr.write(f"[calendar] fetch failed for {url}: {e}\n")
+            sys.stderr.write(f"[calendar] fetch failed for url #{idx} ({_redact_url(url)}): {e}\n")
             continue
         text = raw.decode("utf-8", errors="replace")
         for ev in parse_ics(text):
