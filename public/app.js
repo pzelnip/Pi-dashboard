@@ -713,12 +713,14 @@ function setupDebugOverlay() {
   let open = false;
   let tickTimer = null;        // 1Hz interval that updates uptime + page-age
   let cancelTimer = null;      // 1Hz interval for the 3s force-update countdown
+  let firedTimeout = null;     // 30s fallback after firing — swaps banner if no reload
   let serverStartedAt = null;  // captured from /api/debug; used by tickTimer
 
   function clearTimers() {
     if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
     if (cancelTimer) { clearInterval(cancelTimer); cancelTimer = null; }
-    if (banner) banner.classList.remove("active");
+    if (firedTimeout) { clearTimeout(firedTimeout); firedTimeout = null; }
+    if (banner) banner.classList.remove("active", "firing");
   }
 
   function tick() {
@@ -781,10 +783,21 @@ function setupDebugOverlay() {
   }
 
   function cancelUpdateCountdown() {
-    if (!cancelTimer) return;
-    clearInterval(cancelTimer);
-    cancelTimer = null;
-    if (banner) banner.classList.remove("active");
+    // Three states the banner can be in:
+    //   1. counting down to fire — cancel the countdown, hide banner
+    //   2. fired and waiting for reload — ignore (mid-flight, don't let
+    //      a click reset state during the 30s window)
+    //   3. post-timeout "Update complete" — dismiss
+    if (cancelTimer) {
+      clearInterval(cancelTimer);
+      cancelTimer = null;
+      if (banner) banner.classList.remove("active");
+      return;
+    }
+    if (banner && banner.classList.contains("firing") && !firedTimeout) {
+      // firedTimeout cleared = post-timeout state
+      banner.classList.remove("active", "firing");
+    }
   }
 
   async function fireUpdate() {
@@ -796,11 +809,20 @@ function setupDebugOverlay() {
       const data = await resp.json().catch(() => ({}));
       if (data.error) {
         banner.textContent = `Update failed: ${data.error}`;
+        return;  // leave banner up so the user sees the error
       }
     } catch {
       // Server may have already restarted us — that's the success case,
       // not a failure. The page will reload when the new SHA is detected.
     }
+    // If we're still here 30s later, watchVersion didn't see a SHA flip
+    // (likely: --force restart against unchanged code, or restart was
+    // very fast and a stale-cache fetch glued the SHAs together). Swap
+    // to a "completed" banner so the user knows it's done and can dismiss.
+    firedTimeout = setTimeout(() => {
+      firedTimeout = null;
+      banner.textContent = "Update complete — click to dismiss";
+    }, 30 * 1000);
   }
 
   async function openDebug() {

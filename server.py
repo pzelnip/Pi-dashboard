@@ -826,7 +826,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             # systemctl restart will kill us mid-flight, which is fine. The
             # frontend's /api/version poll picks up the new SHA and reloads.
             subprocess.Popen(
-                ["/usr/bin/env", "bash", UPDATE_SCRIPT_PATH],
+                ["/usr/bin/env", "bash", UPDATE_SCRIPT_PATH, "--force"],
                 cwd=HERE,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
