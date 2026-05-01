@@ -20,6 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PUBLIC_DIR = os.path.join(HERE, "public")
+PUBLIC_REAL = os.path.realpath(PUBLIC_DIR)
 CONFIG_PATH = os.path.join(HERE, "config.json")
 LOCAL_CONFIG_PATH = os.path.join(HERE, "config.local.json")
 PORT = int(os.environ.get("DASHBOARD_PORT", "8080"))
@@ -100,6 +101,12 @@ def fetch_cached(url: str, ttl_seconds: int) -> bytes:
         raise
 
     with _cache_lock:
+        # Amortized eviction: drop entries whose TTL expired more than a day ago.
+        # Keeps the stale-fallback window generous while preventing unbounded growth
+        # over long uptimes (NHL adds two new keys per calendar day).
+        cutoff = now - 86400
+        for u in [u for u, (exp, _) in _cache.items() if exp < cutoff]:
+            del _cache[u]
         _cache[url] = (now + ttl_seconds, body)
     return body
 
@@ -126,6 +133,8 @@ def _status_text(game: dict) -> str:
         return "Final"
 
     if state in ("LIVE", "CRIT"):
+        if period_num is None:
+            return ""  # pre-game LIVE transition: let the frontend show start time
         ord_label = PERIOD_ORDINAL.get(period_num, f"P{period_num}")
         if in_intermission:
             return f"End of {ord_label}"
@@ -176,7 +185,10 @@ def fetch_nhl(date: str | None, favorites: list[str]) -> list[dict]:
     target_date = date or dt.date.today().isoformat()
     url = f"https://api-web.nhle.com/v1/schedule/{target_date}"
     raw = fetch_cached(url, ttl_seconds=20)
-    data = json.loads(raw)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        raise ValueError("upstream returned non-JSON response (got HTML?)")
     weeks = data.get("gameWeek", [])
 
     fav_set = set(favorites or [])
@@ -218,7 +230,10 @@ def fetch_weather(lat: float, lon: float) -> dict:
     }
     url = "https://api.open-meteo.com/v1/forecast?" + urllib.parse.urlencode(params)
     raw = fetch_cached(url, ttl_seconds=600)
-    data = json.loads(raw)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        raise ValueError("upstream returned non-JSON response (got HTML?)")
     return {
         "current": data.get("current", {}),
         "daily": data.get("daily", {}),
@@ -309,7 +324,10 @@ def _build_item(el, title_field, link_fn, published_fields, html_fields) -> dict
 
 
 def parse_rss(xml_bytes: bytes, limit: int = 4) -> tuple[str, list[dict]]:
-    root = ET.fromstring(xml_bytes)
+    try:
+        root = ET.fromstring(xml_bytes)
+    except ET.ParseError:
+        raise ValueError("upstream returned non-XML response (got HTML?)")
     feed_image = _extract_feed_image(root)
 
     # RSS 2.0: <rss><channel><item>
@@ -420,23 +438,27 @@ def parse_ics(text: str) -> list[dict]:
         # Property line: NAME[;PARAM=VAL;...]:VALUE
         if ":" not in line:
             continue
-        head, _, value = line.partition(":")
-        parts = head.split(";")
-        name = parts[0].upper()
-        params = {}
-        for p in parts[1:]:
-            if "=" in p:
-                k, _, v = p.partition("=")
-                params[k.upper()] = v
+        try:
+            head, _, value = line.partition(":")
+            parts = head.split(";")
+            name = parts[0].upper()
+            params = {}
+            for p in parts[1:]:
+                if "=" in p:
+                    k, _, v = p.partition("=")
+                    params[k.upper()] = v
 
-        if name == "SUMMARY":
-            current["summary"] = _ics_unescape(value)
-        elif name == "DTSTART":
-            current["start"], current["allDay"] = _ics_parse_dt(value, params)
-        elif name == "DTEND":
-            current["end"], _ = _ics_parse_dt(value, params)
-        elif name == "RRULE":
-            current["_recurring"] = True
+            if name == "SUMMARY":
+                current["summary"] = _ics_unescape(value)
+            elif name == "DTSTART":
+                current["start"], current["allDay"] = _ics_parse_dt(value, params)
+            elif name == "DTEND":
+                current["end"], _ = _ics_parse_dt(value, params)
+            elif name == "RRULE":
+                current["_recurring"] = True
+        except Exception as e:
+            sys.stderr.write(f"[calendar] skipping event due to parse error: {e}\n")
+            current = None  # discard this event entirely; END:VEVENT won't append it
 
     if skipped_recurring:
         sys.stderr.write(f"[calendar] skipped {skipped_recurring} recurring event(s)\n")
@@ -524,8 +546,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if rel_path in ("", "/"):
             rel_path = "index.html"
         rel_path = rel_path.lstrip("/")
-        full = os.path.normpath(os.path.join(PUBLIC_DIR, rel_path))
-        if not full.startswith(PUBLIC_DIR) or not os.path.isfile(full):
+        full = os.path.realpath(os.path.join(PUBLIC_DIR, rel_path))
+        if os.path.commonpath([full, PUBLIC_REAL]) != PUBLIC_REAL or not os.path.isfile(full):
             self.send_error(404, "Not Found")
             return
         ctype, _ = mimetypes.guess_type(full)

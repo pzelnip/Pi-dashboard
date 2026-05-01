@@ -266,6 +266,9 @@ function wxLabel(code) {
   return WX_CODES[code] || [`code ${code}`, "·"];
 }
 
+const fmtNum = (v, suffix = "") =>
+  (v == null || Number.isNaN(v)) ? "—" : `${Math.round(v)}${suffix}`;
+
 function renderWeather(data) {
   const labelEl = document.getElementById("weather-label");
   labelEl.textContent = data.label || "";
@@ -295,11 +298,11 @@ function renderWeather(data) {
     <div class="wx-hero">
       <div class="wx-hero-icon">${curIcon}</div>
       <div class="wx-hero-main">
-        <div class="wx-temp">${Math.round(cur.temperature_2m)}${tempUnit}</div>
+        <div class="wx-temp">${fmtNum(cur.temperature_2m, tempUnit)}</div>
         <div class="wx-condition">${curDesc}</div>
         <div class="wx-meta">
-          <span>Wind ${Math.round(cur.wind_speed_10m)} ${windUnit}</span>
-          <span>Humidity ${cur.relative_humidity_2m}%</span>
+          <span>Wind ${fmtNum(cur.wind_speed_10m)} ${windUnit}</span>
+          <span>Humidity ${fmtNum(cur.relative_humidity_2m, "%")}</span>
         </div>
       </div>
     </div>
@@ -308,7 +311,7 @@ function renderWeather(data) {
         <div class="wx-day">
           <div class="wx-day-label">${dayLabel(d.date, i)}</div>
           <div class="wx-day-icon">${d.icon}</div>
-          <div class="wx-day-range"><span class="wx-min">${Math.round(d.min)}°</span> ${Math.round(d.max)}°</div>
+          <div class="wx-day-range"><span class="wx-min">${fmtNum(d.min, "°")}</span> ${fmtNum(d.max, "°")}</div>
         </div>
       `).join("")}
     </div>
@@ -344,7 +347,8 @@ function renderCalendar(data) {
     return;
   }
 
-  const timeLabel = ev => ev.allDay ? "All day" : formatTime(ev.start);
+  const isDateOnly = ev => typeof ev.start === "string" && ev.start.length === 10;
+  const timeLabel = ev => (ev.allDay || isDateOnly(ev)) ? "All day" : formatTime(ev.start);
 
   el.innerHTML = data.events.map(ev => `
     <div class="cal-event ${ev.allDay ? "cal-allday" : ""}">
