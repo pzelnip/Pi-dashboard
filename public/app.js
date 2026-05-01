@@ -648,12 +648,9 @@ function shortUrl(url) {
   }
 }
 
-const PAGE_LOADED_AT = Date.now();
-
 function renderDebugFields(data) {
   const now = Date.now();
   const uptime = formatUptime(now - data.serverStartedAt * 1000);
-  const pageAge = formatAgo(now - PAGE_LOADED_AT);
   const commit = data.latestCommitAt
     ? `${formatAgo(now - data.latestCommitAt * 1000)} — "${escapeHtml(data.latestCommitSubject)}"`
     : "(unavailable)";
@@ -672,7 +669,6 @@ function renderDebugFields(data) {
     <dt>SHA</dt><dd class="mono"><a href="${escapeHtml(ghCommitUrl)}" target="_blank" rel="noopener">${escapeHtml(data.versionShort)}</a> <a href="${escapeHtml(ghCommitUrl)}" target="_blank" rel="noopener" style="color:var(--text-muted)">(${escapeHtml(data.version)})</a></dd>
     <dt>Latest commit</dt><dd>${commit}</dd>
     <dt>Server uptime</dt><dd><span id="debug-uptime">${uptime}</span></dd>
-    <dt>Page loaded</dt><dd><span id="debug-page-age">${pageAge}</span></dd>
     <dt>Viewport</dt><dd>${window.innerWidth}×${window.innerHeight}</dd>
     <dt>User agent</dt><dd>${escapeHtml(navigator.userAgent)}</dd>
     <dt>Python</dt><dd>${escapeHtml(data.pythonVersion)}</dd>
@@ -726,11 +722,8 @@ function setupDebugOverlay() {
 
   function tick() {
     if (serverStartedAt == null) return;
-    const now = Date.now();
     const uptimeEl = document.getElementById("debug-uptime");
-    if (uptimeEl) uptimeEl.textContent = formatUptime(now - serverStartedAt * 1000);
-    const pageAgeEl = document.getElementById("debug-page-age");
-    if (pageAgeEl) pageAgeEl.textContent = formatAgo(now - PAGE_LOADED_AT);
+    if (uptimeEl) uptimeEl.textContent = formatUptime(Date.now() - serverStartedAt * 1000);
   }
 
   async function showFields() {
