@@ -4,6 +4,7 @@
 import json
 import mimetypes
 import os
+import platform
 import re
 import subprocess
 import sys
@@ -37,7 +38,22 @@ def _current_version() -> str:
         return str(int(time.time()))
 
 
+def _latest_commit() -> tuple[float | None, str]:
+    try:
+        out = subprocess.check_output(
+            ["git", "log", "-1", "--format=%ct%n%s", "HEAD"],
+            cwd=HERE,
+            stderr=subprocess.DEVNULL,
+            timeout=2,
+        ).decode().strip().split("\n", 1)
+        return float(out[0]), (out[1] if len(out) > 1 else "")
+    except Exception:
+        return None, ""
+
+
 VERSION = _current_version()
+LATEST_COMMIT_AT, LATEST_COMMIT_SUBJECT = _latest_commit()
+SERVER_STARTED_AT = time.time()
 
 _cache: dict[str, tuple[float, bytes]] = {}
 _cache_lock = threading.Lock()
@@ -531,6 +547,33 @@ class DashboardHandler(BaseHTTPRequestHandler):
             cfg = load_config()
         except Exception as e:
             self._send_error_json(f"config error: {e}")
+            return
+
+        if path == "/api/debug":
+            now = time.time()
+            cal_url_set = set((cfg.get("calendar") or {}).get("urls") or [])
+            with _cache_lock:
+                cache_entries = [
+                    {"url": u, "ttlRemaining": round(exp - now, 1)}
+                    for u, (exp, _body) in _cache.items()
+                    if u not in cal_url_set
+                ]
+            cache_entries.sort(key=lambda e: e["url"])
+            self._send_json(
+                {
+                    "version": VERSION,
+                    "versionShort": VERSION[:7],
+                    "serverStartedAt": SERVER_STARTED_AT,
+                    "latestCommitAt": LATEST_COMMIT_AT,
+                    "latestCommitSubject": LATEST_COMMIT_SUBJECT,
+                    "pythonVersion": platform.python_version(),
+                    "platform": platform.platform(),
+                    "configLocalPresent": os.path.isfile(LOCAL_CONFIG_PATH),
+                    "rssFeedCount": len(cfg.get("rss", []) or []),
+                    "calendarUrlCount": len(cal_url_set),
+                    "cache": cache_entries,
+                }
+            )
             return
 
         if path == "/api/config":

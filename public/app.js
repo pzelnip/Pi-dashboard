@@ -589,7 +589,123 @@ async function start() {
   // Keep "X ago" labels accurate as time passes between data refreshes.
   setInterval(refreshUpdatedLabels, 5 * 1000);
 
+  setupDebugOverlay();
   watchVersion();
+}
+
+// ---------- Debug overlay ----------
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+function formatUptime(ms) {
+  const secs = Math.max(0, Math.floor(ms / 1000));
+  if (secs < 60) return `${secs}s`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  if (hours < 24) return `${hours}h ${remMins}m`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
+}
+
+function shortUrl(url) {
+  // Trim long URLs to a recognizable head: host + first segment.
+  try {
+    const u = new URL(url);
+    const path = u.pathname.split("/").slice(0, 3).join("/");
+    return `${u.host}${path}`;
+  } catch {
+    return url;
+  }
+}
+
+const PAGE_LOADED_AT = Date.now();
+
+function renderDebug(data) {
+  const now = Date.now();
+  const uptime = formatUptime(now - data.serverStartedAt * 1000);
+  const pageAge = formatAgo(now - PAGE_LOADED_AT);
+  const commit = data.latestCommitAt
+    ? `${formatAgo(now - data.latestCommitAt * 1000)} — "${escapeHtml(data.latestCommitSubject)}"`
+    : "(unavailable)";
+  const cache = data.cache.length
+    ? data.cache.map(c => {
+        const ttl = c.ttlRemaining > 60
+          ? `${Math.round(c.ttlRemaining / 60)}m left`
+          : `${Math.max(0, Math.round(c.ttlRemaining))}s left`;
+        return `<div class="mono">${escapeHtml(shortUrl(c.url))} <span style="color:var(--text-muted)">(${ttl})</span></div>`;
+      }).join("")
+    : '<span style="color:var(--text-muted)">(empty)</span>';
+
+  return `<dl>
+    <dt>SHA</dt><dd class="mono">${escapeHtml(data.versionShort)} <span style="color:var(--text-muted)">(${escapeHtml(data.version)})</span></dd>
+    <dt>Latest commit</dt><dd>${commit}</dd>
+    <dt>Server uptime</dt><dd>${uptime}</dd>
+    <dt>Page loaded</dt><dd>${pageAge}</dd>
+    <dt>Viewport</dt><dd>${window.innerWidth}×${window.innerHeight}</dd>
+    <dt>User agent</dt><dd>${escapeHtml(navigator.userAgent)}</dd>
+    <dt>Python</dt><dd>${escapeHtml(data.pythonVersion)}</dd>
+    <dt>Platform</dt><dd>${escapeHtml(data.platform)}</dd>
+    <dt>config.local</dt><dd>${data.configLocalPresent ? "present" : "absent"}</dd>
+    <dt>RSS feeds</dt><dd>${data.rssFeedCount}</dd>
+    <dt>Calendar URLs</dt><dd>${data.calendarUrlCount}</dd>
+    <dt>Cache (${data.cache.length})</dt><dd>${cache}</dd>
+  </dl>`;
+}
+
+function setupDebugOverlay() {
+  const dot = document.getElementById("debug-dot");
+  const sheet = document.getElementById("debug-sheet");
+  const backdrop = document.getElementById("debug-backdrop");
+  const body = document.getElementById("debug-body");
+  const close = document.getElementById("debug-close");
+  if (!dot || !sheet || !backdrop || !body || !close) return;
+
+  let open = false;
+
+  async function openDebug() {
+    if (open) return;
+    open = true;
+    sheet.classList.add("open");
+    backdrop.classList.add("open");
+    sheet.setAttribute("aria-hidden", "false");
+    body.innerHTML = "Loading…";
+    try {
+      const data = await fetchJson("/api/debug");
+      if (data.error) throw new Error(data.error);
+      body.innerHTML = renderDebug(data);
+    } catch (e) {
+      body.innerHTML = `<p style="color: var(--live)">Failed to load debug info: ${escapeHtml(e.message)}</p>`;
+    }
+  }
+
+  function closeDebug() {
+    if (!open) return;
+    open = false;
+    sheet.classList.remove("open");
+    backdrop.classList.remove("open");
+    sheet.setAttribute("aria-hidden", "true");
+  }
+
+  dot.addEventListener("click", openDebug);
+  close.addEventListener("click", closeDebug);
+  backdrop.addEventListener("click", closeDebug);
+
+  document.addEventListener("keydown", (e) => {
+    const tag = (document.activeElement?.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea") return;
+    if (e.key === "d" || e.key === "D") {
+      e.preventDefault();
+      open ? closeDebug() : openDebug();
+    } else if (e.key === "Escape" && open) {
+      closeDebug();
+    }
+  });
 }
 
 async function watchVersion() {
