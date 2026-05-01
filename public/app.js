@@ -669,7 +669,7 @@ function renderDebugFields(data) {
   const ghCommitUrl = `${GITHUB_REPO_URL}/commit/${encodeURIComponent(data.version)}`;
 
   return `<dl>
-    <dt>SHA</dt><dd class="mono"><a href="${escapeHtml(ghCommitUrl)}" target="_blank" rel="noopener">${escapeHtml(data.versionShort)}</a> <span style="color:var(--text-muted)">(${escapeHtml(data.version)})</span></dd>
+    <dt>SHA</dt><dd class="mono"><a href="${escapeHtml(ghCommitUrl)}" target="_blank" rel="noopener">${escapeHtml(data.versionShort)}</a> <a href="${escapeHtml(ghCommitUrl)}" target="_blank" rel="noopener" style="color:var(--text-muted)">(${escapeHtml(data.version)})</a></dd>
     <dt>Latest commit</dt><dd>${commit}</dd>
     <dt>Server uptime</dt><dd><span id="debug-uptime">${uptime}</span></dd>
     <dt>Page loaded</dt><dd><span id="debug-page-age">${pageAge}</span></dd>
@@ -711,6 +711,7 @@ function setupDebugOverlay() {
   if (!dot || !sheet || !backdrop || !body || !close) return;
 
   let open = false;
+  let mode = "fields";         // "fields" | "log" — controls Escape behavior
   let tickTimer = null;        // 1Hz interval that updates uptime + page-age
   let cancelTimer = null;      // 1Hz interval for the 3s force-update countdown
   let firedTimeout = null;     // 30s fallback after firing — swaps banner if no reload
@@ -733,6 +734,7 @@ function setupDebugOverlay() {
   }
 
   async function showFields() {
+    mode = "fields";
     body.innerHTML = "Loading…";
     try {
       const data = await fetchJson("/api/debug");
@@ -746,6 +748,7 @@ function setupDebugOverlay() {
   }
 
   async function showLog(which) {
+    mode = "log";
     const title = which === "service" ? "Service log" : "Update log";
     body.innerHTML = `<p style="color:var(--text-muted)">Loading ${title.toLowerCase()}…</p>`;
     if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
@@ -837,6 +840,7 @@ function setupDebugOverlay() {
   function closeDebug() {
     if (!open) return;
     open = false;
+    mode = "fields";
     sheet.classList.remove("open");
     backdrop.classList.remove("open");
     sheet.setAttribute("aria-hidden", "true");
@@ -869,7 +873,10 @@ function setupDebugOverlay() {
       e.preventDefault();
       open ? closeDebug() : openDebug();
     } else if (e.key === "Escape" && open) {
-      closeDebug();
+      // Escape from a log view returns to the field list; Escape from
+      // the field list closes the panel entirely.
+      if (mode === "log") showFields();
+      else closeDebug();
     } else if (open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
       e.preventDefault();
       body.scrollBy({ top: e.key === "ArrowDown" ? 60 : -60, behavior: "smooth" });
