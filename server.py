@@ -60,6 +60,12 @@ SERVER_STARTED_AT = time.time()
 _cache: dict[str, tuple[float, bytes]] = {}
 _cache_lock = threading.Lock()
 
+# Held while update-dashboard.sh is running so concurrent POST /api/update
+# requests don't fan out into multiple git pull / restart attempts.
+_update_lock = threading.Lock()
+UPDATE_LOG_PATH = os.path.join(HERE, "update.log")
+UPDATE_SCRIPT_PATH = os.path.join(HERE, "update-dashboard.sh")
+
 
 def _merge_dicts(base: dict, overlay: dict) -> dict:
     """Recursively merge overlay into base. Lists and scalars in overlay replace base."""
@@ -598,12 +604,93 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     "latestCommitSubject": LATEST_COMMIT_SUBJECT,
                     "pythonVersion": platform.python_version(),
                     "platform": platform.platform(),
-                    "configLocalPresent": os.path.isfile(LOCAL_CONFIG_PATH),
                     "rssFeedCount": len(cfg.get("rss", []) or []),
                     "calendarUrlCount": len(cal_url_set),
                     "cache": cache_entries,
                 }
             )
+            return
+
+        if path == "/api/logs":
+            which = (query.get("which", [""])[0] or "").lower()
+            if which not in ("service", "update"):
+                self._send_error_json("which must be 'service' or 'update'")
+                return
+            try:
+                lines_arg = int(query.get("lines", ["200"])[0])
+            except ValueError:
+                lines_arg = 200
+            lines_arg = max(1, min(lines_arg, 2000))
+
+            if which == "service":
+                # No shell — argv list keeps `lines_arg` from being injected.
+                try:
+                    out = subprocess.run(
+                        [
+                            "journalctl",
+                            "-u",
+                            "dashboard.service",
+                            "-n",
+                            str(lines_arg),
+                            "--no-pager",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
+                    )
+                except FileNotFoundError:
+                    self._send_error_json("journalctl not available on this host")
+                    return
+                except subprocess.TimeoutExpired:
+                    self._send_error_json("journalctl timed out")
+                    return
+                if out.returncode != 0:
+                    self._send_error_json(
+                        f"journalctl failed: {out.stderr.strip() or 'unknown error'}"
+                    )
+                    return
+                lines = out.stdout.splitlines()
+                self._send_json(
+                    {
+                        "lines": lines[-lines_arg:],
+                        "source": "journalctl -u dashboard.service",
+                        "truncated": False,
+                    }
+                )
+                return
+
+            # which == "update"
+            if not os.path.isfile(UPDATE_LOG_PATH):
+                self._send_json(
+                    {
+                        "lines": [],
+                        "source": f"file:{UPDATE_LOG_PATH}",
+                        "truncated": False,
+                        "note": "no log yet",
+                    }
+                )
+                return
+            try:
+                with open(UPDATE_LOG_PATH, "rb") as f:
+                    # Cheap tail: read last 256KB and split. update.log is
+                    # plain text and grows slowly so this is fine.
+                    f.seek(0, os.SEEK_END)
+                    size = f.tell()
+                    chunk = 256 * 1024
+                    f.seek(max(0, size - chunk))
+                    raw = f.read()
+                text = raw.decode("utf-8", errors="replace")
+                lines = text.splitlines()
+                truncated = size > chunk
+                self._send_json(
+                    {
+                        "lines": lines[-lines_arg:],
+                        "source": f"file:{UPDATE_LOG_PATH}",
+                        "truncated": truncated,
+                    }
+                )
+            except Exception as e:
+                self._send_error_json(f"failed to read update log: {e}")
             return
 
         if path == "/api/config":
@@ -718,6 +805,44 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         # static
         self._serve_static(path)
+
+    def do_POST(self):
+        # No CSRF token / auth: dashboard runs LAN-only with no users beyond
+        # its own kiosk tab. Adding a token would be theatre.
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path != "/api/update":
+            self.send_error(404, "Not Found")
+            return
+
+        if not os.path.isfile(UPDATE_SCRIPT_PATH):
+            self._send_error_json(f"update script not found at {UPDATE_SCRIPT_PATH}")
+            return
+
+        if not _update_lock.acquire(blocking=False):
+            self._send_error_json("update already running")
+            return
+        try:
+            # Detached so the script can outlive this request — its
+            # systemctl restart will kill us mid-flight, which is fine. The
+            # frontend's /api/version poll picks up the new SHA and reloads.
+            subprocess.Popen(
+                ["/usr/bin/env", "bash", UPDATE_SCRIPT_PATH],
+                cwd=HERE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            self._send_json({"started": True})
+        except Exception as e:
+            self._send_error_json(f"failed to start update: {e}")
+        finally:
+            # Release immediately — Popen returns as soon as the child
+            # forks, so the lock would otherwise just be held for the
+            # ~milliseconds of subprocess startup. The script's own pid
+            # file or systemd state is the real concurrency boundary,
+            # and update-dashboard.sh is idempotent (it no-ops when
+            # already at HEAD).
+            _update_lock.release()
 
 
 def main():

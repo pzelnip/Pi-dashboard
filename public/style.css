@@ -724,3 +724,75 @@ html, body {
 #debug-body .mono {
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
+#debug-body a {
+  color: var(--accent);
+  text-decoration: none;
+}
+#debug-body a:hover { text-decoration: underline; }
+
+.debug-action {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.85em;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.debug-action:hover { background: rgba(255, 255, 255, 0.12); }
+.debug-action.danger { color: var(--live); }
+.debug-action.danger:hover { background: rgba(255, 91, 74, 0.18); }
+
+.debug-back {
+  background: transparent;
+  color: var(--text-dim);
+  border: none;
+  font-size: 0.95em;
+  cursor: pointer;
+  padding: 0 8px 0 0;
+}
+.debug-back:hover { color: var(--text); }
+
+.debug-log-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.debug-log-title {
+  flex: 1;
+  font-weight: 600;
+}
+
+.debug-log {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.78em;
+  line-height: 1.4;
+  max-height: 35vh;
+  overflow: auto;
+  background: var(--bg);
+  color: var(--text-dim);
+  padding: 12px;
+  border-radius: 6px;
+  margin: 0;
+}
+
+.update-banner {
+  display: none;
+  padding: 10px 20px;
+  background: rgba(79, 195, 247, 0.18);
+  color: var(--accent);
+  text-align: center;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+.update-banner.active { display: block; }
+.update-banner.firing {
+  background: rgba(127, 209, 132, 0.18);
+  color: #7fd184;
+  cursor: default;
+}

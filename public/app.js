@@ -620,16 +620,21 @@ async function start() {
 
 // ---------- Debug overlay ----------
 
+const GITHUB_REPO_URL = "https://github.com/pzelnip/Pi-dashboard";
+
 function formatUptime(ms) {
-  const secs = Math.max(0, Math.floor(ms / 1000));
-  if (secs < 60) return `${secs}s`;
-  const mins = Math.floor(secs / 60);
-  if (mins < 60) return `${mins}m`;
-  const hours = Math.floor(mins / 60);
-  const remMins = mins % 60;
-  if (hours < 24) return `${hours}h ${remMins}m`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ${hours % 24}h`;
+  // Live-counting friendly: rightmost unit always changes each second so
+  // the user can see the panel is alive.
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const s = total % 60;
+  const m = Math.floor(total / 60) % 60;
+  const h = Math.floor(total / 3600) % 24;
+  const d = Math.floor(total / 86400);
+  const pad = n => String(n).padStart(2, "0");
+  if (d > 0) return `${d}d ${h}h ${pad(m)}m ${pad(s)}s`;
+  if (h > 0) return `${h}h ${pad(m)}m ${pad(s)}s`;
+  if (m > 0) return `${m}m ${pad(s)}s`;
+  return `${s}s`;
 }
 
 function shortUrl(url) {
@@ -645,7 +650,7 @@ function shortUrl(url) {
 
 const PAGE_LOADED_AT = Date.now();
 
-function renderDebug(data) {
+function renderDebugFields(data) {
   const now = Date.now();
   const uptime = formatUptime(now - data.serverStartedAt * 1000);
   const pageAge = formatAgo(now - PAGE_LOADED_AT);
@@ -661,20 +666,39 @@ function renderDebug(data) {
       }).join("")
     : '<span style="color:var(--text-muted)">(empty)</span>';
 
+  const ghCommitUrl = `${GITHUB_REPO_URL}/commit/${encodeURIComponent(data.version)}`;
+
   return `<dl>
-    <dt>SHA</dt><dd class="mono">${escapeHtml(data.versionShort)} <span style="color:var(--text-muted)">(${escapeHtml(data.version)})</span></dd>
+    <dt>SHA</dt><dd class="mono"><a href="${escapeHtml(ghCommitUrl)}" target="_blank" rel="noopener">${escapeHtml(data.versionShort)}</a> <span style="color:var(--text-muted)">(${escapeHtml(data.version)})</span></dd>
     <dt>Latest commit</dt><dd>${commit}</dd>
-    <dt>Server uptime</dt><dd>${uptime}</dd>
-    <dt>Page loaded</dt><dd>${pageAge}</dd>
+    <dt>Server uptime</dt><dd><span id="debug-uptime">${uptime}</span></dd>
+    <dt>Page loaded</dt><dd><span id="debug-page-age">${pageAge}</span></dd>
     <dt>Viewport</dt><dd>${window.innerWidth}×${window.innerHeight}</dd>
     <dt>User agent</dt><dd>${escapeHtml(navigator.userAgent)}</dd>
     <dt>Python</dt><dd>${escapeHtml(data.pythonVersion)}</dd>
     <dt>Platform</dt><dd>${escapeHtml(data.platform)}</dd>
-    <dt>config.local</dt><dd>${data.configLocalPresent ? "present" : "absent"}</dd>
     <dt>RSS feeds</dt><dd>${data.rssFeedCount}</dd>
     <dt>Calendar URLs</dt><dd>${data.calendarUrlCount}</dd>
     <dt>Cache (${data.cache.length})</dt><dd>${cache}</dd>
+    <dt>Service log</dt><dd><button class="debug-action" data-debug-action="log-service">view ›</button></dd>
+    <dt>Update log</dt><dd><button class="debug-action" data-debug-action="log-update">view ›</button></dd>
+    <dt>Force update</dt><dd><button class="debug-action danger" data-debug-action="update">run</button></dd>
   </dl>`;
+}
+
+function renderDebugLog(title, data) {
+  const lines = (data.lines || []).map(escapeHtml).join("\n") || "(no output)";
+  const note = data.note ? `<p style="color:var(--text-muted)">${escapeHtml(data.note)}</p>` : "";
+  return `
+    <div class="debug-log-header">
+      <button class="debug-back" data-debug-action="back">‹ Back</button>
+      <span class="debug-log-title">${escapeHtml(title)}</span>
+      <button class="debug-action" data-debug-action="${title === "Service log" ? "log-service" : "log-update"}">refresh</button>
+    </div>
+    <div style="color:var(--text-muted);font-size:0.8em;margin-bottom:8px">${escapeHtml(data.source || "")}</div>
+    ${note}
+    <pre class="debug-log">${lines}</pre>
+  `;
 }
 
 function setupDebugOverlay() {
@@ -683,9 +707,101 @@ function setupDebugOverlay() {
   const backdrop = document.getElementById("debug-backdrop");
   const body = document.getElementById("debug-body");
   const close = document.getElementById("debug-close");
+  const banner = document.getElementById("update-banner");
   if (!dot || !sheet || !backdrop || !body || !close) return;
 
   let open = false;
+  let tickTimer = null;        // 1Hz interval that updates uptime + page-age
+  let cancelTimer = null;      // 1Hz interval for the 3s force-update countdown
+  let serverStartedAt = null;  // captured from /api/debug; used by tickTimer
+
+  function clearTimers() {
+    if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
+    if (cancelTimer) { clearInterval(cancelTimer); cancelTimer = null; }
+    if (banner) banner.classList.remove("active");
+  }
+
+  function tick() {
+    if (serverStartedAt == null) return;
+    const now = Date.now();
+    const uptimeEl = document.getElementById("debug-uptime");
+    if (uptimeEl) uptimeEl.textContent = formatUptime(now - serverStartedAt * 1000);
+    const pageAgeEl = document.getElementById("debug-page-age");
+    if (pageAgeEl) pageAgeEl.textContent = formatAgo(now - PAGE_LOADED_AT);
+  }
+
+  async function showFields() {
+    body.innerHTML = "Loading…";
+    try {
+      const data = await fetchJson("/api/debug");
+      if (data.error) throw new Error(data.error);
+      serverStartedAt = data.serverStartedAt;
+      body.innerHTML = renderDebugFields(data);
+      if (!tickTimer) tickTimer = setInterval(tick, 1000);
+    } catch (e) {
+      body.innerHTML = `<p style="color: var(--live)">Failed to load debug info: ${escapeHtml(e.message)}</p>`;
+    }
+  }
+
+  async function showLog(which) {
+    const title = which === "service" ? "Service log" : "Update log";
+    body.innerHTML = `<p style="color:var(--text-muted)">Loading ${title.toLowerCase()}…</p>`;
+    if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
+    try {
+      const data = await fetchJson(`/api/logs?which=${which}&lines=200`);
+      if (data.error) throw new Error(data.error);
+      body.innerHTML = renderDebugLog(title, data);
+    } catch (e) {
+      body.innerHTML = `
+        <div class="debug-log-header">
+          <button class="debug-back" data-debug-action="back">‹ Back</button>
+          <span class="debug-log-title">${escapeHtml(title)}</span>
+        </div>
+        <p style="color: var(--live)">Failed to load: ${escapeHtml(e.message)}</p>
+      `;
+    }
+  }
+
+  function startUpdateCountdown() {
+    if (!banner || cancelTimer) return;
+    let remaining = 3;
+    banner.textContent = `Updating in ${remaining}s — click to cancel`;
+    banner.classList.add("active");
+    banner.classList.remove("firing");
+    cancelTimer = setInterval(() => {
+      remaining -= 1;
+      if (remaining <= 0) {
+        clearInterval(cancelTimer);
+        cancelTimer = null;
+        fireUpdate();
+      } else {
+        banner.textContent = `Updating in ${remaining}s — click to cancel`;
+      }
+    }, 1000);
+  }
+
+  function cancelUpdateCountdown() {
+    if (!cancelTimer) return;
+    clearInterval(cancelTimer);
+    cancelTimer = null;
+    if (banner) banner.classList.remove("active");
+  }
+
+  async function fireUpdate() {
+    if (!banner) return;
+    banner.classList.add("firing");
+    banner.textContent = "Update started — page will reload when ready";
+    try {
+      const resp = await fetch("/api/update", { method: "POST" });
+      const data = await resp.json().catch(() => ({}));
+      if (data.error) {
+        banner.textContent = `Update failed: ${data.error}`;
+      }
+    } catch {
+      // Server may have already restarted us — that's the success case,
+      // not a failure. The page will reload when the new SHA is detected.
+    }
+  }
 
   async function openDebug() {
     if (open) return;
@@ -693,14 +809,7 @@ function setupDebugOverlay() {
     sheet.classList.add("open");
     backdrop.classList.add("open");
     sheet.setAttribute("aria-hidden", "false");
-    body.innerHTML = "Loading…";
-    try {
-      const data = await fetchJson("/api/debug");
-      if (data.error) throw new Error(data.error);
-      body.innerHTML = renderDebug(data);
-    } catch (e) {
-      body.innerHTML = `<p style="color: var(--live)">Failed to load debug info: ${escapeHtml(e.message)}</p>`;
-    }
+    await showFields();
   }
 
   function closeDebug() {
@@ -709,11 +818,27 @@ function setupDebugOverlay() {
     sheet.classList.remove("open");
     backdrop.classList.remove("open");
     sheet.setAttribute("aria-hidden", "true");
+    clearTimers();
+    serverStartedAt = null;
   }
 
   dot.addEventListener("click", openDebug);
   close.addEventListener("click", closeDebug);
   backdrop.addEventListener("click", closeDebug);
+
+  // Single delegated click handler for all in-sheet buttons. Cheaper and
+  // simpler than re-wiring listeners every time body.innerHTML is rewritten.
+  body.addEventListener("click", (e) => {
+    const target = e.target.closest("[data-debug-action]");
+    if (!target) return;
+    const action = target.dataset.debugAction;
+    if (action === "back") showFields();
+    else if (action === "log-service") showLog("service");
+    else if (action === "log-update") showLog("update");
+    else if (action === "update") startUpdateCountdown();
+  });
+
+  if (banner) banner.addEventListener("click", cancelUpdateCountdown);
 
   document.addEventListener("keydown", (e) => {
     const tag = (document.activeElement?.tagName || "").toLowerCase();
