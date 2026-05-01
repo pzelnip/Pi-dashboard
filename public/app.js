@@ -251,7 +251,9 @@ function wxLabel(code) {
 }
 
 function renderWeather(data) {
-  document.getElementById("weather-label").textContent = data.label ? `· ${data.label}` : "";
+  const labelEl = document.getElementById("weather-label");
+  labelEl.textContent = data.label || "";
+  labelEl.classList.toggle("has-label", !!data.label);
   const el = document.querySelector("#weather .view-weather");
   el.classList.remove("error");
 

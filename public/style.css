@@ -77,6 +77,12 @@ html, body {
   gap: 10px;
 }
 
+#weather-label.has-label::before {
+  content: "·";
+  margin-right: 0.4em;
+  color: var(--text-muted);
+}
+
 .panel-header-right {
   display: flex;
   align-items: center;
@@ -570,6 +576,20 @@ html, body {
     gap: 6px;
     row-gap: 8px;
   }
+
+  /* Stack city name under "Weather" instead of inline. */
+  #weather-title {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+  #weather-label {
+    font-size: 0.65em;
+    font-weight: 400;
+    color: var(--text-muted);
+    line-height: 1.1;
+  }
+  #weather-label.has-label::before { content: none; }
 
   /* NHL: one game per row instead of two columns. */
   .games-grid { grid-template-columns: 1fr; }
