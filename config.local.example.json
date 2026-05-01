@@ -1,7 +1,24 @@
 {
+  "_comment": "Copy this file to config.local.json and override only what you need. Values here are merged recursively on top of config.json on every request.",
+  "weather": {
+    "latitude": 48.4284,
+    "longitude": -123.3656,
+    "label": "Victoria"
+  },
+  "nhl": {
+    "favorites": ["EDM", "VAN", "MTL"]
+  },
+  "countdowns": [
+    {"date": "2026-12-25", "title": "Christmas"}
+  ],
   "calendar": {
     "urls": [
       "https://calendar.google.com/calendar/ical/<your-calendar-id>/private-<secret-hash>/basic.ics"
     ]
+  },
+  "rotation": {
+    "rssSeconds": 10,
+    "weatherPanelSeconds": 6,
+    "nhlPanelSeconds": 10
   }
 }
