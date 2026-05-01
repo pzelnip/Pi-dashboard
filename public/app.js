@@ -723,6 +723,9 @@ function setupDebugOverlay() {
       open ? closeDebug() : openDebug();
     } else if (e.key === "Escape" && open) {
       closeDebug();
+    } else if (open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+      e.preventDefault();
+      body.scrollBy({ top: e.key === "ArrowDown" ? 60 : -60, behavior: "smooth" });
     }
   });
 }
