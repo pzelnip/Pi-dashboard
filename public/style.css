@@ -515,3 +515,50 @@ html, body {
 }
 .rot-nav:hover { background: rgba(255, 255, 255, 0.12); }
 .rot-nav:active { transform: scale(0.92); }
+
+/* ---------- Phone layout ----------
+ * Pi kiosk uses a fixed 2x2 grid that fills the viewport. On a phone (or any
+ * narrow screen) we drop to a single scrollable column and shrink the giant
+ * hero numbers down so they don't dominate the screen.
+ */
+@media (max-width: 720px) {
+  html, body {
+    font-size: 16px;
+    height: auto;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    grid-auto-rows: min-content;
+    height: auto;
+    min-height: 100vh;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .panel-wide { grid-column: auto; }
+
+  /* Make stacked-view panels grow to fit their tallest view, since absolute
+   * positioning otherwise collapses height to 0. */
+  #weather .panel-body, #nhl .panel-body { min-height: 320px; }
+
+  /* NHL: one game per row instead of two columns. */
+  .games-grid { grid-template-columns: 1fr; }
+
+  /* Weather hero shrinks; forecast cards stay 4-up but smaller. */
+  .wx-hero-icon { font-size: 3em; }
+  .wx-day-icon { font-size: 2em; }
+  .wx-day-range { font-size: 1.2em; }
+  .wx-daily { gap: 10px; padding-top: 12px; }
+
+  /* Clock + countdown hero numbers were sized for an LCD across the room. */
+  .clock-time { font-size: 4.5em; }
+  .clock-date { font-size: 1.4em; }
+  .countdown-number { font-size: 3.5em; }
+  .countdown-label { font-size: 1.2em; }
+
+  /* Game-row text was 1.45em / 1.6em logos — fine at 16px root, but trim
+   * padding so two-line cards aren't taller than necessary. */
+  .game { padding: 8px 12px; }
+}
