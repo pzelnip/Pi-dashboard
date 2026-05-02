@@ -8,21 +8,26 @@ A zero-dependency Pi-kiosk dashboard. A single Python stdlib HTTP server serves 
 
 ## Run / develop
 
+All Pi-runtime code lives under `src/` (server, parsers, cache, config, the
+checked-in `config.json`, and the static frontend in `src/public/`). Docs and
+meta files (this CLAUDE.md, README.md, deployment.md, etc.) stay at the repo
+root.
+
 ```bash
-python3 server.py             # serves on :8080
-DASHBOARD_PORT=8765 python3 server.py   # alternate port (use this for ad-hoc testing if 8080 is taken)
+python3 src/server.py             # serves on :8080
+DASHBOARD_PORT=8765 python3 src/server.py   # alternate port (use this for ad-hoc testing if 8080 is taken)
 ```
 
-Edit any file under `public/` or `server.py` and reload the browser — the server reads `config.json` per request and serves static files with `Cache-Control: no-store`, so no restart is needed for content changes. Restart Python only if you edit `server.py`.
+Edit any file under `src/public/` or `src/server.py` and reload the browser — the server reads `src/config.json` per request and serves static files with `Cache-Control: no-store`, so no restart is needed for content changes. Restart Python only if you edit Python.
 
-Server-side unit tests live in `tests/` and use stdlib `unittest` only:
+Server-side unit tests live in `src/tests/` and use stdlib `unittest` only:
 
 ```bash
-python3 -m unittest discover -v
+cd src && python3 -m unittest discover -v
 ```
 
 Fixtures (small captured payloads for NHL JSON, RSS/Atom XML, iCal) live in
-`tests/fixtures/`. Tests mock `urllib.request.urlopen` and never touch the
+`src/tests/fixtures/`. Tests mock `urllib.request.urlopen` and never touch the
 network. There is no JS test runner — frontend changes are verified manually
 in the browser.
 
@@ -44,7 +49,7 @@ When making frontend changes, exercise both the rotation timers and the dots/pre
 
 ## Configuration
 
-`config.json` is checked in with the author's defaults. `config.local.json` (gitignored, see `config.local.example.json`) is recursively merged on top — use it for personal calendar URLs or location overrides without touching the committed file. The merge happens on every request inside `load_config()`.
+`src/config.json` is checked in with the author's defaults. `src/config.local.json` (gitignored, see `src/config.local.example.json`) is recursively merged on top — use it for personal calendar URLs or location overrides without touching the committed file. The merge happens on every request inside `load_config()`.
 
 Notable knobs the frontend reads from `config.json` via `/api/config`:
 
@@ -55,7 +60,7 @@ Notable knobs the frontend reads from `config.json` via `/api/config`:
 
 ## Architecture
 
-### Server (`server.py`, ~600 lines)
+### Server (`src/server.py`, ~400 lines + helper modules)
 
 Single-file Python 3 stdlib server. Three concerns are layered:
 
@@ -69,7 +74,7 @@ Single-file Python 3 stdlib server. Three concerns are layered:
 
 `/api/version` returns the current git SHA (computed once at startup); the frontend polls it and reloads on change. This is how the kiosk auto-updates after a deploy.
 
-### Frontend (`public/app.js`, ~600 lines)
+### Frontend (`src/public/app.js`, ~600 lines)
 
 Single ES module-free file, three rotating panels (NHL, weather, RSS). The key abstraction is `createRotator({...})` — every rotating panel is an instance:
 
@@ -83,7 +88,7 @@ CSS classes for the dots/nav controls are `.rot-*` (shared by all three panels).
 
 All time/date formatting in `app.js` passes an explicit `"en-US"` locale and `hour12: true`. The Pi's system locale renders 24-hour by default, so calling `toLocaleTimeString()` with no args (or with `[]`) produces "20:03" on the deployed device but "8:03 PM" on a Mac dev machine — silent regression. The clock view also builds its date string manually (weekday/month from `toLocaleDateString("en-US", {...})`, day-of-month + ordinal suffix from `getDate()` + helper) for the same reason.
 
-### HTML (`public/index.html`, 70 lines)
+### HTML (`src/public/index.html`, 70 lines)
 
 Three panels, each with `data-body="<name>"` for `bodyEl()`/`showError()` lookups, `[data-updated-for="<name>"]` for the "X ago" labels, and `id="<panel>-dots"` / `id="<panel>-nav"` for rotator controls. Each panel body contains stacked `.view` elements that the rotator toggles `.active` on.
 

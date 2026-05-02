@@ -12,3 +12,4 @@ jobs:
           python-version: "3.12"
       - name: Run unittest suite
         run: python3 -m unittest discover -v
+        working-directory: src

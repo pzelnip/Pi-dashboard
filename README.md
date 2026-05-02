@@ -5,8 +5,11 @@ and rotating RSS feeds.
 
 ## Running
 
+All Python source and the static frontend live under [`src/`](src/). Run the
+server from the repo root:
+
 ```shell
-python3 server.py
+python3 src/server.py
 ```
 
 Then open <http://localhost:8080>. Port can be overridden with `DASHBOARD_PORT=9000`.
@@ -25,7 +28,7 @@ Screenshot of mobile view:
 
 ## Configuration
 
-Edit [config.json](config.json):
+Edit [src/config.json](src/config.json):
 
 - `weather.latitude` / `weather.longitude` — used by Open-Meteo.
 - `weather.label` — display label (e.g. city name).
@@ -54,7 +57,8 @@ Name=Dashboard
 Exec=chromium-browser --kiosk --noerrdialogs --disable-infobars http://localhost:8080
 ```
 
-And run `server.py` as a systemd user service so it starts on boot.
+And run `src/server.py` as a systemd user service so it starts on boot. See
+[deployment.md](deployment.md) for the full Pi setup.
 
 ## Tests
 
@@ -62,11 +66,12 @@ Pure-Python unit tests for the parsers, cache layer, and config merge. Stdlib
 only — no pytest, no fixtures runner.
 
 ```shell
-python3 -m unittest discover -v
+cd src && python3 -m unittest discover -v
 ```
 
-Fixtures (small captured upstream payloads) live in `tests/fixtures/`. There are
-no JS tests; the frontend is exercised manually via the browser per CLAUDE.md.
+Fixtures (small captured upstream payloads) live in `src/tests/fixtures/`.
+There are no JS tests; the frontend is exercised manually via the browser per
+CLAUDE.md.
 
 ## Dependencies
 
