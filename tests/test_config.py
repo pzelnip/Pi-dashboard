@@ -44,6 +44,9 @@ class MergeDictsTests(unittest.TestCase):
         self.assertEqual(base, {"a": {"b": 1}})
         self.assertEqual(overlay, {"a": {"b": 2}})
 
+    def test_will_fail(self):
+        self.assertFalse(True)
+
 
 class LoadConfigTests(unittest.TestCase):
     def setUp(self):
@@ -106,7 +109,12 @@ class LoadConfigTests(unittest.TestCase):
         # the point of this test is the merge behaviour, not validation.
         self._write(
             self._cfg_path,
-            {"rss": [{"name": "A", "url": "https://a"}, {"name": "B", "url": "https://b"}]},
+            {
+                "rss": [
+                    {"name": "A", "url": "https://a"},
+                    {"name": "B", "url": "https://b"},
+                ]
+            },
         )
         self._write(self._local_path, {"rss": [{"name": "Z", "url": "https://z"}]})
 
