@@ -56,6 +56,18 @@ Exec=chromium-browser --kiosk --noerrdialogs --disable-infobars http://localhost
 
 And run `server.py` as a systemd user service so it starts on boot.
 
+## Tests
+
+Pure-Python unit tests for the parsers, cache layer, and config merge. Stdlib
+only — no pytest, no fixtures runner.
+
+```shell
+python3 -m unittest discover -v
+```
+
+Fixtures (small captured upstream payloads) live in `tests/fixtures/`. There are
+no JS tests; the frontend is exercised manually via the browser per CLAUDE.md.
+
 ## Dependencies
 
 None beyond the Python 3 standard library. Tested with Python 3.10+.

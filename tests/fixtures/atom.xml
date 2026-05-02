@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Simon's Atom Feed</title>
+  <link href="https://simonwillison.net/" />
+  <updated>2026-05-01T15:00:00Z</updated>
+  <logo>https://simonwillison.net/static/logo.png</logo>
+  <id>https://simonwillison.net/</id>
+  <entry>
+    <title>An Atom entry</title>
+    <link href="https://simonwillison.net/2026/May/1/an-atom-entry/" />
+    <id>tag:simonwillison.net,2026:1</id>
+    <updated>2026-05-01T14:00:00Z</updated>
+    <published>2026-05-01T13:00:00Z</published>
+    <summary type="html">&lt;p&gt;Hello with &lt;img src="https://simonwillison.net/img1.png" /&gt;&lt;/p&gt;</summary>
+  </entry>
+  <entry>
+    <title>Atom entry without image</title>
+    <link href="https://simonwillison.net/2026/May/2/no-image/" />
+    <id>tag:simonwillison.net,2026:2</id>
+    <updated>2026-05-01T12:00:00Z</updated>
+    <summary>Plain summary</summary>
+  </entry>
+</feed>

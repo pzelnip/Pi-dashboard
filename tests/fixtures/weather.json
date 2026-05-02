@@ -1,0 +1,26 @@
+{
+  "latitude": 48.4284,
+  "longitude": -123.3656,
+  "current_units": {
+    "temperature_2m": "°C",
+    "wind_speed_10m": "km/h",
+    "relative_humidity_2m": "%"
+  },
+  "current": {
+    "time": "2026-05-01T18:00",
+    "temperature_2m": 14.2,
+    "weather_code": 3,
+    "wind_speed_10m": 12.5,
+    "relative_humidity_2m": 65
+  },
+  "daily_units": {
+    "temperature_2m_max": "°C",
+    "temperature_2m_min": "°C"
+  },
+  "daily": {
+    "time": ["2026-05-01", "2026-05-02", "2026-05-03", "2026-05-04"],
+    "temperature_2m_max": [16.0, 18.1, 17.5, 15.0],
+    "temperature_2m_min": [9.0, 10.2, 11.0, 8.5],
+    "weather_code": [3, 1, 2, 61]
+  }
+}
