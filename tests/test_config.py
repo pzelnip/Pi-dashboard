@@ -66,7 +66,10 @@ class LoadConfigTests(unittest.TestCase):
         ):
             cfg = server.load_config()
 
-        self.assertEqual(cfg, {"weather": {"label": "Victoria"}})
+        # load_config runs the result through validate_config, which fills in
+        # defaults for keys the user omitted. The user's weather block is
+        # preserved verbatim.
+        self.assertEqual(cfg["weather"], {"label": "Victoria"})
 
     def test_local_config_deep_merges_over_base(self):
         self._write(
@@ -99,15 +102,20 @@ class LoadConfigTests(unittest.TestCase):
         self.assertEqual(cfg["rss"], [{"name": "A", "url": "https://a"}])
 
     def test_local_list_replaces_base_list(self):
-        self._write(self._cfg_path, {"rss": [{"name": "A"}, {"name": "B"}]})
-        self._write(self._local_path, {"rss": [{"name": "Z"}]})
+        # Use valid rss entries (with url) so validate_config doesn't drop them;
+        # the point of this test is the merge behaviour, not validation.
+        self._write(
+            self._cfg_path,
+            {"rss": [{"name": "A", "url": "https://a"}, {"name": "B", "url": "https://b"}]},
+        )
+        self._write(self._local_path, {"rss": [{"name": "Z", "url": "https://z"}]})
 
         with patch.object(server, "CONFIG_PATH", self._cfg_path), patch.object(
             server, "LOCAL_CONFIG_PATH", self._local_path
         ):
             cfg = server.load_config()
 
-        self.assertEqual(cfg["rss"], [{"name": "Z"}])
+        self.assertEqual(cfg["rss"], [{"name": "Z", "url": "https://z"}])
 
 
 if __name__ == "__main__":
