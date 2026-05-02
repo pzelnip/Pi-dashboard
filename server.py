@@ -17,6 +17,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 import datetime as dt
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PUBLIC_DIR = os.path.join(HERE, "public")
@@ -397,17 +398,38 @@ def _ics_unfold(text: str) -> list[str]:
 
 
 def _ics_parse_dt(value: str, params: dict[str, str]) -> tuple[object, bool]:
-    """Return (datetime-or-date, is_all_day)."""
+    """Return (datetime-or-date, is_all_day).
+
+    Timed datetimes are returned as *naive local time* on the host running the
+    server. Three input forms are handled per RFC 5545:
+
+    - `...Z` suffix: UTC. Convert to host-local and strip tzinfo.
+    - `TZID=<IANA name>` parameter: resolve via stdlib ``zoneinfo``, convert to
+      host-local, strip tzinfo. If the TZID is unknown (typo, exotic Windows
+      name, or a VTIMEZONE-only definition we don't read), fall back to naive
+      parsing with a warning so the calendar view stays useful.
+    - Neither: "floating" local time. Returned naive as-is.
+    """
     is_date = params.get("VALUE") == "DATE" or (len(value) == 8 and "T" not in value)
     if is_date:
         return dt.date(int(value[0:4]), int(value[4:6]), int(value[6:8])), True
-    # Timed value: 20260421T140000 or 20260421T140000Z
+    # Timed value: 20260421T140000, 20260421T140000Z, or with a TZID param.
     is_utc = value.endswith("Z")
     if is_utc:
         value = value[:-1]
     naive = dt.datetime.strptime(value, "%Y%m%dT%H%M%S")
     if is_utc:
-        naive = naive.replace(tzinfo=dt.timezone.utc).astimezone().replace(tzinfo=None)
+        return naive.replace(tzinfo=dt.timezone.utc).astimezone().replace(tzinfo=None), False
+    tzid = params.get("TZID")
+    if tzid:
+        try:
+            zone = ZoneInfo(tzid)
+        except (ZoneInfoNotFoundError, ValueError, OSError) as e:
+            sys.stderr.write(
+                f"[calendar] unknown TZID {tzid!r} ({e}); treating as floating local time\n"
+            )
+            return naive, False
+        return naive.replace(tzinfo=zone).astimezone().replace(tzinfo=None), False
     return naive, False
 
 
