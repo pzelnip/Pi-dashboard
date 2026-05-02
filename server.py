@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Dashboard server: serves ./public and proxies three API endpoints."""
 
+import copy
 import hashlib
 import json
 import mimetypes
@@ -157,7 +158,7 @@ def validate_config(cfg) -> dict:
     """
     if not isinstance(cfg, dict):
         _warn(f"top-level config must be an object, got {type(cfg).__name__}; using defaults")
-        return json.loads(json.dumps(_DEFAULT_CONFIG))  # deep copy
+        return copy.deepcopy(_DEFAULT_CONFIG)
 
     out: dict = {}
 
@@ -254,12 +255,18 @@ def validate_config(cfg) -> dict:
     return out
 
 
-def _read_json_file(path: str) -> dict | None:
-    """Read+parse a JSON file. Returns None on any failure (with stderr log)."""
+def _read_json_file(path: str, *, warn_if_missing: bool = False) -> dict | None:
+    """Read+parse a JSON file. Returns None on any failure (with stderr log).
+
+    When ``warn_if_missing`` is True, a missing file is also logged via ``_warn``
+    (use this for the primary config so a missing file is visible in journalctl).
+    """
     try:
         with open(path) as f:
             data = json.load(f)
     except FileNotFoundError:
+        if warn_if_missing:
+            _warn(f"{path} not found; using defaults")
         return None
     except (OSError, json.JSONDecodeError) as e:
         _warn(f"failed to load {path}: {e}")
@@ -278,10 +285,10 @@ def load_config() -> dict:
     main file's values. Either way, ``validate_config`` is the last step and
     guarantees the returned shape is safe for the handlers and the frontend.
     """
-    base = _read_json_file(CONFIG_PATH)
+    base = _read_json_file(CONFIG_PATH, warn_if_missing=True)
     if base is None:
         # Deep-copy the default so callers can't mutate our singleton.
-        base = json.loads(json.dumps(_DEFAULT_CONFIG))
+        base = copy.deepcopy(_DEFAULT_CONFIG)
 
     if os.path.isfile(LOCAL_CONFIG_PATH):
         overlay = _read_json_file(LOCAL_CONFIG_PATH)
