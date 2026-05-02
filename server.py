@@ -424,9 +424,16 @@ def _ics_parse_dt(value: str, params: dict[str, str]) -> tuple[object, bool]:
     if tzid:
         try:
             zone = ZoneInfo(tzid)
-        except (ZoneInfoNotFoundError, ValueError, OSError) as e:
+        except ZoneInfoNotFoundError as e:
             sys.stderr.write(
                 f"[calendar] unknown TZID {tzid!r} ({e}); treating as floating local time\n"
+            )
+            return naive, False
+        except (ValueError, OSError) as e:
+            sys.stderr.write(
+                f"[calendar] zoneinfo system error for TZID {tzid!r} "
+                f"({type(e).__name__}: {e}); treating as floating local time — "
+                f"this likely indicates a missing tzdata package or filesystem issue\n"
             )
             return naive, False
         return naive.replace(tzinfo=zone).astimezone().replace(tzinfo=None), False
