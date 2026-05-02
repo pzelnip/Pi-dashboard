@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
+    <title>Example News</title>
+    <link>https://example.com/</link>
+    <description>Example feed description</description>
+    <image>
+      <url>https://example.com/feed-logo.png</url>
+      <title>Example News</title>
+      <link>https://example.com/</link>
+    </image>
+    <item>
+      <title>First story headline</title>
+      <link>https://example.com/story-1</link>
+      <pubDate>Thu, 01 May 2026 14:30:00 +0000</pubDate>
+      <description>&lt;p&gt;Some text with &lt;img src="https://example.com/story-1.jpg" alt="x"/&gt; an image.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Second story</title>
+      <link>https://example.com/story-2</link>
+      <pubDate>Thu, 01 May 2026 13:00:00 +0000</pubDate>
+      <media:thumbnail url="https://example.com/story-2-thumb.jpg" />
+      <description>No img in body</description>
+    </item>
+    <item>
+      <title>Third story with enclosure</title>
+      <link>https://example.com/story-3</link>
+      <pubDate>Thu, 01 May 2026 12:00:00 +0000</pubDate>
+      <enclosure url="https://example.com/story-3-encl.jpg" type="image/jpeg" length="12345" />
+      <description>Plain text description</description>
+    </item>
+    <item>
+      <title>Fourth story without image</title>
+      <link>https://example.com/story-4</link>
+      <pubDate>Thu, 01 May 2026 11:00:00 +0000</pubDate>
+      <description>No image at all</description>
+    </item>
+    <item>
+      <title>Fifth (should be trimmed)</title>
+      <link>https://example.com/story-5</link>
+      <pubDate>Thu, 01 May 2026 10:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <link>https://example.com/no-title</link>
+      <pubDate>Thu, 01 May 2026 09:00:00 +0000</pubDate>
+    </item>
+  </channel>
+</rss>

@@ -1,0 +1,88 @@
+{
+  "gameWeek": [
+    {
+      "date": "2026-04-21",
+      "games": [
+        {
+          "id": 1,
+          "gameState": "LIVE",
+          "startTimeUTC": "2026-04-22T01:00:00Z",
+          "homeTeam": {
+            "abbrev": "EDM",
+            "commonName": {"default": "Oilers"},
+            "score": 2,
+            "logo": "https://example.com/edm.svg"
+          },
+          "awayTeam": {
+            "abbrev": "VAN",
+            "commonName": {"default": "Canucks"},
+            "score": 1,
+            "logo": "https://example.com/van.svg"
+          },
+          "periodDescriptor": {"number": 2, "periodType": "REG"},
+          "clock": {"timeRemaining": "08:32", "inIntermission": false},
+          "seriesStatus": {
+            "topSeedTeamAbbrev": "EDM",
+            "topSeedWins": 2,
+            "bottomSeedTeamAbbrev": "VAN",
+            "bottomSeedWins": 1,
+            "neededToWin": 4,
+            "gameNumberOfSeries": 4
+          }
+        },
+        {
+          "id": 2,
+          "gameState": "FINAL",
+          "startTimeUTC": "2026-04-21T23:00:00Z",
+          "homeTeam": {
+            "abbrev": "TOR",
+            "commonName": {"default": "Maple Leafs"},
+            "score": 4,
+            "logo": "https://example.com/tor.svg"
+          },
+          "awayTeam": {
+            "abbrev": "MTL",
+            "commonName": {"default": "Canadiens"},
+            "score": 3,
+            "logo": "https://example.com/mtl.svg"
+          },
+          "periodDescriptor": {"number": 4, "periodType": "OT"},
+          "clock": {"timeRemaining": "00:00", "inIntermission": false}
+        },
+        {
+          "id": 3,
+          "gameState": "FUT",
+          "startTimeUTC": "2026-04-22T03:00:00Z",
+          "homeTeam": {
+            "abbrev": "LAK",
+            "commonName": {"default": "Kings"},
+            "score": 0,
+            "logo": "https://example.com/lak.svg"
+          },
+          "awayTeam": {
+            "abbrev": "SJS",
+            "commonName": {"default": "Sharks"},
+            "score": 0,
+            "logo": "https://example.com/sjs.svg"
+          },
+          "periodDescriptor": {},
+          "clock": {}
+        }
+      ]
+    },
+    {
+      "date": "2026-04-22",
+      "games": [
+        {
+          "id": 99,
+          "gameState": "FUT",
+          "startTimeUTC": "2026-04-23T01:00:00Z",
+          "homeTeam": {"abbrev": "BOS", "commonName": {"default": "Bruins"}, "score": 0},
+          "awayTeam": {"abbrev": "BUF", "commonName": {"default": "Sabres"}, "score": 0},
+          "periodDescriptor": {},
+          "clock": {}
+        }
+      ]
+    }
+  ]
+}

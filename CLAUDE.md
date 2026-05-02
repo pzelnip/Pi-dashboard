@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A zero-dependency Pi-kiosk dashboard. A single Python stdlib HTTP server serves a static SPA and proxies a handful of upstream APIs (NHL, Open-Meteo, RSS/Atom, iCal). It is meant to run on a Raspberry Pi displayed via Chromium in kiosk mode. Local development is the same as deployed runtime — there is no build step, no bundler, no test suite.
+A zero-dependency Pi-kiosk dashboard. A single Python stdlib HTTP server serves a static SPA and proxies a handful of upstream APIs (NHL, Open-Meteo, RSS/Atom, iCal). It is meant to run on a Raspberry Pi displayed via Chromium in kiosk mode. Local development is the same as deployed runtime — there is no build step, no bundler. There is a Python `unittest` suite for the server-side parsers and cache; the frontend has no tests and is exercised manually in the browser.
 
 ## Run / develop
 
@@ -15,7 +15,19 @@ DASHBOARD_PORT=8765 python3 server.py   # alternate port (use this for ad-hoc te
 
 Edit any file under `public/` or `server.py` and reload the browser — the server reads `config.json` per request and serves static files with `Cache-Control: no-store`, so no restart is needed for content changes. Restart Python only if you edit `server.py`.
 
-There is no test suite. To smoke-test changes, hit the JSON endpoints with `curl` and inspect the page in a browser:
+Server-side unit tests live in `tests/` and use stdlib `unittest` only:
+
+```bash
+python3 -m unittest discover -v
+```
+
+Fixtures (small captured payloads for NHL JSON, RSS/Atom XML, iCal) live in
+`tests/fixtures/`. Tests mock `urllib.request.urlopen` and never touch the
+network. There is no JS test runner — frontend changes are verified manually
+in the browser.
+
+To smoke-test the running server, hit the JSON endpoints with `curl` and
+inspect the page in a browser:
 
 ```bash
 curl -s http://localhost:8080/api/nhl | jq             # {today, yesterday, hasLiveToday}
