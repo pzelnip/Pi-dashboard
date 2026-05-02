@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Pi runs a Python HTTP server ([server.py](server.py)) on port 8080,
+The Pi runs a Python HTTP server ([server.py](../server.py)) on port 8080,
 displayed via Chromium in kiosk mode.
 
 - **URL:** <http://localhost:8080>
