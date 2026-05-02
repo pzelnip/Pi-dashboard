@@ -79,12 +79,70 @@ function safeUrl(u) {
 // Owns the index, timer, dots/nav, and active-view CSS class for one rotating
 // panel. Each panel calls createRotator once; setViews() can be called later
 // to swap the active set (e.g. NHL switching between today-only and today/yesterday).
-function createRotator({ dotsEl, navEl, viewsContainer, viewClassPrefix, titleEl, titles, views, getRotationMs, onShow }) {
+function createRotator({ dotsEl, navEl, viewsContainer, viewClassPrefix, titleEl, titles, views, getRotationMs, onShow, swipeEl }) {
   let currentViews = views.slice();
   let index = 0;
   let timer = null;
 
   const wrap = i => ((i % currentViews.length) + currentViews.length) % currentViews.length;
+
+  // Touch swipe: left swipe -> next, right swipe -> previous. Mirrors the
+  // .rot-nav button behavior so all controls share one code path via jumpTo.
+  // Thresholds: X delta must exceed 40px and be at least 1.5x the Y delta
+  // (axis-dominance check) to count as a horizontal swipe — otherwise it's
+  // treated as a vertical scroll and ignored.
+  if (swipeEl) {
+    const SWIPE_MIN_X = 40;
+    const SWIPE_AXIS_RATIO = 1.5;
+    let touchStartX = null;
+    let touchStartY = null;
+    let touchActive = false;
+
+    swipeEl.addEventListener("touchstart", (e) => {
+      if (e.touches.length !== 1) { touchActive = false; return; }
+      const t = e.touches[0];
+      touchStartX = t.clientX;
+      touchStartY = t.clientY;
+      touchActive = true;
+    }, { passive: true });
+
+    swipeEl.addEventListener("touchmove", (e) => {
+      if (!touchActive || touchStartX == null) return;
+      const t = e.touches[0];
+      const dx = t.clientX - touchStartX;
+      const dy = t.clientY - touchStartY;
+      // Cancel the gesture once a clear vertical scroll dominates — keeps
+      // page scrolling responsive and avoids a swipe firing after a scroll.
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > SWIPE_MIN_X) {
+        touchActive = false;
+      }
+    }, { passive: true });
+
+    swipeEl.addEventListener("touchend", (e) => {
+      const wasActive = touchActive && touchStartX != null;
+      const startX = touchStartX;
+      const startY = touchStartY;
+      touchActive = false;
+      touchStartX = null;
+      touchStartY = null;
+      if (!wasActive) return;
+      if (e.changedTouches.length === 0) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
+      if (Math.abs(dx) < SWIPE_MIN_X) return;
+      if (Math.abs(dx) < Math.abs(dy) * SWIPE_AXIS_RATIO) return;
+      if (currentViews.length < 2) return;
+      // Left swipe (dx < 0) -> next; right swipe (dx > 0) -> previous.
+      jumpTo(index + (dx < 0 ? 1 : -1));
+    }, { passive: true });
+
+    swipeEl.addEventListener("touchcancel", () => {
+      touchActive = false;
+      touchStartX = null;
+      touchStartY = null;
+    }, { passive: true });
+  }
 
   function renderControls() {
     const count = currentViews.length;
@@ -584,6 +642,7 @@ async function start() {
     titles: NHL_TITLES,
     views: ["today"],  // refreshNHL() expands to ["today","yesterday"] when appropriate
     getRotationMs: () => nhlRotationMs,
+    swipeEl: bodyEl("nhl"),
   });
   nhlRotator.start();
 
@@ -597,6 +656,7 @@ async function start() {
     views: weatherViews,
     getRotationMs: () => weatherRotationMs,
     onShow: onWeatherViewShown,
+    swipeEl: bodyEl("weather"),
   });
   weatherRotator.start();
 
@@ -606,6 +666,7 @@ async function start() {
     views: ["0"],  // renderRSS expands once we know the feed count
     getRotationMs: () => rssRotationMs,
     onShow: onRssViewShown,
+    swipeEl: bodyEl("rss"),
   });
   rssRotator.start();
 
