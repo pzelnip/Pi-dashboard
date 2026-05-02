@@ -711,12 +711,14 @@ function setupDebugOverlay() {
   let tickTimer = null;        // 1Hz interval that updates uptime + page-age
   let cancelTimer = null;      // 1Hz interval for the 3s force-update countdown
   let firedTimeout = null;     // 30s fallback after firing — swaps banner if no reload
+  let fastPollTimer = null;    // 1Hz post-fire SHA poll — beats watchVersion's 30s cadence
   let serverStartedAt = null;  // captured from /api/debug; used by tickTimer
 
   function clearTimers() {
     if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
     if (cancelTimer) { clearInterval(cancelTimer); cancelTimer = null; }
     if (firedTimeout) { clearTimeout(firedTimeout); firedTimeout = null; }
+    if (fastPollTimer) { clearInterval(fastPollTimer); fastPollTimer = null; }
     if (banner) banner.classList.remove("active", "firing");
   }
 
@@ -811,10 +813,30 @@ function setupDebugOverlay() {
       // Server may have already restarted us — that's the success case,
       // not a failure. The page will reload when the new SHA is detected.
     }
-    // If we're still here 30s later, watchVersion didn't see a SHA flip
-    // (likely: --force restart against unchanged code, or restart was
-    // very fast and a stale-cache fetch glued the SHAs together). Swap
-    // to a "completed" banner so the user knows it's done and can dismiss.
+    // Fast-poll /api/version once a second for up to 60s. watchVersion's
+    // 30s cadence means a fresh deploy could otherwise sit unnoticed for
+    // up to 30 seconds; this catches it as soon as the new server is up.
+    // Cache-bust the URL so a worker/HTTP layer can't hand us back the
+    // old SHA from a stale connection.
+    if (fastPollTimer) clearInterval(fastPollTimer);
+    let pollsRemaining = 60;
+    fastPollTimer = setInterval(async () => {
+      pollsRemaining -= 1;
+      if (pollsRemaining <= 0) {
+        clearInterval(fastPollTimer);
+        fastPollTimer = null;
+        return;
+      }
+      try {
+        const { version } = await fetchJson(`/api/version?t=${Date.now()}`);
+        if (version && initialVersion && version !== initialVersion) {
+          location.reload();
+        }
+      } catch { /* server is mid-restart — try again next tick */ }
+    }, 1000);
+    // If we're still here 30s later, the SHA didn't flip (likely:
+    // --force restart against unchanged code). Swap to a "completed"
+    // banner so the user knows it's done and can dismiss.
     firedTimeout = setTimeout(() => {
       firedTimeout = null;
       banner.textContent = "Update complete — click to dismiss";
@@ -877,17 +899,20 @@ function setupDebugOverlay() {
   });
 }
 
+// Captured at startup; read by fireUpdate so it can fast-poll for a SHA
+// flip without waiting up to 30s for the next watchVersion tick.
+let initialVersion = null;
+
 async function watchVersion() {
-  let initial;
   try {
-    initial = (await fetchJson("/api/version"))?.version;
+    initialVersion = (await fetchJson("/api/version"))?.version;
   } catch { return; }
-  if (!initial) return;
+  if (!initialVersion) return;
 
   setInterval(async () => {
     try {
       const { version } = await fetchJson("/api/version");
-      if (version && version !== initial) location.reload();
+      if (version && version !== initialVersion) location.reload();
     } catch { /* transient — try again next tick */ }
   }, 30 * 1000);
 }
