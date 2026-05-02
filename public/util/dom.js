@@ -28,6 +28,7 @@ export function bodyEl(panel) {
 // like RSS that have no .view children).
 export function showError(panel, message, viewSelector) {
   const el = bodyEl(panel);
+  if (!el) return;
   el.classList.remove("stale");
   const html = `<p class="panel-error">⚠ ${escapeHtml(message)}</p>`;
   const target = viewSelector ? el.querySelector(viewSelector) : null;
