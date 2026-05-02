@@ -78,13 +78,220 @@ def _merge_dicts(base: dict, overlay: dict) -> dict:
     return out
 
 
+# Built-in safe defaults used when config.json itself is unreadable / invalid.
+# These match the public-facing keys the request handlers and the frontend
+# read; values are intentionally minimal so the dashboard starts but flags
+# missing data (no weather coords, no feeds) rather than crashing.
+_DEFAULT_CONFIG: dict = {
+    "weather": {},
+    "nhl": {"favorites": []},
+    "countdowns": [],
+    "rss": [],
+    "rotation": {
+        "rssSeconds": 30,
+        "weatherPanelSeconds": 10,
+        "nhlPanelSeconds": 10,
+    },
+    "calendar": {"urls": []},
+}
+
+
+def _warn(msg: str) -> None:
+    sys.stderr.write(f"[config] {msg}\n")
+
+
+def _coerce_str_list(value, key: str) -> list[str]:
+    """Coerce ``value`` to a list[str]. Logs and drops bad entries.
+
+    A bare string is treated as a single-element list (common slip-up in
+    hand-edited JSON, e.g. ``"calendar": {"urls": "https://..."}``).
+    """
+    if value is None:
+        return []
+    if isinstance(value, str):
+        _warn(f"{key} should be a list, got string; coercing to single-element list")
+        return [value]
+    if not isinstance(value, list):
+        _warn(f"{key} should be a list, got {type(value).__name__}; ignoring")
+        return []
+    out: list[str] = []
+    for i, item in enumerate(value):
+        if isinstance(item, str):
+            out.append(item)
+        else:
+            _warn(f"{key}[{i}] should be a string, got {type(item).__name__}; dropping")
+    return out
+
+
+def _coerce_positive_number(value, key: str, default):
+    """Coerce ``value`` to a positive number. Returns ``default`` on failure."""
+    if isinstance(value, bool):  # bool is a subclass of int — exclude it
+        _warn(f"{key} should be a number, got bool; using default {default}")
+        return default
+    if isinstance(value, (int, float)):
+        if value > 0:
+            return value
+        _warn(f"{key} should be > 0, got {value}; using default {default}")
+        return default
+    if isinstance(value, str):
+        try:
+            num = float(value)
+        except ValueError:
+            _warn(f"{key} should be a number, got string {value!r}; using default {default}")
+            return default
+        if num > 0:
+            _warn(f"{key} should be a number, got string {value!r}; coercing to {num}")
+            return num
+        _warn(f"{key} should be > 0, got {num}; using default {default}")
+        return default
+    _warn(f"{key} should be a number, got {type(value).__name__}; using default {default}")
+    return default
+
+
+def validate_config(cfg) -> dict:
+    """Normalize ``cfg`` to the shape the rest of the server (and frontend) expect.
+
+    Coerces what is reasonable, drops what isn't, and logs each correction so
+    a bad config deploy is visible in journalctl without crashing the server.
+    Always returns a dict with the keys the handlers access.
+    """
+    if not isinstance(cfg, dict):
+        _warn(f"top-level config must be an object, got {type(cfg).__name__}; using defaults")
+        return json.loads(json.dumps(_DEFAULT_CONFIG))  # deep copy
+
+    out: dict = {}
+
+    # weather: pass through dict; lat/lon validated lazily in the handler
+    # (handler already checks for None — keep that behaviour). Just ensure
+    # it's a dict so .get() doesn't AttributeError.
+    weather = cfg.get("weather")
+    if weather is None:
+        out["weather"] = {}
+    elif isinstance(weather, dict):
+        out["weather"] = weather
+    else:
+        _warn(f"weather should be an object, got {type(weather).__name__}; ignoring")
+        out["weather"] = {}
+
+    # nhl.favorites: list of strings
+    nhl = cfg.get("nhl")
+    if not isinstance(nhl, dict):
+        if nhl is not None:
+            _warn(f"nhl should be an object, got {type(nhl).__name__}; ignoring")
+        nhl = {}
+    out["nhl"] = {"favorites": _coerce_str_list(nhl.get("favorites"), "nhl.favorites")}
+    # Preserve any other nhl keys the user set so we don't silently drop forward-compat fields.
+    for k, v in nhl.items():
+        if k != "favorites":
+            out["nhl"].setdefault(k, v)
+
+    # countdowns: list of {date, title} objects
+    countdowns_raw = cfg.get("countdowns")
+    countdowns: list[dict] = []
+    if countdowns_raw is None:
+        pass
+    elif not isinstance(countdowns_raw, list):
+        _warn(f"countdowns should be a list, got {type(countdowns_raw).__name__}; ignoring")
+    else:
+        for i, entry in enumerate(countdowns_raw):
+            if not isinstance(entry, dict):
+                _warn(f"countdowns[{i}] should be an object, got {type(entry).__name__}; dropping")
+                continue
+            date = entry.get("date")
+            title = entry.get("title")
+            if not isinstance(date, str) or not isinstance(title, str):
+                _warn(f"countdowns[{i}] needs string date+title; dropping {entry!r}")
+                continue
+            countdowns.append({"date": date, "title": title})
+    out["countdowns"] = countdowns
+
+    # rss: list of {name, url} objects
+    rss_raw = cfg.get("rss")
+    rss_out: list[dict] = []
+    if rss_raw is None:
+        pass
+    elif not isinstance(rss_raw, list):
+        _warn(f"rss should be a list, got {type(rss_raw).__name__}; ignoring")
+    else:
+        for i, entry in enumerate(rss_raw):
+            if not isinstance(entry, dict):
+                _warn(f"rss[{i}] should be an object, got {type(entry).__name__}; dropping")
+                continue
+            url = entry.get("url")
+            if not isinstance(url, str) or not url:
+                _warn(f"rss[{i}] missing/non-string url; dropping {entry!r}")
+                continue
+            name = entry.get("name")
+            if not isinstance(name, str):
+                name = url
+            rss_out.append({"name": name, "url": url})
+    out["rss"] = rss_out
+
+    # rotation: numbers > 0; fall back per-key
+    rotation_raw = cfg.get("rotation")
+    if not isinstance(rotation_raw, dict):
+        if rotation_raw is not None:
+            _warn(f"rotation should be an object, got {type(rotation_raw).__name__}; ignoring")
+        rotation_raw = {}
+    rotation_out: dict = {}
+    for key, default in _DEFAULT_CONFIG["rotation"].items():
+        if key in rotation_raw:
+            rotation_out[key] = _coerce_positive_number(rotation_raw[key], f"rotation.{key}", default)
+        else:
+            rotation_out[key] = default
+    out["rotation"] = rotation_out
+
+    # calendar.urls: list of strings
+    calendar_raw = cfg.get("calendar")
+    if calendar_raw is None:
+        out["calendar"] = {"urls": []}
+    elif not isinstance(calendar_raw, dict):
+        _warn(f"calendar should be an object, got {type(calendar_raw).__name__}; ignoring")
+        out["calendar"] = {"urls": []}
+    else:
+        out["calendar"] = {"urls": _coerce_str_list(calendar_raw.get("urls"), "calendar.urls")}
+
+    return out
+
+
+def _read_json_file(path: str) -> dict | None:
+    """Read+parse a JSON file. Returns None on any failure (with stderr log)."""
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        return None
+    except (OSError, json.JSONDecodeError) as e:
+        _warn(f"failed to load {path}: {e}")
+        return None
+    if not isinstance(data, dict):
+        _warn(f"{path} top level must be an object, got {type(data).__name__}; ignoring")
+        return None
+    return data
+
+
 def load_config() -> dict:
-    with open(CONFIG_PATH) as f:
-        cfg = json.load(f)
+    """Load and validate the merged config. Never raises.
+
+    On a malformed ``config.json`` we fall back to built-in defaults so the
+    server still starts. On a malformed ``config.local.json`` we keep the
+    main file's values. Either way, ``validate_config`` is the last step and
+    guarantees the returned shape is safe for the handlers and the frontend.
+    """
+    base = _read_json_file(CONFIG_PATH)
+    if base is None:
+        # Deep-copy the default so callers can't mutate our singleton.
+        base = json.loads(json.dumps(_DEFAULT_CONFIG))
+
     if os.path.isfile(LOCAL_CONFIG_PATH):
-        with open(LOCAL_CONFIG_PATH) as f:
-            cfg = _merge_dicts(cfg, json.load(f))
-    return cfg
+        overlay = _read_json_file(LOCAL_CONFIG_PATH)
+        if overlay is not None:
+            try:
+                base = _merge_dicts(base, overlay)
+            except Exception as e:
+                _warn(f"failed to merge {LOCAL_CONFIG_PATH}: {e}; using base config only")
+
+    return validate_config(base)
 
 
 def fetch_cached(url: str, ttl_seconds: int) -> bytes:
@@ -848,6 +1055,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
 def main():
     if not os.path.isdir(PUBLIC_DIR):
         os.makedirs(PUBLIC_DIR, exist_ok=True)
+    # Run config through the validator at startup so any warnings are
+    # printed to journalctl up front rather than only on the first request.
+    # Failures are logged; we still proceed (load_config never raises).
+    try:
+        load_config()
+    except Exception as e:
+        _warn(f"unexpected error during startup config validation: {e}")
     server = ThreadingHTTPServer(("", PORT), DashboardHandler)
     print(f"Dashboard running at http://localhost:{PORT}")
     try:
