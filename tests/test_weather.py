@@ -5,15 +5,15 @@ from unittest.mock import patch
 
 from tests._helpers import fixture_bytes
 
-import server
+from parsers import weather
 
 
 class FetchWeatherTests(unittest.TestCase):
     def test_fetch_weather_shape(self):
         raw = fixture_bytes("weather.json")
 
-        with patch.object(server, "fetch_cached", return_value=raw):
-            result = server.fetch_weather(48.4284, -123.3656)
+        with patch.object(weather, "fetch_cached", return_value=raw):
+            result = weather.fetch_weather(48.4284, -123.3656)
 
         self.assertIn("current", result)
         self.assertIn("daily", result)
@@ -32,17 +32,17 @@ class FetchWeatherTests(unittest.TestCase):
             captured["ttl"] = ttl_seconds
             return raw
 
-        with patch.object(server, "fetch_cached", side_effect=fake_cache):
-            server.fetch_weather(48.4284, -123.3656)
+        with patch.object(weather, "fetch_cached", side_effect=fake_cache):
+            weather.fetch_weather(48.4284, -123.3656)
 
         self.assertIn("latitude=48.4284", captured["url"])
         self.assertIn("longitude=-123.3656", captured["url"])
         self.assertEqual(captured["ttl"], 600)
 
     def test_fetch_weather_raises_on_html_response(self):
-        with patch.object(server, "fetch_cached", return_value=b"<html>oops</html>"):
+        with patch.object(weather, "fetch_cached", return_value=b"<html>oops</html>"):
             with self.assertRaises(ValueError):
-                server.fetch_weather(0.0, 0.0)
+                weather.fetch_weather(0.0, 0.0)
 
 
 if __name__ == "__main__":

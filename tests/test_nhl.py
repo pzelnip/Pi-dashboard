@@ -5,28 +5,28 @@ from unittest.mock import patch
 
 from tests._helpers import fixture_bytes
 
-import server
+from parsers import nhl
 
 
 class StatusTextTests(unittest.TestCase):
     def test_final_regulation(self):
         game = {"gameState": "FINAL", "periodDescriptor": {"number": 3, "periodType": "REG"}}
 
-        result = server._status_text(game)
+        result = nhl._status_text(game)
 
         self.assertEqual(result, "Final")
 
     def test_final_overtime(self):
         game = {"gameState": "OFF", "periodDescriptor": {"number": 4, "periodType": "OT"}}
 
-        result = server._status_text(game)
+        result = nhl._status_text(game)
 
         self.assertEqual(result, "Final/OT")
 
     def test_final_shootout(self):
         game = {"gameState": "FINAL", "periodDescriptor": {"number": 5, "periodType": "SO"}}
 
-        result = server._status_text(game)
+        result = nhl._status_text(game)
 
         self.assertEqual(result, "Final/SO")
 
@@ -37,7 +37,7 @@ class StatusTextTests(unittest.TestCase):
             "clock": {"timeRemaining": "08:32", "inIntermission": False},
         }
 
-        result = server._status_text(game)
+        result = nhl._status_text(game)
 
         self.assertEqual(result, "2nd · 08:32")
 
@@ -48,7 +48,7 @@ class StatusTextTests(unittest.TestCase):
             "clock": {"inIntermission": True},
         }
 
-        result = server._status_text(game)
+        result = nhl._status_text(game)
 
         self.assertEqual(result, "End of 1st")
 
@@ -59,7 +59,7 @@ class StatusTextTests(unittest.TestCase):
             "clock": {"timeRemaining": "03:11", "inIntermission": False},
         }
 
-        result = server._status_text(game)
+        result = nhl._status_text(game)
 
         self.assertEqual(result, "OT · 03:11")
 
@@ -70,21 +70,21 @@ class StatusTextTests(unittest.TestCase):
             "clock": {"timeRemaining": "10:00", "inIntermission": False},
         }
 
-        result = server._status_text(game)
+        result = nhl._status_text(game)
 
         self.assertEqual(result, "P9 · 10:00")
 
     def test_live_without_period_returns_empty(self):
         game = {"gameState": "LIVE", "periodDescriptor": {}}
 
-        result = server._status_text(game)
+        result = nhl._status_text(game)
 
         self.assertEqual(result, "")
 
     def test_scheduled_returns_empty(self):
         game = {"gameState": "FUT", "periodDescriptor": {}}
 
-        result = server._status_text(game)
+        result = nhl._status_text(game)
 
         self.assertEqual(result, "")
 
@@ -98,7 +98,7 @@ class TeamShapingTests(unittest.TestCase):
             "logo": "https://example.com/edm.svg",
         }
 
-        result = server._team(team, favorites={"EDM", "VAN"})
+        result = nhl._team(team, favorites={"EDM", "VAN"})
 
         self.assertEqual(result["abbrev"], "EDM")
         self.assertEqual(result["name"], "Oilers")
@@ -109,29 +109,29 @@ class TeamShapingTests(unittest.TestCase):
     def test_team_no_favorites(self):
         team = {"abbrev": "BOS", "commonName": {"default": "Bruins"}, "score": 1}
 
-        result = server._team(team, favorites=None)
+        result = nhl._team(team, favorites=None)
 
         self.assertFalse(result["isFavorite"])
 
     def test_team_empty_favorites_set(self):
         team = {"abbrev": "BOS", "commonName": {"default": "Bruins"}, "score": 1}
 
-        result = server._team(team, favorites=set())
+        result = nhl._team(team, favorites=set())
 
         self.assertFalse(result["isFavorite"])
 
     def test_team_missing_logo_defaults_to_empty(self):
         team = {"abbrev": "BOS", "commonName": {"default": "Bruins"}, "score": 0}
 
-        result = server._team(team, favorites=set())
+        result = nhl._team(team, favorites=set())
 
         self.assertEqual(result["logo"], "")
 
 
 class SeriesTextTests(unittest.TestCase):
     def test_no_series(self):
-        self.assertEqual(server._series_text(None), "")
-        self.assertEqual(server._series_text({}), "")
+        self.assertEqual(nhl._series_text(None), "")
+        self.assertEqual(nhl._series_text({}), "")
 
     def test_series_first_game(self):
         s = {
@@ -143,7 +143,7 @@ class SeriesTextTests(unittest.TestCase):
             "gameNumberOfSeries": 1,
         }
 
-        self.assertEqual(server._series_text(s), "Game 1")
+        self.assertEqual(nhl._series_text(s), "Game 1")
 
     def test_series_top_leads(self):
         s = {
@@ -155,7 +155,7 @@ class SeriesTextTests(unittest.TestCase):
             "gameNumberOfSeries": 4,
         }
 
-        self.assertEqual(server._series_text(s), "Game 4 (EDM leads 2-1)")
+        self.assertEqual(nhl._series_text(s), "Game 4 (EDM leads 2-1)")
 
     def test_series_bottom_leads(self):
         s = {
@@ -167,7 +167,7 @@ class SeriesTextTests(unittest.TestCase):
             "gameNumberOfSeries": 5,
         }
 
-        self.assertEqual(server._series_text(s), "Game 5 (VAN leads 3-1)")
+        self.assertEqual(nhl._series_text(s), "Game 5 (VAN leads 3-1)")
 
     def test_series_tied(self):
         s = {
@@ -179,7 +179,7 @@ class SeriesTextTests(unittest.TestCase):
             "gameNumberOfSeries": 5,
         }
 
-        self.assertEqual(server._series_text(s), "Game 5 (tied 2-2)")
+        self.assertEqual(nhl._series_text(s), "Game 5 (tied 2-2)")
 
     def test_series_top_won(self):
         s = {
@@ -191,7 +191,7 @@ class SeriesTextTests(unittest.TestCase):
             "gameNumberOfSeries": 5,
         }
 
-        result = server._series_text(s)
+        result = nhl._series_text(s)
 
         self.assertIn("EDM won 4-1", result)
         self.assertTrue(result.startswith("Game 5"))
@@ -206,7 +206,7 @@ class SeriesTextTests(unittest.TestCase):
             "gameNumberOfSeries": 6,
         }
 
-        result = server._series_text(s)
+        result = nhl._series_text(s)
 
         self.assertIn("VAN won 4-2", result)
 
@@ -219,16 +219,16 @@ class FetchNhlTests(unittest.TestCase):
         return self._raw
 
     def test_fetch_nhl_returns_only_target_date(self):
-        with patch.object(server, "fetch_cached", side_effect=self._patched_fetch):
-            games = server.fetch_nhl("2026-04-21", favorites=["EDM"])
+        with patch.object(nhl, "fetch_cached", side_effect=self._patched_fetch):
+            games = nhl.fetch_nhl("2026-04-21", favorites=["EDM"])
 
         # Fixture has 3 games on 2026-04-21 and 1 on 2026-04-22.
         self.assertEqual(len(games), 3)
         self.assertEqual({g["away"]["abbrev"] for g in games}, {"VAN", "MTL", "SJS"})
 
     def test_fetch_nhl_marks_favorite_at_game_level(self):
-        with patch.object(server, "fetch_cached", side_effect=self._patched_fetch):
-            games = server.fetch_nhl("2026-04-21", favorites=["EDM"])
+        with patch.object(nhl, "fetch_cached", side_effect=self._patched_fetch):
+            games = nhl.fetch_nhl("2026-04-21", favorites=["EDM"])
 
         edm_game = next(g for g in games if g["home"]["abbrev"] == "EDM")
         non_fav_game = next(g for g in games if g["home"]["abbrev"] == "LAK")
@@ -238,8 +238,8 @@ class FetchNhlTests(unittest.TestCase):
         self.assertFalse(non_fav_game["isFavorite"])
 
     def test_fetch_nhl_includes_status_and_series_text(self):
-        with patch.object(server, "fetch_cached", side_effect=self._patched_fetch):
-            games = server.fetch_nhl("2026-04-21", favorites=[])
+        with patch.object(nhl, "fetch_cached", side_effect=self._patched_fetch):
+            games = nhl.fetch_nhl("2026-04-21", favorites=[])
 
         live = next(g for g in games if g["state"] == "LIVE")
         final_ot = next(g for g in games if g["state"] == "FINAL")
@@ -249,15 +249,15 @@ class FetchNhlTests(unittest.TestCase):
         self.assertEqual(final_ot["seriesText"], "")
 
     def test_fetch_nhl_empty_when_no_matching_date(self):
-        with patch.object(server, "fetch_cached", side_effect=self._patched_fetch):
-            games = server.fetch_nhl("2025-01-01", favorites=[])
+        with patch.object(nhl, "fetch_cached", side_effect=self._patched_fetch):
+            games = nhl.fetch_nhl("2025-01-01", favorites=[])
 
         self.assertEqual(games, [])
 
     def test_fetch_nhl_raises_on_html_response(self):
-        with patch.object(server, "fetch_cached", return_value=b"<html>oops</html>"):
+        with patch.object(nhl, "fetch_cached", return_value=b"<html>oops</html>"):
             with self.assertRaises(ValueError):
-                server.fetch_nhl("2026-04-21", favorites=[])
+                nhl.fetch_nhl("2026-04-21", favorites=[])
 
 
 if __name__ == "__main__":
