@@ -119,11 +119,17 @@ function createRotator({ dotsEl, navEl, viewsContainer, viewClassPrefix, titleEl
     }, { passive: true });
 
     swipeEl.addEventListener("touchend", (e) => {
-      if (!touchActive || touchStartX == null) { touchActive = false; return; }
+      const wasActive = touchActive && touchStartX != null;
+      const startX = touchStartX;
+      const startY = touchStartY;
       touchActive = false;
+      touchStartX = null;
+      touchStartY = null;
+      if (!wasActive) return;
+      if (e.changedTouches.length === 0) return;
       const t = e.changedTouches[0];
-      const dx = t.clientX - touchStartX;
-      const dy = t.clientY - touchStartY;
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
       if (Math.abs(dx) < SWIPE_MIN_X) return;
       if (Math.abs(dx) < Math.abs(dy) * SWIPE_AXIS_RATIO) return;
       if (currentViews.length < 2) return;
