@@ -29,7 +29,9 @@ Edit [config.json](config.json):
 
 - `weather.latitude` / `weather.longitude` — used by Open-Meteo.
 - `weather.label` — display label (e.g. city name).
-- `nhl.teams` — array of team abbreviations (e.g. `["OTT"]`). Empty array shows all games.
+- `nhl.favorites` — array of team abbreviations (e.g. `["OTT"]`). Favorited teams
+  sort to the top of their status group and get a ★ next to the team name. Empty
+  array shows all games with no preference.
 - `rss` — array of `{name, url}`. All entries rotate.
 - `rotation.rssSeconds` — how often the RSS panel switches to the next feed.
 
@@ -37,9 +39,9 @@ Edit [config.json](config.json):
 
 - `GET /` — dashboard.
 - `GET /api/config` — client-relevant config (rotation settings).
-- `GET /api/nhl[?date=YYYYMMDD]` — today's games (or games on a specific date).
+- `GET /api/nhl[?date=YYYY-MM-DD]` — today's games (or games on a specific date).
 - `GET /api/weather` — current + 3-day forecast.
-- `GET /api/rss?feed=<N>` — top 5 items from the Nth configured feed.
+- `GET /api/rss?feed=<N>` — top 4 items from the Nth configured feed.
 
 ## Kiosk mode on the Pi
 

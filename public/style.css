@@ -116,7 +116,9 @@ html, body {
 
 .panel-body { flex: 1; overflow: auto; min-height: 0; }
 .panel-body.stale { opacity: 0.6; }
-.panel-body.error { color: var(--live); }
+.panel-body.error,
+.view.error { color: var(--live); }
+.panel-error { margin: 0; }
 
 /* ---------- NHL ---------- */
 

@@ -33,11 +33,24 @@ function bodyEl(panel) {
   return document.querySelector(`[data-body="${panel}"]`);
 }
 
-function showError(panel, message) {
+// Render an error inside a panel without destroying the rotator's .view-*
+// structure. `viewSelector` (optional) targets a specific view that owns the
+// failing data source — that way the next successful refresh writes over the
+// error in the same place. If omitted, the panel body is replaced (for panels
+// like RSS that have no .view children).
+function showError(panel, message, viewSelector) {
   const el = bodyEl(panel);
-  el.classList.add("error");
   el.classList.remove("stale");
-  el.textContent = `⚠ ${message}`;
+  const html = `<p class="panel-error">⚠ ${escapeHtml(message)}</p>`;
+  const target = viewSelector ? el.querySelector(viewSelector) : null;
+  if (target) {
+    target.classList.add("error");
+    target.innerHTML = html;
+    el.classList.remove("error");
+  } else {
+    el.classList.add("error");
+    el.innerHTML = html;
+  }
 }
 
 async function fetchJson(url) {
@@ -234,7 +247,7 @@ async function refreshNHL() {
   try {
     const data = await fetchJson("/api/nhl");
     if (data && data.error) {
-      showError("nhl", data.error);
+      showError("nhl", data.error, ".view-nhl-today");
       return;
     }
     renderNHL(data.today?.games, "#nhl .view-nhl-today", "No games today.");
@@ -245,7 +258,7 @@ async function refreshNHL() {
     nhlRotator.setViews(canRotate ? ["today", "yesterday"] : ["today"]);
     setUpdated("nhl");
   } catch (e) {
-    showError("nhl", e.message);
+    showError("nhl", e.message, ".view-nhl-today");
   }
 }
 
@@ -322,13 +335,13 @@ async function refreshWeather() {
   try {
     const data = await fetchJson("/api/weather");
     if (data.error) {
-      showError("weather", data.error);
+      showError("weather", data.error, ".view-weather");
     } else {
       renderWeather(data);
     }
     setUpdated("weather");
   } catch (e) {
-    showError("weather", e.message);
+    showError("weather", e.message, ".view-weather");
   }
 }
 
