@@ -1,30 +1,37 @@
 #!/usr/bin/env python3
-"""Dashboard server: serves ./public and proxies three API endpoints."""
+"""Dashboard server: serves ./public and proxies a handful of API endpoints.
 
-import hashlib
+This file is the entry point and HTTP routing layer. The real work lives in:
+  - cache.py          — in-memory TTL cache with stale-on-failure fallback
+  - config.py         — config.json + config.local.json overlay
+  - parsers/nhl.py    — NHL schedule
+  - parsers/weather.py — Open-Meteo
+  - parsers/rss.py    — RSS 2.0 + Atom
+  - parsers/calendar.py — iCalendar (.ics)
+"""
+
 import json
 import mimetypes
 import os
 import platform
-import re
 import subprocess
 import sys
 import threading
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
-import xml.etree.ElementTree as ET
 import datetime as dt
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+import cache
+from config import HERE, load_config
+from parsers.calendar import fetch_calendar
+from parsers.nhl import fetch_nhl
+from parsers.rss import fetch_rss
+from parsers.weather import fetch_weather
+
 PUBLIC_DIR = os.path.join(HERE, "public")
 PUBLIC_REAL = os.path.realpath(PUBLIC_DIR)
-CONFIG_PATH = os.path.join(HERE, "config.json")
-LOCAL_CONFIG_PATH = os.path.join(HERE, "config.local.json")
 PORT = int(os.environ.get("DASHBOARD_PORT", "8080"))
-USER_AGENT = "Mozilla/5.0 (compatible; pi-dashboard/1.0)"
 
 
 def _current_version() -> str:
@@ -57,475 +64,11 @@ VERSION = _current_version()
 LATEST_COMMIT_AT, LATEST_COMMIT_SUBJECT = _latest_commit()
 SERVER_STARTED_AT = time.time()
 
-_cache: dict[str, tuple[float, bytes]] = {}
-_cache_lock = threading.Lock()
-
 # Held while update-dashboard.sh is running so concurrent POST /api/update
 # requests don't fan out into multiple git pull / restart attempts.
 _update_lock = threading.Lock()
 UPDATE_LOG_PATH = os.path.join(HERE, "update.log")
 UPDATE_SCRIPT_PATH = os.path.join(HERE, "update-dashboard.sh")
-
-
-def _merge_dicts(base: dict, overlay: dict) -> dict:
-    """Recursively merge overlay into base. Lists and scalars in overlay replace base."""
-    out = dict(base)
-    for key, value in overlay.items():
-        if isinstance(value, dict) and isinstance(out.get(key), dict):
-            out[key] = _merge_dicts(out[key], value)
-        else:
-            out[key] = value
-    return out
-
-
-def load_config() -> dict:
-    with open(CONFIG_PATH) as f:
-        cfg = json.load(f)
-    if os.path.isfile(LOCAL_CONFIG_PATH):
-        with open(LOCAL_CONFIG_PATH) as f:
-            cfg = _merge_dicts(cfg, json.load(f))
-    return cfg
-
-
-def fetch_cached(url: str, ttl_seconds: int) -> bytes:
-    now = time.time()
-    with _cache_lock:
-        hit = _cache.get(url)
-        if hit and hit[0] > now:
-            return hit[1]
-
-    headers = {"User-Agent": USER_AGENT, "Accept": "*/*"}
-    req = urllib.request.Request(url, headers=headers)
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            body = resp.read()
-    except Exception:
-        # On network failure, return any cached body we still have (even if expired).
-        # The frontend stays useful when upstream APIs blip.
-        if hit:
-            return hit[1]
-        raise
-
-    with _cache_lock:
-        # Amortized eviction: drop entries whose TTL expired more than a day ago.
-        # Keeps the stale-fallback window generous while preventing unbounded growth
-        # over long uptimes (NHL adds two new keys per calendar day).
-        cutoff = now - 86400
-        for u in [u for u, (exp, _) in _cache.items() if exp < cutoff]:
-            del _cache[u]
-        _cache[url] = (now + ttl_seconds, body)
-    return body
-
-
-# ---------- NHL ----------
-
-PERIOD_ORDINAL = {1: "1st", 2: "2nd", 3: "3rd", 4: "OT", 5: "2OT", 6: "3OT"}
-
-
-def _status_text(game: dict) -> str:
-    state = game.get("gameState", "")
-    pd = game.get("periodDescriptor") or {}
-    period_num = pd.get("number")
-    period_type = pd.get("periodType", "REG")
-    clock = game.get("clock") or {}
-    time_remaining = clock.get("timeRemaining")
-    in_intermission = clock.get("inIntermission", False)
-
-    if state in ("OFF", "FINAL"):
-        if period_type == "OT":
-            return "Final/OT"
-        if period_type == "SO":
-            return "Final/SO"
-        return "Final"
-
-    if state in ("LIVE", "CRIT"):
-        if period_num is None:
-            return ""  # pre-game LIVE transition: let the frontend show start time
-        ord_label = PERIOD_ORDINAL.get(period_num, f"P{period_num}")
-        if in_intermission:
-            return f"End of {ord_label}"
-        if time_remaining:
-            return f"{ord_label} · {time_remaining}"
-        return ord_label
-
-    return ""  # scheduled / pre-game: frontend will show start time instead
-
-
-def _team(t: dict, favorites: set[str] | None = None) -> dict:
-    abbrev = t.get("abbrev", "")
-    return {
-        "abbrev": abbrev,
-        "name": (t.get("commonName") or {}).get("default", ""),
-        "score": t.get("score"),
-        "logo": t.get("logo", ""),
-        "isFavorite": bool(favorites) and abbrev in favorites,
-    }
-
-
-def _series_text(s: dict | None) -> str:
-    if not s:
-        return ""
-    top = s.get("topSeedTeamAbbrev")
-    top_w = s.get("topSeedWins", 0)
-    bot = s.get("bottomSeedTeamAbbrev")
-    bot_w = s.get("bottomSeedWins", 0)
-    needed = s.get("neededToWin", 4)
-    game_num = s.get("gameNumberOfSeries", "?")
-    if top_w == 0 and bot_w == 0:
-        return f"Game {game_num}"
-    if top_w >= needed:
-        return f"Game {game_num} ({top} won {top_w}-{bot_w}) ✅"
-    if bot_w >= needed:
-        return f"Game {game_num} ({bot} won {bot_w}-{top_w}) ✅"
-    if top_w > bot_w:
-        return f"Game {game_num} ({top} leads {top_w}-{bot_w})"
-    if bot_w > top_w:
-        return f"Game {game_num} ({bot} leads {bot_w}-{top_w})"
-    return f"Game {game_num} (tied {top_w}-{bot_w})"
-
-
-def fetch_nhl(date: str | None, favorites: list[str]) -> list[dict]:
-    # Use the Pi's local date when no explicit date is passed. The NHL API's
-    # /schedule/now endpoint lags the calendar rollover, so we anchor on the
-    # server clock instead.
-    target_date = date or dt.date.today().isoformat()
-    url = f"https://api-web.nhle.com/v1/schedule/{target_date}"
-    # 20s TTL is shorter than the client's 30s poll so live-game state changes
-    # (period clock, score) reach the kiosk on every poll without re-fetching.
-    raw = fetch_cached(url, ttl_seconds=20)
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        raise ValueError("upstream returned non-JSON response (got HTML?)")
-    weeks = data.get("gameWeek", [])
-
-    fav_set = set(favorites or [])
-    games_out = []
-    for week in weeks:
-        if week.get("date") != target_date:
-            continue
-        for game in week.get("games", []):
-            home = game.get("homeTeam", {})
-            away = game.get("awayTeam", {})
-            is_fav = bool(fav_set) and (
-                home.get("abbrev") in fav_set or away.get("abbrev") in fav_set
-            )
-            games_out.append(
-                {
-                    "home": _team(home, fav_set),
-                    "away": _team(away, fav_set),
-                    "state": game.get("gameState", ""),
-                    "startTime": game.get("startTimeUTC", ""),
-                    "statusText": _status_text(game),
-                    "seriesText": _series_text(game.get("seriesStatus")),
-                    "isFavorite": is_fav,
-                }
-            )
-    return games_out
-
-
-# ---------- Weather ----------
-
-
-def fetch_weather(lat: float, lon: float) -> dict:
-    params = {
-        "latitude": lat,
-        "longitude": lon,
-        "current": "temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m",
-        "daily": "temperature_2m_max,temperature_2m_min,weather_code",
-        "forecast_days": 4,
-        "timezone": "auto",
-    }
-    url = "https://api.open-meteo.com/v1/forecast?" + urllib.parse.urlencode(params)
-    raw = fetch_cached(url, ttl_seconds=600)
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        raise ValueError("upstream returned non-JSON response (got HTML?)")
-    return {
-        "current": data.get("current", {}),
-        "daily": data.get("daily", {}),
-        "units": {
-            "current": data.get("current_units", {}),
-            "daily": data.get("daily_units", {}),
-        },
-    }
-
-
-# ---------- RSS ----------
-
-ATOM_NS = "{http://www.w3.org/2005/Atom}"
-MEDIA_NS = "{http://search.yahoo.com/mrss/}"
-
-_IMG_SRC_RE = re.compile(r"""<img\b[^>]*\bsrc=["']([^"']+)["']""", re.IGNORECASE)
-
-
-def _extract_image(el, html_fields: list[str]) -> str:
-    # 1. Yahoo media namespace: <media:thumbnail url="..."> or <media:content url="...">
-    for tag in ("thumbnail", "content"):
-        m = el.find(f"{MEDIA_NS}{tag}")
-        if m is not None:
-            url = m.get("url") or m.get("href")
-            if url:
-                return url
-
-    # 2. <enclosure url="..." type="image/..."> (RSS 2.0)
-    enc = el.find("enclosure")
-    if enc is not None and (enc.get("type") or "").startswith("image/"):
-        url = enc.get("url")
-        if url:
-            return url
-
-    # 3. First <img> inside an HTML-bearing field like description/summary/content.
-    for field in html_fields:
-        html = el.findtext(field)
-        if html:
-            match = _IMG_SRC_RE.search(html)
-            if match:
-                return match.group(1)
-
-    return ""
-
-
-def _extract_feed_image(root) -> str:
-    # RSS 2.0: <rss><channel><image><url>...</url></image>
-    ch = root.find("channel")
-    if ch is not None:
-        img = ch.find("image")
-        if img is not None:
-            url = (img.findtext("url") or "").strip()
-            if url:
-                return url
-        # Also try <itunes:image href="..."> and channel-level <media:thumbnail>
-        for tag in (f"{MEDIA_NS}thumbnail", f"{MEDIA_NS}image"):
-            m = ch.find(tag)
-            if m is not None:
-                url = m.get("url") or m.get("href") or ""
-                if url:
-                    return url
-
-    # Atom: <feed><logo> (preferred) or <icon>
-    for tag in ("logo", "icon"):
-        el = root.find(f"{ATOM_NS}{tag}")
-        if el is not None and el.text:
-            return el.text.strip()
-
-    return ""
-
-
-def _build_item(el, title_field, link_fn, published_fields, html_fields) -> dict | None:
-    title = (el.findtext(title_field) or "").strip()
-    if not title:
-        return None
-    link = link_fn(el)
-    published = ""
-    for f in published_fields:
-        if val := el.findtext(f):
-            published = val.strip()
-            break
-    return {
-        "title": title,
-        "link": link,
-        "published": published,
-        "image": _extract_image(el, html_fields),
-    }
-
-
-def parse_rss(xml_bytes: bytes, limit: int = 4) -> tuple[str, list[dict]]:
-    try:
-        root = ET.fromstring(xml_bytes)
-    except ET.ParseError:
-        raise ValueError("upstream returned non-XML response (got HTML?)")
-    feed_image = _extract_feed_image(root)
-
-    # RSS 2.0: <rss><channel><item>
-    items = [
-        item
-        for el in root.findall(".//item")
-        if (
-            item := _build_item(
-                el,
-                title_field="title",
-                link_fn=lambda e: (e.findtext("link") or "").strip(),
-                published_fields=["pubDate"],
-                html_fields=["description", "content:encoded"],
-            )
-        )
-    ]
-
-    # Atom: <feed><entry>
-    if not items:
-
-        def atom_link(e):
-            link_el = e.find(f"{ATOM_NS}link")
-            return link_el.get("href", "") if link_el is not None else ""
-
-        items = [
-            item
-            for el in root.findall(f"{ATOM_NS}entry")
-            if (
-                item := _build_item(
-                    el,
-                    title_field=f"{ATOM_NS}title",
-                    link_fn=atom_link,
-                    published_fields=[f"{ATOM_NS}published", f"{ATOM_NS}updated"],
-                    html_fields=[f"{ATOM_NS}summary", f"{ATOM_NS}content"],
-                )
-            )
-        ]
-
-    return feed_image, items[:limit]
-
-
-def fetch_rss(url: str) -> tuple[str, list[dict]]:
-    raw = fetch_cached(url, ttl_seconds=900)
-    return parse_rss(raw)
-
-
-# ---------- Calendar (.ics) ----------
-
-
-def _ics_unfold(text: str) -> list[str]:
-    # RFC 5545: lines that start with a space or tab are continuations.
-    out: list[str] = []
-    for raw_line in text.splitlines():
-        if raw_line.startswith((" ", "\t")) and out:
-            out[-1] += raw_line[1:]
-        else:
-            out.append(raw_line)
-    return out
-
-
-def _ics_parse_dt(value: str, params: dict[str, str]) -> tuple[object, bool]:
-    """Return (datetime-or-date, is_all_day)."""
-    is_date = params.get("VALUE") == "DATE" or (len(value) == 8 and "T" not in value)
-    if is_date:
-        return dt.date(int(value[0:4]), int(value[4:6]), int(value[6:8])), True
-    # Timed value: 20260421T140000 or 20260421T140000Z
-    is_utc = value.endswith("Z")
-    if is_utc:
-        value = value[:-1]
-    naive = dt.datetime.strptime(value, "%Y%m%dT%H%M%S")
-    if is_utc:
-        naive = naive.replace(tzinfo=dt.timezone.utc).astimezone().replace(tzinfo=None)
-    return naive, False
-
-
-def _ics_unescape(text: str) -> str:
-    return (
-        text.replace("\\n", " ")
-        .replace("\\N", " ")
-        .replace("\\,", ",")
-        .replace("\\;", ";")
-        .replace("\\\\", "\\")
-    )
-
-
-def parse_ics(text: str) -> list[dict]:
-    """Parse a minimal subset of RFC 5545. Skips events with RRULE."""
-    lines = _ics_unfold(text)
-    events: list[dict] = []
-    current: dict | None = None
-    skipped_recurring = 0
-
-    for line in lines:
-        if line == "BEGIN:VEVENT":
-            current = {}
-            continue
-        if line == "END:VEVENT":
-            if current is not None and "start" in current and "summary" in current:
-                if current.pop("_recurring", False):
-                    skipped_recurring += 1
-                else:
-                    events.append(current)
-            current = None
-            continue
-        if current is None:
-            continue
-
-        # Property line: NAME[;PARAM=VAL;...]:VALUE
-        if ":" not in line:
-            continue
-        try:
-            head, _, value = line.partition(":")
-            parts = head.split(";")
-            name = parts[0].upper()
-            params = {}
-            for p in parts[1:]:
-                if "=" in p:
-                    k, _, v = p.partition("=")
-                    params[k.upper()] = v
-
-            if name == "SUMMARY":
-                current["summary"] = _ics_unescape(value)
-            elif name == "DTSTART":
-                current["start"], current["allDay"] = _ics_parse_dt(value, params)
-            elif name == "DTEND":
-                current["end"], _ = _ics_parse_dt(value, params)
-            elif name == "RRULE":
-                current["_recurring"] = True
-        except Exception as e:
-            sys.stderr.write(f"[calendar] skipping event due to parse error: {e}\n")
-            current = None  # discard this event entirely; END:VEVENT won't append it
-
-    if skipped_recurring:
-        sys.stderr.write(f"[calendar] skipped {skipped_recurring} recurring event(s)\n")
-    return events
-
-
-def _event_occurs_today(ev: dict, today: dt.date) -> bool:
-    start = ev["start"]
-    end = ev.get("end", start)
-    # All-day events: iCal DTEND is exclusive (next day). Treat missing end as same day.
-    start_d = (
-        start
-        if isinstance(start, dt.date) and not isinstance(start, dt.datetime)
-        else start.date()
-    )
-    end_d = (
-        end
-        if isinstance(end, dt.date) and not isinstance(end, dt.datetime)
-        else end.date()
-    )
-    if ev.get("allDay"):
-        # DTEND is exclusive for all-day per RFC 5545
-        return start_d <= today < end_d if end_d > start_d else start_d == today
-    return start_d <= today <= end_d
-
-
-def _redact_url(url: str) -> str:
-    h = hashlib.sha256(url.encode()).hexdigest()[:8]
-    return f"<sha256:{h}>"
-
-
-def fetch_calendar(urls: list[str]) -> list[dict]:
-    today = dt.date.today()
-    all_events: list[dict] = []
-    for idx, url in enumerate(urls):
-        try:
-            raw = fetch_cached(url, ttl_seconds=300)
-        except Exception as e:
-            sys.stderr.write(f"[calendar] fetch failed for url #{idx} ({_redact_url(url)}): {e}\n")
-            continue
-        text = raw.decode("utf-8", errors="replace")
-        for ev in parse_ics(text):
-            if not _event_occurs_today(ev, today):
-                continue
-            start = ev["start"]
-            end = ev.get("end", start)
-            all_events.append(
-                {
-                    "summary": ev["summary"],
-                    "start": start.isoformat(),
-                    "end": end.isoformat() if hasattr(end, "isoformat") else str(end),
-                    "allDay": bool(ev.get("allDay")),
-                    "source": idx,
-                }
-            )
-
-    # All-day first, then by start time.
-    all_events.sort(key=lambda e: (not e["allDay"], e["start"]))
-    return all_events
 
 
 # ---------- HTTP handler ----------
@@ -588,10 +131,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if path == "/api/debug":
             now = time.time()
             cal_url_set = set((cfg.get("calendar") or {}).get("urls") or [])
-            with _cache_lock:
+            with cache._cache_lock:
                 cache_entries = [
                     {"url": u, "ttlRemaining": round(exp - now, 1)}
-                    for u, (exp, _body) in _cache.items()
+                    for u, (exp, _body) in cache._cache.items()
                     if u not in cal_url_set
                 ]
             cache_entries.sort(key=lambda e: e["url"])
