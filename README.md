@@ -42,12 +42,6 @@ Edit [src/config.json](src/config.json):
 
 ## Endpoints
 
-- `GET /` — dashboard.
-- `GET /api/config` — client-relevant config (rotation settings).
-- `GET /api/nhl[?date=YYYY-MM-DD]` — today's games (or games on a specific date).
-- `GET /api/weather` — current + 3-day forecast.
-- `GET /api/rss?feed=<N>` — top 4 items from the Nth configured feed.
-
 A full OpenAPI 3.0 spec for every `/api/*` endpoint lives at
 [`docs/openapi.yaml`](docs/openapi.yaml).
 
@@ -55,7 +49,7 @@ A full OpenAPI 3.0 spec for every `/api/*` endpoint lives at
 
 Add to `~/.config/autostart/dashboard.desktop`:
 
-```
+```ini
 [Desktop Entry]
 Type=Application
 Name=Dashboard

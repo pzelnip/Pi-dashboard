@@ -23,13 +23,13 @@ included) live in [`docs/`](.).
 
 **Repo directory:** `/home/pi/temp/sandbox/Pi-dashboard`
 
-| File | Purpose |
-| --- | --- |
-| `src/server.py` | HTTP server serving the dashboard |
-| `src/public/` | Static frontend (HTML/CSS/JS) served by the kiosk |
-| `src/config.json` | Dashboard config (rotation, weather, NHL, RSS, calendar) |
-| `update-dashboard.sh` | Poll + pull + restart script (run by cron) |
-| `update.log` | Output of the cron-driven update script |
+| File                  | Purpose                                                  |
+| --------------------- | -------------------------------------------------------- |
+| `src/server.py`       | HTTP server serving the dashboard                        |
+| `src/public/`         | Static frontend (HTML/CSS/JS) served by the kiosk        |
+| `src/config.json`     | Dashboard config (rotation, weather, NHL, RSS, calendar) |
+| `update-dashboard.sh` | Poll + pull + restart script (run by cron)               |
+| `update.log`          | Output of the cron-driven update script                  |
 
 ---
 
@@ -198,4 +198,3 @@ updated before the service can come back up:
 5. Cron entry, sudo config, kiosk autostart command, and `update-dashboard.sh`
    itself need no changes — `update.log` and `update-dashboard.sh` still live
    at the repo root.
-
