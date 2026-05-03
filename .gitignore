@@ -5,3 +5,4 @@ src/config.local.json
 .DS_Store
 *.pyc
 .mypy_cache/
+.claude/worktrees/
