@@ -29,6 +29,8 @@ https://docs.python.org/release/<VERSION/ in a new tab
 
 ## User Agent Info
 
+Open in https://github.com/pzelnip/Pi-dashboard/pull/15
+
 For the User Agent string, both display the actual UA string, but also what
 browser, OS, etc, it is.  If this is not possible with out additional
 dependencies (ie if there's no standard library item to give this info)
