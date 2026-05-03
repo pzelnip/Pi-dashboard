@@ -231,12 +231,18 @@ function createRotator({ dotsEl, navEl, viewsContainer, viewClassPrefix, titleEl
 
 // ---------- NHL ----------
 
-function renderNHL(games, containerSelector, emptyMessage = "No games.") {
+// Map of bucket name -> sorted games list, populated by renderNHL. The
+// click handler reads from this to resolve a clicked DOM node back to the
+// rich game payload without stuffing it into data attributes.
+const _nhlGamesByBucket = { today: [], yesterday: [] };
+
+function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket = null) {
   const el = document.querySelector(containerSelector);
   if (!el) return;
   el.classList.remove("error");
   if (!games || !games.length) {
     el.innerHTML = `<p style="color: var(--text-muted)">${emptyMessage}</p>`;
+    if (bucket) _nhlGamesByBucket[bucket] = [];
     return;
   }
 
@@ -251,6 +257,7 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.") {
     if (s !== 0) return s;
     return (b.isFavorite ? 1 : 0) - (a.isFavorite ? 1 : 0);
   });
+  if (bucket) _nhlGamesByBucket[bucket] = sorted;
 
   const pillFor = g => {
     if (isLive(g)) return `<span class="status-pill live">${escapeHtml(g.statusText || "LIVE")}</span>`;
@@ -268,7 +275,7 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.") {
     </div>`;
   };
 
-  const renderGame = g => {
+  const renderGame = (g, idx) => {
     let awayCls = "", homeCls = "";
     const bothScores = g.away.score != null && g.home.score != null;
     if (isFinal(g) && bothScores) {
@@ -279,8 +286,11 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.") {
       else if (g.home.score > g.away.score) homeCls = "leading";
     }
     const stateCls = isLive(g) ? "is-live" : isFinal(g) ? "is-final" : "";
+    const clickAttrs = bucket
+      ? `class="game game-clickable ${stateCls}" tabindex="0" role="button" aria-label="Show details for ${escapeHtml(g.away.fullName || g.away.name || g.away.abbrev || "away")} at ${escapeHtml(g.home.fullName || g.home.name || g.home.abbrev || "home")}" data-nhl-bucket="${escapeHtml(bucket)}" data-nhl-index="${idx}"`
+      : `class="game ${stateCls}"`;
     return `
-    <div class="game ${stateCls}">
+    <div ${clickAttrs}>
       <div class="game-meta">
         ${pillFor(g)}
         ${g.seriesText ? `<span class="series-tag">${escapeHtml(g.seriesText)}</span>` : ""}
@@ -297,6 +307,151 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.") {
   el.innerHTML = `<div class="games-grid">${sorted.map(renderGame).join("")}</div>`;
 }
 
+// ---------- NHL game details modal ----------
+
+const COUNTRY_FLAG = { US: "US", CA: "CA" };
+
+function renderGameDetails(g) {
+  const teamBlock = (t, scoreClass) => {
+    const logoUrl = safeUrl(t.logo);
+    const fav = t.isFavorite ? ' <span class="fav-star" aria-label="Favorite team">★</span>' : "";
+    return `
+      <div class="gd-team">
+        ${logoUrl ? `<img src="${escapeHtml(logoUrl)}" alt="" onerror="this.remove()">` : ""}
+        <span class="gd-team-name">${escapeHtml(t.fullName || t.name || t.abbrev || "")}${fav}</span>
+        <span class="gd-team-abbrev">${escapeHtml(t.abbrev || "")}</span>
+        ${t.score != null ? `<span class="gd-team-score ${scoreClass}">${escapeHtml(String(t.score))}</span>` : ""}
+      </div>`;
+  };
+
+  const isLive = g.state === "LIVE" || g.state === "CRIT";
+  const isFinal = g.state === "OFF" || g.state === "FINAL";
+  const startLabel = g.startTime ? formatTime(g.startTime) : "";
+  const headlineStatus = g.statusText || (isLive ? "Live" : isFinal ? "Final" : startLabel);
+
+  const broadcasts = (g.broadcasts || []).map(b => {
+    const country = COUNTRY_FLAG[b.country] || b.country || "";
+    return `<span class="gd-broadcast">${escapeHtml(b.network)}${country ? ` <span class="gd-country">${escapeHtml(country)}</span>` : ""}</span>`;
+  }).join("");
+
+  const odds = (g.away.odds || g.home.odds)
+    ? `
+      <div class="gd-odds">
+        ${g.away.odds ? `<span class="gd-odds-team"><span class="gd-odds-abbrev">${escapeHtml(g.away.abbrev)}</span> ${escapeHtml(g.away.odds)}</span>` : ""}
+        ${g.home.odds ? `<span class="gd-odds-team"><span class="gd-odds-abbrev">${escapeHtml(g.home.abbrev)}</span> ${escapeHtml(g.home.odds)}</span>` : ""}
+      </div>`
+    : "";
+
+  const seriesLine = g.series
+    ? `${escapeHtml(g.series.title || "")}${g.series.gameNumber ? ` &middot; Game ${escapeHtml(String(g.series.gameNumber))}` : ""}${g.seriesText ? ` &middot; ${escapeHtml(g.seriesText)}` : ""}`
+    : "";
+
+  const links = [];
+  if (g.gameCenterLink) links.push(`<a href="${escapeHtml(g.gameCenterLink)}" target="_blank" rel="noopener">Game center</a>`);
+  if (g.seriesUrl) links.push(`<a href="${escapeHtml(g.seriesUrl)}" target="_blank" rel="noopener">Series page</a>`);
+  if (g.ticketsLink) links.push(`<a href="${escapeHtml(g.ticketsLink)}" target="_blank" rel="noopener">Tickets</a>`);
+
+  const rows = [];
+  if (headlineStatus) rows.push(["Status", escapeHtml(headlineStatus)]);
+  if (startLabel) rows.push(["Start", escapeHtml(startLabel)]);
+  if (g.venue) {
+    const neutral = g.neutralSite ? ' <span style="color:var(--text-muted)">(neutral site)</span>' : "";
+    rows.push(["Venue", `${escapeHtml(g.venue)}${neutral}`]);
+  }
+  if (g.gameTypeLabel) rows.push(["Game type", escapeHtml(g.gameTypeLabel)]);
+  if (seriesLine) rows.push(["Series", seriesLine]);
+  if (broadcasts) rows.push(["Broadcasts", `<div class="gd-broadcasts">${broadcasts}</div>`]);
+  if (odds) rows.push(["Odds", odds]);
+  if (links.length) rows.push(["Links", links.join(" &middot; ")]);
+
+  const dl = rows.length
+    ? `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`
+    : `<p style="color:var(--text-muted)">No additional info available.</p>`;
+
+  return `
+    <div class="gd-matchup">
+      ${teamBlock(g.away, "")}
+      <div class="gd-vs">@</div>
+      ${teamBlock(g.home, "")}
+    </div>
+    ${dl}
+  `;
+}
+
+function setupGameDetails() {
+  const sheet = document.getElementById("game-sheet");
+  const backdrop = document.getElementById("game-backdrop");
+  const body = document.getElementById("game-body");
+  const titleEl = document.getElementById("game-sheet-title");
+  const closeBtn = document.getElementById("game-close");
+  if (!sheet || !backdrop || !body || !closeBtn) return;
+
+  let open = false;
+  let returnFocusTo = null;
+
+  function openDetails(game, originEl) {
+    if (!game) return;
+    open = true;
+    returnFocusTo = originEl || null;
+    const headline = `${game.away.fullName || game.away.name || game.away.abbrev || "Away"} @ ${game.home.fullName || game.home.name || game.home.abbrev || "Home"}`;
+    titleEl.textContent = headline;
+    body.innerHTML = renderGameDetails(game);
+    sheet.classList.add("open");
+    backdrop.classList.add("open");
+    sheet.setAttribute("aria-hidden", "false");
+    sheet.focus();
+  }
+
+  function closeDetails() {
+    if (!open) return;
+    open = false;
+    sheet.classList.remove("open");
+    backdrop.classList.remove("open");
+    sheet.setAttribute("aria-hidden", "true");
+    if (returnFocusTo && typeof returnFocusTo.focus === "function") {
+      returnFocusTo.focus();
+    }
+    returnFocusTo = null;
+  }
+
+  // Delegate clicks on rendered game cards (works across re-renders without
+  // re-wiring listeners). Cards carry data-nhl-bucket / data-nhl-index that
+  // resolve back to the cached payload in _nhlGamesByBucket.
+  document.getElementById("nhl").addEventListener("click", (e) => {
+    const target = e.target.closest("[data-nhl-bucket][data-nhl-index]");
+    if (!target) return;
+    const bucket = target.dataset.nhlBucket;
+    const idx = Number(target.dataset.nhlIndex);
+    const list = _nhlGamesByBucket[bucket];
+    const game = list && list[idx];
+    if (game) openDetails(game, target);
+  });
+
+  // Keyboard activation for the role="button" cards: Enter / Space behave
+  // like a click. Space is preventDefault'd so the page doesn't scroll.
+  document.getElementById("nhl").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const target = e.target.closest("[data-nhl-bucket][data-nhl-index]");
+    if (!target) return;
+    e.preventDefault();
+    const bucket = target.dataset.nhlBucket;
+    const idx = Number(target.dataset.nhlIndex);
+    const list = _nhlGamesByBucket[bucket];
+    const game = list && list[idx];
+    if (game) openDetails(game, target);
+  });
+
+  closeBtn.addEventListener("click", closeDetails);
+  backdrop.addEventListener("click", closeDetails);
+
+  document.addEventListener("keydown", (e) => {
+    if (open && e.key === "Escape") {
+      e.preventDefault();
+      closeDetails();
+    }
+  });
+}
+
 const NHL_TITLES = { today: "NHL Scores", yesterday: "Yesterday" };
 let nhlRotationMs = 10000;
 let nhlRotator = null;
@@ -308,9 +463,9 @@ async function refreshNHL() {
       showError("nhl", data.error, ".view-nhl-today");
       return;
     }
-    renderNHL(data.today?.games, "#nhl .view-nhl-today", "No games today.");
+    renderNHL(data.today?.games, "#nhl .view-nhl-today", "No games today.", "today");
     if (data.yesterday) {
-      renderNHL(data.yesterday.games, "#nhl .view-nhl-yesterday", "No games yesterday.");
+      renderNHL(data.yesterday.games, "#nhl .view-nhl-yesterday", "No games yesterday.", "yesterday");
     }
     const canRotate = !!(data.yesterday && !data.hasLiveToday);
     nhlRotator.setViews(canRotate ? ["today", "yesterday"] : ["today"]);
@@ -689,6 +844,7 @@ async function start() {
   setInterval(refreshUpdatedLabels, 5 * 1000);
 
   setupDebugOverlay();
+  setupGameDetails();
   watchVersion();
 }
 
