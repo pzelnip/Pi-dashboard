@@ -38,5 +38,7 @@ then instead link to a site that gives this info.
 
 ## Link Weather pane to Weather Site
 
+Open in https://github.com/pzelnip/Pi-dashboard/pull/16
+
 Clicking the weather should take me to a site that gives more detailed
 weather info in a new tab.
