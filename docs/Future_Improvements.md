@@ -1,11 +1,5 @@
 # Future Improvements
 
-## Reorganize the docs
-
-Docs (with the exception of README.md) should live in a `docs/` directory.
-Include moving the screenshots into that docs directory and have readme link to
-that location (ie `docs/screenshots/somescreenshot.jpg`)
-
 ## Move the Code
 
 Top level dir is a mix of code as it's run on the Pi, docs, readme's, the
