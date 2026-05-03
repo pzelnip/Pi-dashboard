@@ -1,7 +1,7 @@
 # Dashboard Overview
 
 A feature-by-feature inventory of the Pi Dashboard. The project README focuses
-on running it; this doc documents what shows up on screen and what each panel
+on running it; this doc describes what shows up on screen and what each panel
 does. See [`README.md`](../README.md) for run/setup instructions and
 [`docs/deployment.md`](deployment.md) for the Pi-side deployment flow.
 
