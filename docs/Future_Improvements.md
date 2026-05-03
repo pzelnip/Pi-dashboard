@@ -7,13 +7,6 @@ Open in https://github.com/pzelnip/Pi-dashboard/pull/12
 For each NHL game in the NHL panel, display which "round" a game is if it's a
 playoff game.  Ex: currently CAR & PHI is round 2, but MTL & TBL is round 1.
 
-## Python version link
-
-Open in https://github.com/pzelnip/Pi-dashboard/pull/14
-
-On the debug panel, make the python version a clickable link that goes to:
-https://docs.python.org/release/<VERSION/ in a new tab
-
 ## User Agent Info
 
 Open in https://github.com/pzelnip/Pi-dashboard/pull/15

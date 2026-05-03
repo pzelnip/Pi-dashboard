@@ -163,7 +163,7 @@ def _absolute_nhl_url(path: str) -> str:
     if path.startswith("http://") or path.startswith("https://"):
         return path
     if path.startswith("/"):
-        return f"https://www.nhle.com{path}"
+        return f"https://www.nhl.com{path}"
     return path
 
 

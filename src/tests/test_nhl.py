@@ -330,10 +330,10 @@ class AbsoluteUrlTests(unittest.TestCase):
             "https://example.com/x",
         )
 
-    def test_roots_relative_path_at_nhle(self):
+    def test_roots_relative_path_at_nhl(self):
         self.assertEqual(
             nhl._absolute_nhl_url("/gamecenter/foo"),
-            "https://www.nhle.com/gamecenter/foo",
+            "https://www.nhl.com/gamecenter/foo",
         )
 
     def test_empty_in_yields_empty_out(self):
@@ -415,11 +415,11 @@ class FetchNhlTests(unittest.TestCase):
         self.assertEqual(edm["series"]["gameNumber"], 4)
         self.assertEqual(
             edm["seriesUrl"],
-            "https://www.nhle.com/schedule/playoff-series/2026/series-e/oilers-vs-canucks",
+            "https://www.nhl.com/schedule/playoff-series/2026/series-e/oilers-vs-canucks",
         )
         self.assertEqual(
             edm["gameCenterLink"],
-            "https://www.nhle.com/gamecenter/van-vs-edm/2026/04/21/1",
+            "https://www.nhl.com/gamecenter/van-vs-edm/2026/04/21/1",
         )
         self.assertEqual(edm["ticketsLink"], "https://www.ticketmaster.com/event/1")
 
@@ -453,7 +453,7 @@ class FetchNhlTests(unittest.TestCase):
 
         self.assertTrue(games)
         for game in games:
-            self.assertEqual(game["ticketsLink"], "https://www.nhle.com/tickets/event/123")
+            self.assertEqual(game["ticketsLink"], "https://www.nhl.com/tickets/event/123")
 
 
 if __name__ == "__main__":
