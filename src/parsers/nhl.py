@@ -62,7 +62,7 @@ def _playoff_round(game: dict) -> int | None:
     # frontend can omit the badge.
     if game.get("gameType") != 3:
         return None
-    if (series := game.get("seriesStatus")) and isinstance(series.get("round"), int):
+    if isinstance(series := game.get("seriesStatus"), dict) and isinstance(series.get("round"), int):
         return series["round"]
     return None
 

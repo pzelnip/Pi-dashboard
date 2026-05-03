@@ -240,6 +240,26 @@ class PlayoffRoundTests(unittest.TestCase):
 
         self.assertIsNone(result)
 
+    def test_playoff_non_int_round_returns_none(self):
+        string_round = {"gameType": 3, "seriesStatus": {"round": "2"}}
+        float_round = {"gameType": 3, "seriesStatus": {"round": 2.0}}
+
+        string_result = nhl._playoff_round(string_round)
+        float_result = nhl._playoff_round(float_round)
+
+        self.assertIsNone(string_result)
+        self.assertIsNone(float_result)
+
+    def test_playoff_non_dict_series_returns_none(self):
+        list_series = {"gameType": 3, "seriesStatus": [1, 2]}
+        string_series = {"gameType": 3, "seriesStatus": "round 2"}
+
+        list_result = nhl._playoff_round(list_series)
+        string_result = nhl._playoff_round(string_series)
+
+        self.assertIsNone(list_result)
+        self.assertIsNone(string_result)
+
     def test_missing_game_type_returns_none(self):
         game = {"seriesStatus": {"round": 2}}
 
@@ -293,6 +313,8 @@ class FetchNhlTests(unittest.TestCase):
         regular = next(g for g in games if g["home"]["abbrev"] == "TOR")
         self.assertEqual(playoff["playoffRound"], 2)
         self.assertIsNone(regular["playoffRound"])
+        for g in games:
+            self.assertIn("playoffRound", g)
 
     def test_fetch_nhl_empty_when_no_matching_date(self):
         with patch.object(nhl, "fetch_cached", side_effect=self._patched_fetch):
