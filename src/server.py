@@ -295,7 +295,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self._send_error_json("weather lat/lon missing in config.json")
                 return
             try:
-                payload = {"label": w.get("label", ""), **fetch_weather(lat, lon)}
+                payload = {
+                    "label": w.get("label", ""),
+                    "latitude": lat,
+                    "longitude": lon,
+                    **fetch_weather(lat, lon),
+                }
                 self._send_json(payload)
             except Exception as e:
                 self._send_error_json(str(e))

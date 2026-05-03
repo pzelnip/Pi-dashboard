@@ -340,6 +340,14 @@ function wxLabel(code) {
 const fmtNum = (v, suffix = "") =>
   (v == null || Number.isNaN(v)) ? "—" : `${Math.round(v)}${suffix}`;
 
+// Build a Windy.com URL for the given lat/lon. Windy accepts `?<lat>,<lon>,<zoom>`
+// directly with no account/API key, supports any coordinates worldwide, and
+// shows a rich detailed-forecast UI — a good "more weather info" target.
+function windyUrl(lat, lon) {
+  if (typeof lat !== "number" || typeof lon !== "number") return "";
+  return `https://www.windy.com/?${lat},${lon},9`;
+}
+
 function renderWeather(data) {
   const labelEl = document.getElementById("weather-label");
   labelEl.textContent = data.label || "";
@@ -365,7 +373,17 @@ function renderWeather(data) {
     return d.toLocaleDateString([], { weekday: "short" });
   };
 
+  // Wrap the weather view content in an <a> so the entire view is clickable
+  // and right-click-friendly. Only this view (.view-weather) gets the link —
+  // the calendar/clock/countdown views in the same panel are left untouched.
+  const link = safeUrl(windyUrl(data.latitude, data.longitude));
+  const open = link
+    ? `<a class="wx-link" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" title="Open detailed forecast on Windy.com">`
+    : `<div class="wx-link">`;
+  const close = link ? `</a>` : `</div>`;
+
   el.innerHTML = `
+    ${open}
     <div class="wx-hero">
       <div class="wx-hero-icon">${curIcon}</div>
       <div class="wx-hero-main">
@@ -386,6 +404,7 @@ function renderWeather(data) {
         </div>
       `).join("")}
     </div>
+    ${close}
   `;
 }
 
