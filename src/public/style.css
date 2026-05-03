@@ -784,3 +784,203 @@ html, body {
   color: #7fd184;
   cursor: default;
 }
+
+/* ---------- NHL game details modal ----------
+ * Mirrors the debug sheet's surfaces and typography but rendered as a
+ * centered modal so it can fit the richer game content without monopolizing
+ * the kiosk's full bottom edge. Reuses --surface-raised and --border. */
+
+.game-clickable {
+  cursor: pointer;
+}
+.game-clickable:hover {
+  filter: brightness(1.08);
+}
+.game-clickable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+#game-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+  z-index: 400;
+}
+#game-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#game-sheet {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.96);
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  background: var(--surface-raised);
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease, transform 180ms ease;
+  display: flex;
+  flex-direction: column;
+  z-index: 500;
+  outline: none;
+}
+#game-sheet.open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%) scale(1);
+}
+#game-sheet header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  font-size: 1.05em;
+  font-weight: 600;
+}
+#game-close {
+  background: rgba(255, 255, 255, 0.06);
+  border: none;
+  color: var(--text);
+  font-size: 0.85em;
+  cursor: pointer;
+  padding: 6px 14px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+#game-close:hover { background: rgba(255, 255, 255, 0.12); }
+
+#game-body {
+  padding: 16px 18px 20px;
+  overflow-y: auto;
+  font-size: 0.92em;
+}
+
+.gd-matchup {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.gd-team {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+}
+.gd-team img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+.gd-team-name {
+  font-size: 1.1em;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.gd-team-abbrev {
+  font-size: 0.75em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.gd-team-score {
+  font-size: 2.4em;
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.gd-vs {
+  font-size: 1em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+
+#game-body dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 18px;
+}
+#game-body dt {
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-size: 0.72em;
+  letter-spacing: 0.05em;
+  align-self: baseline;
+  padding-top: 4px;
+}
+#game-body dd {
+  word-break: break-word;
+  font-size: 0.95em;
+}
+#game-body a {
+  color: var(--accent);
+  text-decoration: none;
+}
+#game-body a:hover { text-decoration: underline; }
+
+.gd-broadcasts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.gd-broadcast {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 0.85em;
+}
+.gd-broadcast .gd-country {
+  color: var(--text-muted);
+  font-size: 0.85em;
+}
+
+.gd-odds {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-variant-numeric: tabular-nums;
+}
+.gd-odds-team {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.gd-odds-team .gd-odds-abbrev {
+  color: var(--text-muted);
+  font-size: 0.85em;
+}
+
+@media (max-width: 720px) {
+  #game-sheet {
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 24px);
+  }
+  #game-body { padding: 12px 14px 16px; }
+  .gd-team img { width: 48px; height: 48px; }
+  .gd-team-name { font-size: 0.95em; }
+  .gd-team-score { font-size: 1.8em; }
+  #game-body dl {
+    grid-template-columns: 1fr;
+    gap: 4px 0;
+  }
+  #game-body dt { padding-top: 8px; }
+}
