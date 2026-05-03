@@ -291,6 +291,26 @@ html, body {
 
 /* ---------- Weather ---------- */
 
+/* Whole weather view links to a detailed forecast (Windy.com). Inherit colors
+ * so the existing typography is unchanged; just signal interactivity with a
+ * pointer cursor and a faint hover lift on the hero temperature. The <a>
+ * wraps both the hero and the daily strip; the link only exists on the
+ * .view-weather subview, so calendar/clock/countdown rotation views stay
+ * non-interactive. Falls back to a plain <div> when lat/lon are missing. */
+a.wx-link,
+div.wx-link {
+  color: inherit;
+  text-decoration: none;
+  display: block;
+}
+a.wx-link { cursor: pointer; }
+a.wx-link:hover .wx-temp { color: var(--accent); }
+a.wx-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
 .wx-hero {
   display: flex;
   align-items: center;

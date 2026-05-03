@@ -621,6 +621,14 @@ function wxLabel(code) {
 const fmtNum = (v, suffix = "") =>
   (v == null || Number.isNaN(v)) ? "—" : `${Math.round(v)}${suffix}`;
 
+// Build a Windy.com URL for the given lat/lon. Windy accepts `?<lat>,<lon>,<zoom>`
+// directly with no account/API key, supports any coordinates worldwide, and
+// shows a rich detailed-forecast UI — a good "more weather info" target.
+function windyUrl(lat, lon) {
+  if (typeof lat !== "number" || typeof lon !== "number") return "";
+  return `https://www.windy.com/?${lat},${lon},9`;
+}
+
 function renderWeather(data) {
   const labelEl = document.getElementById("weather-label");
   labelEl.textContent = data.label || "";
@@ -646,28 +654,91 @@ function renderWeather(data) {
     return d.toLocaleDateString([], { weekday: "short" });
   };
 
-  el.innerHTML = `
-    <div class="wx-hero">
-      <div class="wx-hero-icon">${curIcon}</div>
-      <div class="wx-hero-main">
-        <div class="wx-temp">${fmtNum(cur.temperature_2m, tempUnit)}</div>
-        <div class="wx-condition">${curDesc}</div>
-        <div class="wx-meta">
-          <span>Wind ${fmtNum(cur.wind_speed_10m)} ${windUnit}</span>
-          <span>Humidity ${fmtNum(cur.relative_humidity_2m, "%")}</span>
-        </div>
-      </div>
-    </div>
-    <div class="wx-daily">
-      ${days.map((d, i) => `
-        <div class="wx-day">
-          <div class="wx-day-label">${dayLabel(d.date, i)}</div>
-          <div class="wx-day-icon">${d.icon}</div>
-          <div class="wx-day-range"><span class="wx-min">${fmtNum(d.min, "°")}</span> ${fmtNum(d.max, "°")}</div>
-        </div>
-      `).join("")}
-    </div>
-  `;
+  // Wrap the weather view content in an <a> so the entire view is clickable
+  // and right-click-friendly. Only this view (.view-weather) gets the link —
+  // the calendar/clock/countdown views in the same panel are left untouched.
+  // Build via DOM APIs (createElement / textContent / appendChild) instead of
+  // innerHTML — the upstream weather payload comes from a third-party API
+  // (Open-Meteo) and should be treated as untrusted input. See PR #13 for the
+  // same pattern applied to the NHL details modal.
+  const link = safeUrl(windyUrl(data.latitude, data.longitude));
+  let wrapper;
+  if (link) {
+    wrapper = document.createElement("a");
+    wrapper.className = "wx-link";
+    wrapper.href = link;
+    wrapper.target = "_blank";
+    wrapper.rel = "noopener noreferrer";
+    wrapper.title = "Open detailed forecast on Windy.com";
+  } else {
+    wrapper = document.createElement("div");
+    wrapper.className = "wx-link";
+  }
+
+  const hero = document.createElement("div");
+  hero.className = "wx-hero";
+
+  const heroIcon = document.createElement("div");
+  heroIcon.className = "wx-hero-icon";
+  heroIcon.textContent = curIcon;
+  hero.appendChild(heroIcon);
+
+  const heroMain = document.createElement("div");
+  heroMain.className = "wx-hero-main";
+
+  const tempEl = document.createElement("div");
+  tempEl.className = "wx-temp";
+  tempEl.textContent = fmtNum(cur.temperature_2m, tempUnit);
+  heroMain.appendChild(tempEl);
+
+  const condEl = document.createElement("div");
+  condEl.className = "wx-condition";
+  condEl.textContent = curDesc;
+  heroMain.appendChild(condEl);
+
+  const metaEl = document.createElement("div");
+  metaEl.className = "wx-meta";
+  const windSpan = document.createElement("span");
+  windSpan.textContent = `Wind ${fmtNum(cur.wind_speed_10m)} ${windUnit}`;
+  metaEl.appendChild(windSpan);
+  const humSpan = document.createElement("span");
+  humSpan.textContent = `Humidity ${fmtNum(cur.relative_humidity_2m, "%")}`;
+  metaEl.appendChild(humSpan);
+  heroMain.appendChild(metaEl);
+
+  hero.appendChild(heroMain);
+  wrapper.appendChild(hero);
+
+  const dailyEl = document.createElement("div");
+  dailyEl.className = "wx-daily";
+  days.forEach((d, i) => {
+    const dayEl = document.createElement("div");
+    dayEl.className = "wx-day";
+
+    const dayLabelEl = document.createElement("div");
+    dayLabelEl.className = "wx-day-label";
+    dayLabelEl.textContent = dayLabel(d.date, i);
+    dayEl.appendChild(dayLabelEl);
+
+    const dayIconEl = document.createElement("div");
+    dayIconEl.className = "wx-day-icon";
+    dayIconEl.textContent = d.icon;
+    dayEl.appendChild(dayIconEl);
+
+    const rangeEl = document.createElement("div");
+    rangeEl.className = "wx-day-range";
+    const minSpan = document.createElement("span");
+    minSpan.className = "wx-min";
+    minSpan.textContent = fmtNum(d.min, "°");
+    rangeEl.appendChild(minSpan);
+    rangeEl.appendChild(document.createTextNode(` ${fmtNum(d.max, "°")}`));
+    dayEl.appendChild(rangeEl);
+
+    dailyEl.appendChild(dayEl);
+  });
+  wrapper.appendChild(dailyEl);
+
+  el.replaceChildren(wrapper);
 }
 
 async function refreshWeather() {
