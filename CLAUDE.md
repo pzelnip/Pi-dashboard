@@ -9,9 +9,8 @@ A zero-dependency Pi-kiosk dashboard. A single Python stdlib HTTP server serves 
 ## Run / develop
 
 All Pi-runtime code lives under `src/` (server, parsers, cache, config, the
-checked-in `config.json`, and the static frontend in `src/public/`). Docs and
-meta files (this CLAUDE.md, README.md, deployment.md, etc.) stay at the repo
-root.
+checked-in `config.json`, and the static frontend in `src/public/`). Docs live
+under `docs/`; `CLAUDE.md` and `README.md` stay at the repo root.
 
 ```bash
 python3 src/server.py             # serves on :8080
@@ -94,4 +93,4 @@ Three panels, each with `data-body="<name>"` for `bodyEl()`/`showError()` lookup
 
 ## Deployment
 
-`deployment.md` has the full Pi setup. The TL;DR: a cron job on the Pi runs `update-dashboard.sh` every minute, which fetches `origin/main` and `systemctl restart`s the service if the remote is ahead. The frontend's `/api/version` poll then triggers a browser reload. So pushing to `main` is effectively the deploy.
+`docs/deployment.md` has the full Pi setup. The TL;DR: a cron job on the Pi runs `update-dashboard.sh` every minute, which fetches `origin/main` and `systemctl restart`s the service if the remote is ahead. The frontend's `/api/version` poll then triggers a browser reload. So pushing to `main` is effectively the deploy.

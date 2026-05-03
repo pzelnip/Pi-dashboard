@@ -16,15 +16,15 @@ Then open <http://localhost:8080>. Port can be overridden with `DASHBOARD_PORT=9
 
 Screenshot:
 
-![screenshot](screenshots/screenshot.png)
+![screenshot](docs/screenshots/screenshot.png)
 
 Picture of it displayed via my Pi on a [small 10" screen](https://www.amazon.ca/dp/B0CR43GHWT?ref_=ppx_hzsearch_conn_dt_b_fed_asin_title_3):
 
-![picture](screenshots/onPi.jpg)
+![picture](docs/screenshots/onPi.jpg)
 
 Screenshot of mobile view:
 
-![screenshot](screenshots/mobile.png)
+![screenshot](docs/screenshots/mobile.png)
 
 ## Configuration
 
@@ -58,7 +58,7 @@ Exec=chromium-browser --kiosk --noerrdialogs --disable-infobars http://localhost
 ```
 
 And run `src/server.py` as a systemd user service so it starts on boot. See
-[deployment.md](deployment.md) for the full Pi setup.
+[docs/deployment.md](docs/deployment.md) for the full Pi setup.
 
 ## Tests
 

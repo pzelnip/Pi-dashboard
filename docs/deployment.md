@@ -2,10 +2,11 @@
 
 ## Overview
 
-The Pi runs a Python HTTP server ([src/server.py](src/server.py)) on port 8080,
-displayed via Chromium in kiosk mode. All Pi-runtime code (server, parsers,
-config, static frontend) lives under [`src/`](src/); deployment tooling
-(`update-dashboard.sh`) and docs stay at the repo root.
+The Pi runs a Python HTTP server ([src/server.py](../src/server.py)) on port
+8080, displayed via Chromium in kiosk mode. All Pi-runtime code (server,
+parsers, config, static frontend) lives under [`src/`](../src/); deployment
+tooling (`update-dashboard.sh`) stays at the repo root, and docs (this file
+included) live in [`docs/`](.).
 
 - **URL:** <http://localhost:8080>
 - **Kiosk command:** `chromium --kiosk http://localhost:8080`
