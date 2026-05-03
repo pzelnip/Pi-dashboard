@@ -745,7 +745,7 @@ function renderDebugFields(data) {
     <dt>Latest commit</dt><dd>${commit}</dd>
     <dt>Server uptime</dt><dd><span id="debug-uptime">${uptime}</span></dd>
     <dt>Viewport</dt><dd>${window.innerWidth}×${window.innerHeight}</dd>
-    <dt>User agent</dt><dd>${escapeHtml(navigator.userAgent)}</dd>
+    <dt>User agent</dt><dd id="debug-ua"></dd>
     <dt>Python</dt><dd><a href="${escapeHtml(pyDocsUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(data.pythonVersion)}</a></dd>
     <dt>Platform</dt><dd>${escapeHtml(data.platform)}</dd>
     <dt>RSS feeds</dt><dd>${data.rssFeedCount}</dd>
@@ -755,6 +755,43 @@ function renderDebugFields(data) {
     <dt>Update log</dt><dd><button class="debug-action" data-debug-action="log-update">view ›</button></dd>
     <dt>Force update</dt><dd><button class="debug-action danger" data-debug-action="update">run</button></dd>
   </dl>`;
+}
+
+// Populate the User agent <dd> with structured fields (when navigator.userAgentData
+// is available) plus the raw UA string as a clickable link to a parsing site.
+// Uses DOM APIs (textContent / setAttribute) rather than innerHTML — the UA
+// string comes from navigator but is treated as untrusted text.
+function populateUserAgent(container) {
+  if (!container) return;
+  while (container.firstChild) container.removeChild(container.firstChild);
+
+  const uaData = navigator.userAgentData;
+  if (uaData) {
+    const parts = [];
+    if (Array.isArray(uaData.brands) && uaData.brands.length) {
+      const brands = uaData.brands
+        .filter(b => b && b.brand && !/Not.?A.?Brand/i.test(b.brand))
+        .map(b => b.version ? `${b.brand} ${b.version}` : b.brand);
+      if (brands.length) parts.push(brands.join(", "));
+    }
+    if (uaData.platform) parts.push(uaData.platform);
+    parts.push(uaData.mobile ? "mobile" : "desktop");
+
+    if (parts.length) {
+      const summary = document.createElement("div");
+      summary.textContent = parts.join(" • ");
+      container.appendChild(summary);
+    }
+  }
+
+  const link = document.createElement("a");
+  link.textContent = navigator.userAgent;
+  link.setAttribute("href", "https://www.whatismybrowser.com/detect/what-is-my-user-agent");
+  link.setAttribute("target", "_blank");
+  link.setAttribute("rel", "noopener noreferrer");
+  link.setAttribute("title", "Open user-agent parser in a new tab");
+  link.className = "mono";
+  container.appendChild(link);
 }
 
 function renderDebugLog(title, data) {
@@ -811,6 +848,7 @@ function setupDebugOverlay() {
       if (data.error) throw new Error(data.error);
       serverStartedAt = data.serverStartedAt;
       body.innerHTML = renderDebugFields(data);
+      populateUserAgent(document.getElementById("debug-ua"));
       if (!tickTimer) tickTimer = setInterval(tick, 1000);
     } catch (e) {
       body.innerHTML = `<p style="color: var(--live)">Failed to load debug info: ${escapeHtml(e.message)}</p>`;

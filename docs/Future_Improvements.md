@@ -20,15 +20,6 @@ Bay Lightning" rather than "Lightning" or "TBL").
 Don't consider this an exhuastive list, be creative on what info can be included
 on the display.
 
-## User Agent Info
-
-Open in https://github.com/pzelnip/Pi-dashboard/pull/15
-
-For the User Agent string, both display the actual UA string, but also what
-browser, OS, etc, it is.  If this is not possible with out additional
-dependencies (ie if there's no standard library item to give this info)
-then instead link to a site that gives this info.
-
 ## Link Weather pane to Weather Site
 
 Open in https://github.com/pzelnip/Pi-dashboard/pull/16
