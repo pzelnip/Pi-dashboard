@@ -1,0 +1,583 @@
+openapi: 3.0.3
+info:
+  title: Pi Dashboard API
+  version: "1.0.0"
+  description: |
+    Internal HTTP API for the Pi Dashboard — a zero-dependency Python stdlib
+    server that powers a Raspberry Pi kiosk SPA. Most `/api/*` endpoints proxy
+    and reshape upstream services (NHL, Open-Meteo, RSS/Atom, iCal) so the
+    frontend can render directly against a stable, trimmed-down JSON shape.
+
+    Conventions:
+      - All endpoints return `application/json` with `Cache-Control: no-store`.
+      - **Error responses are HTTP 200** with body `{"error": "<message>"}`.
+        This is intentional: the frontend renders errors inline without
+        clobbering the last-good data already on screen, and `fetch_cached`
+        transparently serves stale data on upstream failures.
+      - The server is meant for LAN-only use. There is no auth, CSRF, or rate
+        limiting.
+
+    This spec is hand-maintained — keep it in sync with `src/server.py` and
+    the parsers under `src/parsers/`.
+
+servers:
+  - url: http://localhost:8080
+    description: Local development / Pi kiosk
+
+tags:
+  - name: dashboard
+    description: Frontend-facing data endpoints (NHL, weather, RSS, calendar).
+  - name: meta
+    description: Metadata endpoints (version, config, debug, logs).
+  - name: ops
+    description: Operational endpoints (self-update).
+
+paths:
+  /api/version:
+    get:
+      tags: [meta]
+      summary: Current server git SHA
+      description: |
+        Returns the git SHA captured at server start. The frontend polls this
+        and triggers a full page reload when the value changes — that's how
+        the kiosk auto-updates after a deploy.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version]
+                properties:
+                  version:
+                    type: string
+                    description: Git SHA of HEAD at server start, or a unix-timestamp fallback if `git` is unavailable.
+                    example: "f0536eaa1b2c3d4e5f6789abcdef0123456789ab"
+
+  /api/config:
+    get:
+      tags: [meta]
+      summary: Client-relevant config subset
+      description: |
+        Exposes only the parts of `config.json` (merged with `config.local.json`)
+        that the frontend needs: rotation cadences, calendar feature flag,
+        and the configured countdowns list.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfigResponse"
+
+  /api/debug:
+    get:
+      tags: [meta]
+      summary: Server diagnostics
+      description: Server build/runtime info plus a snapshot of cache TTLs (calendar URLs are excluded to avoid leaking private iCal links).
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DebugResponse"
+
+  /api/logs:
+    get:
+      tags: [meta]
+      summary: Tail systemd or update-script logs
+      parameters:
+        - in: query
+          name: which
+          required: true
+          schema:
+            type: string
+            enum: [service, update]
+          description: |
+            `service` runs `journalctl -u dashboard.service`; `update` tails
+            the `update.log` file written by `update-dashboard.sh`.
+        - in: query
+          name: lines
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 2000
+            default: 200
+          description: Number of trailing lines to return.
+      responses:
+        "200":
+          description: OK or inline error envelope.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/LogsResponse"
+                  - $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/nhl:
+    get:
+      tags: [dashboard]
+      summary: NHL games for today (and yesterday)
+      description: |
+        Anchored on the Pi's local date. Calls `https://api-web.nhle.com/v1/schedule/<YYYY-MM-DD>`
+        upstream (NOT `/schedule/now`, which lags the calendar rollover and would
+        return yesterday's slate hours into the user's morning).
+
+        Without `date`: returns both `today` and `yesterday` envelopes so the
+        frontend can rotate between them when no live game is in progress.
+
+        With `date` (debug override): returns only the requested date as `today`,
+        with `yesterday: null`.
+      parameters:
+        - in: query
+          name: date
+          required: false
+          schema:
+            type: string
+            format: date
+            pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          description: Debug override — fetch a specific date instead of today.
+      responses:
+        "200":
+          description: OK or inline error envelope.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/NhlResponse"
+                  - $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/weather:
+    get:
+      tags: [dashboard]
+      summary: Current weather + 4-day forecast
+      description: |
+        Reshaped Open-Meteo response. Latitude/longitude come from
+        `config.json -> weather`. Returns `{error}` envelope if lat/lon are
+        missing or the upstream call fails.
+      responses:
+        "200":
+          description: OK or inline error envelope.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/WeatherResponse"
+                  - $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/rss:
+    get:
+      tags: [dashboard]
+      summary: Top items from a configured RSS or Atom feed
+      description: |
+        Indexes into `config.json -> rss`. Handles both RSS 2.0 (`<item>`) and
+        Atom (`<entry>`). Returns up to 4 items.
+      parameters:
+        - in: query
+          name: feed
+          required: false
+          schema:
+            type: integer
+            default: 0
+          description: |
+            Index into the configured feed list (wraps modulo the count).
+            Defaults to 0.
+      responses:
+        "200":
+          description: OK or inline error envelope.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/RssResponse"
+                  - $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/calendar:
+    get:
+      tags: [dashboard]
+      summary: Today's events from configured iCalendar URLs
+      description: |
+        Merges events from all URLs in `config.json -> calendar.urls`, filters
+        to those occurring today, and sorts all-day events first. Returns
+        `{enabled: false, events: []}` when no calendar URLs are configured —
+        the frontend uses this to suppress the calendar view entirely.
+
+        Recurring events (RRULE) are currently skipped — only one-off events
+        are surfaced.
+      responses:
+        "200":
+          description: OK or inline error envelope.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/CalendarResponse"
+                  - $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/update:
+    post:
+      tags: [ops]
+      summary: Trigger the self-update script
+      description: |
+        Spawns `update-dashboard.sh --force` detached. The script `git pull`s
+        and `systemctl restart`s the service; the running Python process will
+        be killed mid-flight, which is fine — the frontend's `/api/version`
+        poll picks up the new SHA and reloads.
+
+        Concurrent requests are guarded by a process-local lock; subsequent
+        callers receive `{"error": "update already running"}`.
+      responses:
+        "200":
+          description: Started, or inline error envelope.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required: [started]
+                    properties:
+                      started:
+                        type: boolean
+                        example: true
+                  - $ref: "#/components/schemas/ErrorEnvelope"
+
+components:
+  schemas:
+    ErrorEnvelope:
+      type: object
+      description: |
+        Inline error returned with HTTP 200 so the frontend can render the
+        message without losing whatever's already on screen.
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: "weather lat/lon missing in config.json"
+
+    ConfigResponse:
+      type: object
+      required: [rotation, calendar, countdowns]
+      properties:
+        rotation:
+          type: object
+          description: Per-panel rotation cadence (seconds). `nhlPanelSeconds` defaults to `weatherPanelSeconds` if omitted.
+          properties:
+            rssSeconds:
+              type: integer
+              example: 30
+            weatherPanelSeconds:
+              type: integer
+              example: 15
+            nhlPanelSeconds:
+              type: integer
+              example: 15
+        calendar:
+          type: object
+          required: [enabled]
+          properties:
+            enabled:
+              type: boolean
+              description: True iff at least one calendar URL is configured.
+        countdowns:
+          type: array
+          description: Items rendered in the countdown view of the weather panel.
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date
+                example: "2026-12-25"
+              title:
+                type: string
+                example: "Christmas"
+
+    DebugResponse:
+      type: object
+      properties:
+        version:
+          type: string
+        versionShort:
+          type: string
+          description: First 7 characters of `version`.
+        serverStartedAt:
+          type: number
+          description: Unix timestamp.
+        latestCommitAt:
+          type: number
+          nullable: true
+          description: Unix timestamp of the latest commit, if `git log` succeeded.
+        latestCommitSubject:
+          type: string
+        pythonVersion:
+          type: string
+          example: "3.11.6"
+        platform:
+          type: string
+          example: "Linux-6.1.21-v8+-aarch64-with-glibc2.36"
+        rssFeedCount:
+          type: integer
+        calendarUrlCount:
+          type: integer
+        cache:
+          type: array
+          description: Snapshot of cached upstream URLs and their remaining TTL (calendar URLs excluded).
+          items:
+            type: object
+            properties:
+              url:
+                type: string
+                format: uri
+              ttlRemaining:
+                type: number
+                description: Seconds until the cached entry expires (negative when stale).
+
+    LogsResponse:
+      type: object
+      required: [lines, source, truncated]
+      properties:
+        lines:
+          type: array
+          items:
+            type: string
+        source:
+          type: string
+          example: "journalctl -u dashboard.service"
+        truncated:
+          type: boolean
+        note:
+          type: string
+          description: Optional informational note (e.g. "no log yet").
+
+    NhlResponse:
+      type: object
+      required: [today, hasLiveToday]
+      properties:
+        today:
+          $ref: "#/components/schemas/NhlDayEnvelope"
+        yesterday:
+          oneOf:
+            - $ref: "#/components/schemas/NhlDayEnvelope"
+            - type: "null"
+          description: Null when a `?date=` override is used; otherwise the previous day's slate.
+        hasLiveToday:
+          type: boolean
+          description: True if any of today's games is in `LIVE` or `CRIT` state.
+
+    NhlDayEnvelope:
+      type: object
+      required: [date, games]
+      properties:
+        date:
+          type: string
+          format: date
+        games:
+          type: array
+          items:
+            $ref: "#/components/schemas/NhlGame"
+
+    NhlGame:
+      type: object
+      properties:
+        id:
+          type: integer
+        home:
+          $ref: "#/components/schemas/NhlTeam"
+        away:
+          $ref: "#/components/schemas/NhlTeam"
+        state:
+          type: string
+          description: Upstream NHL game state.
+          enum: [FUT, PRE, LIVE, CRIT, OFF, FINAL]
+        startTime:
+          type: string
+          format: date-time
+          description: ISO-8601 UTC start time (`startTimeUTC`).
+        statusText:
+          type: string
+          description: Human-readable status computed server-side (e.g. "Final", "2nd · 11:32", "End of 1st").
+        seriesText:
+          type: string
+          description: Playoff series summary (empty for regular-season games).
+        playoffRound:
+          type: integer
+          nullable: true
+          description: 1-4 for playoff games (R1, R2, Conf Final, Cup Final). Null for non-playoff.
+        isFavorite:
+          type: boolean
+        venue:
+          type: string
+        venueTimezone:
+          type: string
+        neutralSite:
+          type: boolean
+        gameType:
+          type: integer
+          description: NHL gameType code (1=Preseason, 2=Regular Season, 3=Playoffs, 4=All-Star).
+        gameTypeLabel:
+          type: string
+        broadcasts:
+          type: array
+          items:
+            type: object
+            properties:
+              network:
+                type: string
+              country:
+                type: string
+              market:
+                type: string
+        series:
+          nullable: true
+          type: object
+          description: Detailed playoff series block (null for regular season).
+          properties:
+            round:
+              type: integer
+            title:
+              type: string
+            abbrev:
+              type: string
+            letter:
+              type: string
+            gameNumber:
+              type: integer
+            neededToWin:
+              type: integer
+            topSeedAbbrev:
+              type: string
+            topSeedWins:
+              type: integer
+            bottomSeedAbbrev:
+              type: string
+            bottomSeedWins:
+              type: integer
+        seriesUrl:
+          type: string
+        gameCenterLink:
+          type: string
+        ticketsLink:
+          type: string
+
+    NhlTeam:
+      type: object
+      properties:
+        abbrev:
+          type: string
+          example: "EDM"
+        name:
+          type: string
+          example: "Oilers"
+        placeName:
+          type: string
+          example: "Edmonton"
+        fullName:
+          type: string
+          example: "Edmonton Oilers"
+        score:
+          type: integer
+          nullable: true
+          description: Null for scheduled games that haven't started.
+        logo:
+          type: string
+          format: uri
+        isFavorite:
+          type: boolean
+        odds:
+          type: string
+          description: A representative betting line, preferring American moneyline (e.g. "-170"). Empty when no odds were published.
+
+    WeatherResponse:
+      type: object
+      properties:
+        label:
+          type: string
+          description: Display label (e.g. city name) from config.
+        latitude:
+          type: number
+        longitude:
+          type: number
+        current:
+          type: object
+          description: Open-Meteo `current` block (passes through). Includes `temperature_2m`, `weather_code`, `wind_speed_10m`, `relative_humidity_2m`, `time`, etc.
+          additionalProperties: true
+        daily:
+          type: object
+          description: Open-Meteo `daily` block (passes through). Includes `time`, `temperature_2m_max`, `temperature_2m_min`, `weather_code` arrays, 4 days each.
+          additionalProperties: true
+        units:
+          type: object
+          properties:
+            current:
+              type: object
+              additionalProperties: true
+            daily:
+              type: object
+              additionalProperties: true
+
+    RssResponse:
+      type: object
+      required: [index, total, name, items]
+      properties:
+        index:
+          type: integer
+          description: Resolved feed index (after wrapping modulo `total`).
+        total:
+          type: integer
+          description: Number of configured feeds.
+        name:
+          type: string
+          description: Configured display name (falls back to feed URL).
+        feedImage:
+          type: string
+          description: Channel-level image / Atom logo, when present.
+        items:
+          type: array
+          maxItems: 4
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+              link:
+                type: string
+                format: uri
+              published:
+                type: string
+                description: Raw upstream `pubDate` (RSS) or `published`/`updated` (Atom).
+              image:
+                type: string
+                description: Best-effort thumbnail (media namespace, image enclosure, or first `<img>` in description).
+
+    CalendarResponse:
+      type: object
+      required: [enabled, events, date]
+      properties:
+        enabled:
+          type: boolean
+          description: True iff at least one calendar URL is configured.
+        date:
+          type: string
+          format: date
+          description: The Pi's local date used to filter events.
+        events:
+          type: array
+          items:
+            type: object
+            properties:
+              summary:
+                type: string
+              start:
+                type: string
+                description: ISO date (all-day) or naive local datetime.
+              end:
+                type: string
+                description: ISO date (all-day, exclusive per RFC 5545) or naive local datetime.
+              allDay:
+                type: boolean
+              source:
+                type: integer
+                description: Index into the configured `calendar.urls` list.

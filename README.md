@@ -46,6 +46,9 @@ Edit [src/config.json](src/config.json):
 - `GET /api/weather` — current + 3-day forecast.
 - `GET /api/rss?feed=<N>` — top 4 items from the Nth configured feed.
 
+A full OpenAPI 3.0 spec for every `/api/*` endpoint lives at
+[`docs/openapi.yaml`](docs/openapi.yaml).
+
 ## Kiosk mode on the Pi
 
 Add to `~/.config/autostart/dashboard.desktop`:
