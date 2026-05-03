@@ -268,6 +268,25 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.") {
     </div>`;
   };
 
+  const roundEmoji = round => {
+    switch (round) {
+      case 1: return { icon: "\u{1F949}", label: "Round 1" };
+      case 2: return { icon: "\u{1F948}", label: "Round 2" };
+      case 3: return { icon: "\u{1F947}", label: "Conference Final" };
+      case 4: return { icon: "\u{1F3C6}", label: "Stanley Cup Final" };
+      default: return null;
+    }
+  };
+
+  const renderRoundBadge = round => {
+    const r = Number(round);
+    if (!Number.isInteger(r)) return "";
+    const info = roundEmoji(r);
+    if (!info) return "";
+    const label = escapeHtml(info.label);
+    return `<span class="series-tag round-tag" role="img" aria-label="${label}" title="${label}"><span aria-hidden="true">${info.icon}</span></span>`;
+  };
+
   const renderGame = g => {
     let awayCls = "", homeCls = "";
     const bothScores = g.away.score != null && g.home.score != null;
@@ -283,7 +302,7 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.") {
     <div class="game ${stateCls}">
       <div class="game-meta">
         ${pillFor(g)}
-        ${g.playoffRound ? `<span class="series-tag round-tag">R${escapeHtml(String(g.playoffRound))}</span>` : ""}
+        ${renderRoundBadge(g.playoffRound)}
         ${g.seriesText ? `<span class="series-tag">${escapeHtml(g.seriesText)}</span>` : ""}
       </div>
       <div class="game-body">
