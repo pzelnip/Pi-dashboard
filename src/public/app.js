@@ -738,6 +738,7 @@ function renderDebugFields(data) {
     : '<span style="color:var(--text-muted)">(empty)</span>';
 
   const ghCommitUrl = `${GITHUB_REPO_URL}/commit/${encodeURIComponent(data.version)}`;
+  const pyDocsUrl = `https://docs.python.org/release/${encodeURIComponent(data.pythonVersion)}/`;
 
   return `<dl>
     <dt>SHA</dt><dd class="mono"><a href="${escapeHtml(ghCommitUrl)}" target="_blank" rel="noopener">${escapeHtml(data.versionShort)}</a> <a href="${escapeHtml(ghCommitUrl)}" target="_blank" rel="noopener" style="color:var(--text-muted)">(${escapeHtml(data.version)})</a></dd>
@@ -745,7 +746,7 @@ function renderDebugFields(data) {
     <dt>Server uptime</dt><dd><span id="debug-uptime">${uptime}</span></dd>
     <dt>Viewport</dt><dd>${window.innerWidth}×${window.innerHeight}</dd>
     <dt>User agent</dt><dd>${escapeHtml(navigator.userAgent)}</dd>
-    <dt>Python</dt><dd>${escapeHtml(data.pythonVersion)}</dd>
+    <dt>Python</dt><dd><a href="${escapeHtml(pyDocsUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(data.pythonVersion)}</a></dd>
     <dt>Platform</dt><dd>${escapeHtml(data.platform)}</dd>
     <dt>RSS feeds</dt><dd>${data.rssFeedCount}</dd>
     <dt>Calendar URLs</dt><dd>${data.calendarUrlCount}</dd>
