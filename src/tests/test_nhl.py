@@ -266,6 +266,63 @@ class SeriesTextTests(unittest.TestCase):
         self.assertIn("VAN won 4-2", result)
 
 
+class PlayoffRoundTests(unittest.TestCase):
+    def test_regular_season_returns_none(self):
+        game = {"gameType": 2, "seriesStatus": {"round": 1}}
+
+        result = nhl._playoff_round(game)
+
+        self.assertIsNone(result)
+
+    def test_playoff_returns_round_number(self):
+        game = {"gameType": 3, "seriesStatus": {"round": 3}}
+
+        result = nhl._playoff_round(game)
+
+        self.assertEqual(result, 3)
+
+    def test_playoff_missing_series_returns_none(self):
+        game = {"gameType": 3}
+
+        result = nhl._playoff_round(game)
+
+        self.assertIsNone(result)
+
+    def test_playoff_missing_round_field_returns_none(self):
+        game = {"gameType": 3, "seriesStatus": {"topSeedWins": 1}}
+
+        result = nhl._playoff_round(game)
+
+        self.assertIsNone(result)
+
+    def test_playoff_non_int_round_returns_none(self):
+        string_round = {"gameType": 3, "seriesStatus": {"round": "2"}}
+        float_round = {"gameType": 3, "seriesStatus": {"round": 2.0}}
+
+        string_result = nhl._playoff_round(string_round)
+        float_result = nhl._playoff_round(float_round)
+
+        self.assertIsNone(string_result)
+        self.assertIsNone(float_result)
+
+    def test_playoff_non_dict_series_returns_none(self):
+        list_series = {"gameType": 3, "seriesStatus": [1, 2]}
+        string_series = {"gameType": 3, "seriesStatus": "round 2"}
+
+        list_result = nhl._playoff_round(list_series)
+        string_result = nhl._playoff_round(string_series)
+
+        self.assertIsNone(list_result)
+        self.assertIsNone(string_result)
+
+    def test_missing_game_type_returns_none(self):
+        game = {"seriesStatus": {"round": 2}}
+
+        result = nhl._playoff_round(game)
+
+        self.assertIsNone(result)
+
+
 class BroadcastsTests(unittest.TestCase):
     def test_empty_when_missing(self):
         result = nhl._broadcasts({})
@@ -376,6 +433,17 @@ class FetchNhlTests(unittest.TestCase):
         self.assertEqual(live["seriesText"], "Game 4 (EDM leads 2-1)")
         self.assertEqual(final_ot["statusText"], "Final/OT")
         self.assertEqual(final_ot["seriesText"], "")
+
+    def test_fetch_nhl_exposes_playoff_round(self):
+        with patch.object(nhl, "fetch_cached", side_effect=self._patched_fetch):
+            games = nhl.fetch_nhl("2026-04-21", favorites=[])
+
+        playoff = next(g for g in games if g["home"]["abbrev"] == "EDM")
+        regular = next(g for g in games if g["home"]["abbrev"] == "TOR")
+        self.assertEqual(playoff["playoffRound"], 2)
+        self.assertIsNone(regular["playoffRound"])
+        for g in games:
+            self.assertIn("playoffRound", g)
 
     def test_fetch_nhl_empty_when_no_matching_date(self):
         with patch.object(nhl, "fetch_cached", side_effect=self._patched_fetch):

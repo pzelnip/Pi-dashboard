@@ -275,6 +275,21 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
     </div>`;
   };
 
+  const ROUND_LABELS = {
+    1: "Round 1",
+    2: "Round 2",
+    3: "Conference Final",
+    4: "Stanley Cup Final",
+  };
+  const ROUND_NUMERALS = { 1: "I", 2: "II", 3: "III", 4: "IV" };
+
+  const renderRoundBadge = round => {
+    const r = Number(round);
+    if (!Number.isInteger(r) || r < 1 || r > 4) return "";
+    const label = escapeHtml(ROUND_LABELS[r]);
+    return `<span class="series-tag round-tag" aria-label="${label}" title="${label}">${ROUND_NUMERALS[r]}</span>`;
+  };
+
   const renderGame = (g, idx) => {
     let awayCls = "", homeCls = "";
     const bothScores = g.away.score != null && g.home.score != null;
@@ -293,6 +308,7 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
     <div ${clickAttrs}>
       <div class="game-meta">
         ${pillFor(g)}
+        ${renderRoundBadge(g.playoffRound)}
         ${g.seriesText ? `<span class="series-tag">${escapeHtml(g.seriesText)}</span>` : ""}
       </div>
       <div class="game-body">

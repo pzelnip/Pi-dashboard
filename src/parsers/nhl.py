@@ -81,6 +81,18 @@ def _team(t: dict, favorites: set[str] | None = None) -> dict:
     }
 
 
+def _playoff_round(game: dict) -> int | None:
+    # NHL API uses gameType=3 for playoff games (regular season is 2). The
+    # round number lives on seriesStatus.round (1-4: R1, R2, Conf Final, Cup
+    # Final). Return None for anything that isn't a playoff game so the
+    # frontend can omit the badge.
+    if game.get("gameType") != 3:
+        return None
+    if isinstance(series := game.get("seriesStatus"), dict) and isinstance(series.get("round"), int):
+        return series["round"]
+    return None
+
+
 def _series_text(s: dict | None) -> str:
     if not s:
         return ""
@@ -204,6 +216,7 @@ def fetch_nhl(date: str | None, favorites: list[str]) -> list[dict]:
                     "startTime": game.get("startTimeUTC", ""),
                     "statusText": _status_text(game),
                     "seriesText": _series_text(game.get("seriesStatus")),
+                    "playoffRound": _playoff_round(game),
                     "isFavorite": is_fav,
                     "venue": venue,
                     "venueTimezone": game.get("venueTimezone", ""),
