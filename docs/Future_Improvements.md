@@ -22,6 +22,8 @@ on the display.
 
 ## Python version link
 
+Open in https://github.com/pzelnip/Pi-dashboard/pull/14
+
 On the debug panel, make the python version a clickable link that goes to:
 https://docs.python.org/release/<VERSION/ in a new tab
 
