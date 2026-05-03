@@ -547,29 +547,15 @@ html, body {
 
   .panel-wide { grid-column: auto; }
 
-  /* Drop the cross-fade stacking on phones — let the active view size the
-   * panel naturally so nothing gets clipped or pushed off the bottom.
-   * Inactive views go away entirely (no animation, but cleaner layout). */
-  #weather .panel-body,
-  #nhl .panel-body {
-    position: static;
-  }
-  #weather .view,
-  #nhl .view {
-    position: static;
-    inset: auto;
-    transition: none;
-    display: none;
-  }
-  #weather .view.active,
-  #nhl .view.active {
-    display: block;
-    opacity: 1;
-  }
-  #weather .view-clock.active,
-  #weather .view-countdown.active {
-    display: flex;
-  }
+  /* Keep the desktop cross-fade on phones, but pin both stacked panel bodies
+   * to a fixed min-height. Without it, the absolute-positioned views collapse
+   * the parent to zero and the RSS panel below would jump as views rotate.
+   * Weather: 320px comfortably fits the tallest view (calendar with ~5
+   * events) while not leaving clock/countdown looking too sparse.
+   * NHL: 400px fits a typical 4–6 game slate; the body itself scrolls
+   * (overflow:auto on .panel-body) when there are more. */
+  #weather .panel-body { min-height: 320px; }
+  #nhl .panel-body { min-height: 400px; }
 
   /* Allow the panel header to wrap when the title plus controls exceed the
    * viewport. Right-side group drops to a new line. */
@@ -611,8 +597,8 @@ html, body {
   .countdown-number { font-size: 3.5em; }
   .countdown-label { font-size: 1.2em; }
 
-  /* Stacked clock/countdown views need explicit min-height since they were
-   * relying on the absolute-positioned parent for sizing. */
+  /* Belt-and-braces min-height for the centered clock/countdown views in
+   * case the panel-body min-height above is overridden by future styling. */
   #weather .view-clock,
   #weather .view-countdown {
     min-height: 200px;
