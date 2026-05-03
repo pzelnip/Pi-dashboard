@@ -300,7 +300,7 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
     const matchupLabel = `${escapeHtml(g.away.fullName || g.away.name || g.away.abbrev || "away")} at ${escapeHtml(g.home.fullName || g.home.name || g.home.abbrev || "home")}`;
     const clickAttrs = bucket
       ? `class="game game-clickable ${stateCls}" tabindex="0" role="button" aria-label="Show details for ${matchupLabel}${hasRound ? `, ${roundLabel}` : ""}" data-nhl-bucket="${escapeHtml(bucket)}" data-nhl-index="${idx}"${hasRound ? ` title="${roundLabel}"` : ""}${roundAttr}`
-      : `class="game ${stateCls}"${hasRound ? ` aria-label="${roundLabel}" title="${roundLabel}"` : ""}${roundAttr}`;
+      : `class="game ${stateCls}"${hasRound ? ` title="${roundLabel}"` : ""}${roundAttr}`;
     return `
     <div ${clickAttrs}>
       <div class="game-meta">

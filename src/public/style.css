@@ -137,9 +137,12 @@ html, body {
   gap: 6px;
   position: relative;
   overflow: hidden;
+  isolation: isolate;
 }
 
-/* Playoff round progress fill: 25/50/75/100% horizontal tint behind content. */
+/* Playoff round progress fill: 25/50/75/100% horizontal tint behind content.
+   z-index: -1 is scoped inside .game's stacking context (isolation: isolate
+   above), so children render above without needing their own z-index rules. */
 .game::before {
   content: "";
   position: absolute;
@@ -147,13 +150,12 @@ html, body {
   width: 0;
   background: rgba(255, 255, 255, 0.06);
   pointer-events: none;
-  z-index: 0;
+  z-index: -1;
 }
 .game[data-playoff-round="1"]::before { width: 25%; }
 .game[data-playoff-round="2"]::before { width: 50%; }
 .game[data-playoff-round="3"]::before { width: 75%; }
 .game[data-playoff-round="4"]::before { width: 100%; }
-.game > * { position: relative; z-index: 1; }
 
 .fav-star {
   color: #f5c419;
