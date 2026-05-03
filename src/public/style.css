@@ -283,13 +283,6 @@ html, body {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.15);
 }
-.series-tag.round-tag {
-  padding: 2px 8px;
-  font-family: monospace;
-  letter-spacing: 0.15em;
-  line-height: 1;
-}
-
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }

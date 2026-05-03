@@ -274,13 +274,13 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.") {
     3: "Conference Final",
     4: "Stanley Cup Final",
   };
+  const ROUND_NUMERALS = { 1: "I", 2: "II", 3: "III", 4: "IV" };
 
   const renderRoundBadge = round => {
     const r = Number(round);
     if (!Number.isInteger(r) || r < 1 || r > 4) return "";
-    const dots = "●".repeat(r) + "○".repeat(4 - r);
     const label = escapeHtml(ROUND_LABELS[r]);
-    return `<span class="series-tag round-tag" role="img" aria-label="${label}" title="${label}"><span aria-hidden="true">${dots}</span></span>`;
+    return `<span class="series-tag round-tag" aria-label="${label}" title="${label}">${ROUND_NUMERALS[r]}</span>`;
   };
 
   const renderGame = g => {
