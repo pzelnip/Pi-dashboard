@@ -439,6 +439,22 @@ class FetchNhlTests(unittest.TestCase):
         self.assertEqual(tor["gameType"], 2)
         self.assertEqual(tor["gameTypeLabel"], "Regular Season")
 
+    def test_fetch_nhl_absolutizes_relative_tickets_link(self):
+        import json
+
+        raw = json.loads(self._raw.decode("utf-8"))
+        for week in raw.get("gameWeek", []):
+            for game in week.get("games", []):
+                game["ticketsLink"] = "/tickets/event/123"
+        patched = json.dumps(raw).encode("utf-8")
+
+        with patch.object(nhl, "fetch_cached", return_value=patched):
+            games = nhl.fetch_nhl("2026-04-21", favorites=[])
+
+        self.assertTrue(games)
+        for game in games:
+            self.assertEqual(game["ticketsLink"], "https://www.nhle.com/tickets/event/123")
+
 
 if __name__ == "__main__":
     unittest.main()

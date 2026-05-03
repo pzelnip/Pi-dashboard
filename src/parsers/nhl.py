@@ -214,7 +214,7 @@ def fetch_nhl(date: str | None, favorites: list[str]) -> list[dict]:
                     "series": _series_info(game.get("seriesStatus")),
                     "seriesUrl": _absolute_nhl_url(game.get("seriesUrl", "")),
                     "gameCenterLink": _absolute_nhl_url(game.get("gameCenterLink", "")),
-                    "ticketsLink": game.get("ticketsLink", ""),
+                    "ticketsLink": _absolute_nhl_url(game.get("ticketsLink", "")),
                 }
             )
     return games_out

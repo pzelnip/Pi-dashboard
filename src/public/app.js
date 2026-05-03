@@ -311,17 +311,44 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
 
 const COUNTRY_FLAG = { US: "US", CA: "CA" };
 
+// Build the modal contents using DOM APIs (textContent + appendChild) rather
+// than HTML-string concatenation. Team names, venue, broadcaster strings,
+// odds, etc. all originate from a third-party API (proxied through our
+// backend) — treat as untrusted and never inject as HTML. Returns a
+// DocumentFragment ready to be swapped into #game-body.
 function renderGameDetails(g) {
-  const teamBlock = (t, scoreClass) => {
+  const frag = document.createDocumentFragment();
+
+  const el = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null && text !== "") node.textContent = String(text);
+    return node;
+  };
+
+  const buildTeamBlock = (t, scoreClass) => {
+    const wrap = el("div", "gd-team");
     const logoUrl = safeUrl(t.logo);
-    const fav = t.isFavorite ? ' <span class="fav-star" aria-label="Favorite team">★</span>' : "";
-    return `
-      <div class="gd-team">
-        ${logoUrl ? `<img src="${escapeHtml(logoUrl)}" alt="" onerror="this.remove()">` : ""}
-        <span class="gd-team-name">${escapeHtml(t.fullName || t.name || t.abbrev || "")}${fav}</span>
-        <span class="gd-team-abbrev">${escapeHtml(t.abbrev || "")}</span>
-        ${t.score != null ? `<span class="gd-team-score ${scoreClass}">${escapeHtml(String(t.score))}</span>` : ""}
-      </div>`;
+    if (logoUrl) {
+      const img = document.createElement("img");
+      img.src = logoUrl;
+      img.alt = "";
+      img.onerror = function () { this.remove(); };
+      wrap.appendChild(img);
+    }
+    const name = el("span", "gd-team-name", t.fullName || t.name || t.abbrev || "");
+    if (t.isFavorite) {
+      name.appendChild(document.createTextNode(" "));
+      const star = el("span", "fav-star", "★");
+      star.setAttribute("aria-label", "Favorite team");
+      name.appendChild(star);
+    }
+    wrap.appendChild(name);
+    wrap.appendChild(el("span", "gd-team-abbrev", t.abbrev || ""));
+    if (t.score != null) {
+      wrap.appendChild(el("span", `gd-team-score ${scoreClass}`.trim(), String(t.score)));
+    }
+    return wrap;
   };
 
   const isLive = g.state === "LIVE" || g.state === "CRIT";
@@ -329,53 +356,107 @@ function renderGameDetails(g) {
   const startLabel = g.startTime ? formatTime(g.startTime) : "";
   const headlineStatus = g.statusText || (isLive ? "Live" : isFinal ? "Final" : startLabel);
 
-  const broadcasts = (g.broadcasts || []).map(b => {
-    const country = COUNTRY_FLAG[b.country] || b.country || "";
-    return `<span class="gd-broadcast">${escapeHtml(b.network)}${country ? ` <span class="gd-country">${escapeHtml(country)}</span>` : ""}</span>`;
-  }).join("");
+  const matchup = el("div", "gd-matchup");
+  matchup.appendChild(buildTeamBlock(g.away, ""));
+  matchup.appendChild(el("div", "gd-vs", "@"));
+  matchup.appendChild(buildTeamBlock(g.home, ""));
+  frag.appendChild(matchup);
 
-  const odds = (g.away.odds || g.home.odds)
-    ? `
-      <div class="gd-odds">
-        ${g.away.odds ? `<span class="gd-odds-team"><span class="gd-odds-abbrev">${escapeHtml(g.away.abbrev)}</span> ${escapeHtml(g.away.odds)}</span>` : ""}
-        ${g.home.odds ? `<span class="gd-odds-team"><span class="gd-odds-abbrev">${escapeHtml(g.home.abbrev)}</span> ${escapeHtml(g.home.odds)}</span>` : ""}
-      </div>`
-    : "";
-
-  const seriesLine = g.series
-    ? `${escapeHtml(g.series.title || "")}${g.series.gameNumber ? ` &middot; Game ${escapeHtml(String(g.series.gameNumber))}` : ""}${g.seriesText ? ` &middot; ${escapeHtml(g.seriesText)}` : ""}`
-    : "";
-
-  const links = [];
-  if (g.gameCenterLink) links.push(`<a href="${escapeHtml(g.gameCenterLink)}" target="_blank" rel="noopener">Game center</a>`);
-  if (g.seriesUrl) links.push(`<a href="${escapeHtml(g.seriesUrl)}" target="_blank" rel="noopener">Series page</a>`);
-  if (g.ticketsLink) links.push(`<a href="${escapeHtml(g.ticketsLink)}" target="_blank" rel="noopener">Tickets</a>`);
-
+  // Build the rows as [label, valueNode] pairs. valueNode is a Node so the
+  // caller can never accidentally inject HTML.
   const rows = [];
-  if (headlineStatus) rows.push(["Status", escapeHtml(headlineStatus)]);
-  if (startLabel) rows.push(["Start", escapeHtml(startLabel)]);
+  const textNode = s => document.createTextNode(String(s));
+
+  if (headlineStatus) rows.push(["Status", textNode(headlineStatus)]);
+  if (startLabel) rows.push(["Start", textNode(startLabel)]);
   if (g.venue) {
-    const neutral = g.neutralSite ? ' <span style="color:var(--text-muted)">(neutral site)</span>' : "";
-    rows.push(["Venue", `${escapeHtml(g.venue)}${neutral}`]);
+    const venueWrap = document.createDocumentFragment();
+    venueWrap.appendChild(textNode(g.venue));
+    if (g.neutralSite) {
+      venueWrap.appendChild(textNode(" "));
+      const neutral = el("span", null, "(neutral site)");
+      neutral.style.color = "var(--text-muted)";
+      venueWrap.appendChild(neutral);
+    }
+    rows.push(["Venue", venueWrap]);
   }
-  if (g.gameTypeLabel) rows.push(["Game type", escapeHtml(g.gameTypeLabel)]);
-  if (seriesLine) rows.push(["Series", seriesLine]);
-  if (broadcasts) rows.push(["Broadcasts", `<div class="gd-broadcasts">${broadcasts}</div>`]);
-  if (odds) rows.push(["Odds", odds]);
-  if (links.length) rows.push(["Links", links.join(" &middot; ")]);
+  if (g.gameTypeLabel) rows.push(["Game type", textNode(g.gameTypeLabel)]);
+  if (g.series) {
+    const seriesWrap = document.createDocumentFragment();
+    seriesWrap.appendChild(textNode(g.series.title || ""));
+    if (g.series.gameNumber) {
+      seriesWrap.appendChild(textNode(` · Game ${String(g.series.gameNumber)}`));
+    }
+    if (g.seriesText) {
+      seriesWrap.appendChild(textNode(` · ${g.seriesText}`));
+    }
+    rows.push(["Series", seriesWrap]);
+  }
 
-  const dl = rows.length
-    ? `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`
-    : `<p style="color:var(--text-muted)">No additional info available.</p>`;
+  if ((g.broadcasts || []).length) {
+    const list = el("div", "gd-broadcasts");
+    g.broadcasts.forEach(b => {
+      const span = el("span", "gd-broadcast", b.network || "");
+      const country = COUNTRY_FLAG[b.country] || b.country || "";
+      if (country) {
+        span.appendChild(textNode(" "));
+        span.appendChild(el("span", "gd-country", country));
+      }
+      list.appendChild(span);
+    });
+    rows.push(["Broadcasts", list]);
+  }
 
-  return `
-    <div class="gd-matchup">
-      ${teamBlock(g.away, "")}
-      <div class="gd-vs">@</div>
-      ${teamBlock(g.home, "")}
-    </div>
-    ${dl}
-  `;
+  if (g.away.odds || g.home.odds) {
+    const oddsWrap = el("div", "gd-odds");
+    const addOddsTeam = (abbrev, odds) => {
+      if (!odds) return;
+      const team = el("span", "gd-odds-team");
+      team.appendChild(el("span", "gd-odds-abbrev", abbrev || ""));
+      team.appendChild(textNode(` ${odds}`));
+      oddsWrap.appendChild(team);
+    };
+    addOddsTeam(g.away.abbrev, g.away.odds);
+    addOddsTeam(g.home.abbrev, g.home.odds);
+    rows.push(["Odds", oddsWrap]);
+  }
+
+  const linkSpecs = [
+    [g.gameCenterLink, "Game center"],
+    [g.seriesUrl, "Series page"],
+    [g.ticketsLink, "Tickets"],
+  ].filter(([href]) => !!href);
+  if (linkSpecs.length) {
+    const linksWrap = document.createDocumentFragment();
+    linkSpecs.forEach(([href, label], i) => {
+      if (i > 0) linksWrap.appendChild(textNode(" · "));
+      const a = document.createElement("a");
+      a.href = href;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.textContent = label;
+      linksWrap.appendChild(a);
+    });
+    rows.push(["Links", linksWrap]);
+  }
+
+  if (rows.length) {
+    const dl = document.createElement("dl");
+    rows.forEach(([label, valueNode]) => {
+      const dt = el("dt", null, label);
+      const dd = document.createElement("dd");
+      dd.appendChild(valueNode);
+      dl.appendChild(dt);
+      dl.appendChild(dd);
+    });
+    frag.appendChild(dl);
+  } else {
+    const empty = el("p", null, "No additional info available.");
+    empty.style.color = "var(--text-muted)";
+    frag.appendChild(empty);
+  }
+
+  return frag;
 }
 
 function setupGameDetails() {
@@ -384,10 +465,25 @@ function setupGameDetails() {
   const body = document.getElementById("game-body");
   const titleEl = document.getElementById("game-sheet-title");
   const closeBtn = document.getElementById("game-close");
-  if (!sheet || !backdrop || !body || !closeBtn) return;
+  if (!sheet || !backdrop || !body || !closeBtn || !titleEl) return;
 
   let open = false;
   let returnFocusTo = null;
+
+  // Selectors for elements considered focusable for the focus-trap.
+  const FOCUSABLE_SEL = [
+    "a[href]",
+    "button:not([disabled])",
+    "input:not([disabled])",
+    "select:not([disabled])",
+    "textarea:not([disabled])",
+    "[tabindex]:not([tabindex='-1'])",
+  ].join(",");
+
+  function focusableElements() {
+    return Array.from(sheet.querySelectorAll(FOCUSABLE_SEL))
+      .filter(el => !el.hasAttribute("disabled") && el.offsetParent !== null);
+  }
 
   function openDetails(game, originEl) {
     if (!game) return;
@@ -395,7 +491,7 @@ function setupGameDetails() {
     returnFocusTo = originEl || null;
     const headline = `${game.away.fullName || game.away.name || game.away.abbrev || "Away"} @ ${game.home.fullName || game.home.name || game.home.abbrev || "Home"}`;
     titleEl.textContent = headline;
-    body.innerHTML = renderGameDetails(game);
+    body.replaceChildren(renderGameDetails(game));
     sheet.classList.add("open");
     backdrop.classList.add("open");
     sheet.setAttribute("aria-hidden", "false");
@@ -445,9 +541,39 @@ function setupGameDetails() {
   backdrop.addEventListener("click", closeDetails);
 
   document.addEventListener("keydown", (e) => {
-    if (open && e.key === "Escape") {
+    if (!open) return;
+    if (e.key === "Escape") {
       e.preventDefault();
       closeDetails();
+      return;
+    }
+    // Focus trap: keep Tab / Shift+Tab cycling within the modal's focusable
+    // elements while open. The sheet itself is tabindex=-1 (programmatic focus
+    // only), so we restrict the cycle to its descendants plus a fallback to
+    // the close button.
+    if (e.key !== "Tab") return;
+    const focusables = focusableElements();
+    if (focusables.length === 0) {
+      e.preventDefault();
+      closeBtn.focus();
+      return;
+    }
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    const active = document.activeElement;
+    // If focus has somehow escaped the modal (e.g. the sheet itself, or a
+    // background element), pull it back to the first focusable.
+    if (!sheet.contains(active)) {
+      e.preventDefault();
+      first.focus();
+      return;
+    }
+    if (e.shiftKey && active === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault();
+      first.focus();
     }
   });
 }
