@@ -3,6 +3,8 @@
 A zero-dependency dashboard for a Raspberry Pi + LCD, showing NHL scores, weather,
 and rotating RSS feeds.
 
+See [docs/Overview.md](docs/Overview.md) for the full feature list.
+
 ## Running
 
 All Python source and the static frontend live under [`src/`](src/). Run the
