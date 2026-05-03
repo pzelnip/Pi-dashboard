@@ -20,13 +20,6 @@ Bay Lightning" rather than "Lightning" or "TBL").
 Don't consider this an exhuastive list, be creative on what info can be included
 on the display.
 
-## Python version link
-
-Open in https://github.com/pzelnip/Pi-dashboard/pull/14
-
-On the debug panel, make the python version a clickable link that goes to:
-https://docs.python.org/release/<VERSION/ in a new tab
-
 ## Link Weather pane to Weather Site
 
 Open in https://github.com/pzelnip/Pi-dashboard/pull/16
