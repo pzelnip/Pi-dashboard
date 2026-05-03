@@ -127,6 +127,61 @@ class TeamShapingTests(unittest.TestCase):
 
         self.assertEqual(result["logo"], "")
 
+    def test_team_full_name_combines_place_and_common(self):
+        team = {
+            "abbrev": "TBL",
+            "commonName": {"default": "Lightning"},
+            "placeName": {"default": "Tampa Bay"},
+            "score": 2,
+        }
+
+        result = nhl._team(team, favorites=set())
+
+        self.assertEqual(result["fullName"], "Tampa Bay Lightning")
+        self.assertEqual(result["placeName"], "Tampa Bay")
+
+    def test_team_full_name_falls_back_to_common_when_no_place(self):
+        team = {"abbrev": "BOS", "commonName": {"default": "Bruins"}, "score": 0}
+
+        result = nhl._team(team, favorites=set())
+
+        self.assertEqual(result["fullName"], "Bruins")
+        self.assertEqual(result["placeName"], "")
+
+    def test_team_picks_american_moneyline_odds(self):
+        team = {
+            "abbrev": "EDM",
+            "commonName": {"default": "Oilers"},
+            "score": 0,
+            "odds": [
+                {"providerId": 6, "value": "1.67"},
+                {"providerId": 8, "value": "-170"},
+            ],
+        }
+
+        result = nhl._team(team, favorites=set())
+
+        self.assertEqual(result["odds"], "-170")
+
+    def test_team_falls_back_to_first_odds_when_no_moneyline(self):
+        team = {
+            "abbrev": "EDM",
+            "commonName": {"default": "Oilers"},
+            "score": 0,
+            "odds": [{"providerId": 6, "value": "1.67"}],
+        }
+
+        result = nhl._team(team, favorites=set())
+
+        self.assertEqual(result["odds"], "1.67")
+
+    def test_team_missing_odds_yields_empty_string(self):
+        team = {"abbrev": "BOS", "commonName": {"default": "Bruins"}, "score": 0}
+
+        result = nhl._team(team, favorites=set())
+
+        self.assertEqual(result["odds"], "")
+
 
 class SeriesTextTests(unittest.TestCase):
     def test_no_series(self):
@@ -268,6 +323,80 @@ class PlayoffRoundTests(unittest.TestCase):
         self.assertIsNone(result)
 
 
+class BroadcastsTests(unittest.TestCase):
+    def test_empty_when_missing(self):
+        result = nhl._broadcasts({})
+
+        self.assertEqual(result, [])
+
+    def test_filters_blank_networks_and_dedupes(self):
+        game = {
+            "tvBroadcasts": [
+                {"network": "TNT", "countryCode": "US", "market": "N", "sequenceNumber": 1},
+                {"network": "", "countryCode": "US", "market": "N"},
+                {"network": "CBC", "countryCode": "CA", "market": "N", "sequenceNumber": 2},
+                {"network": "CBC", "countryCode": "CA", "market": "N", "sequenceNumber": 3},
+            ],
+        }
+
+        result = nhl._broadcasts(game)
+
+        self.assertEqual(
+            result,
+            [
+                {"network": "TNT", "country": "US", "market": "N"},
+                {"network": "CBC", "country": "CA", "market": "N"},
+            ],
+        )
+
+
+class SeriesInfoTests(unittest.TestCase):
+    def test_returns_none_when_no_series(self):
+        self.assertIsNone(nhl._series_info(None))
+        self.assertIsNone(nhl._series_info({}))
+
+    def test_shapes_playoff_series(self):
+        s = {
+            "round": 2,
+            "seriesTitle": "2nd Round",
+            "seriesAbbrev": "R2",
+            "seriesLetter": "E",
+            "topSeedTeamAbbrev": "EDM",
+            "topSeedWins": 2,
+            "bottomSeedTeamAbbrev": "VAN",
+            "bottomSeedWins": 1,
+            "neededToWin": 4,
+            "gameNumberOfSeries": 4,
+        }
+
+        result = nhl._series_info(s)
+
+        self.assertEqual(result["round"], 2)
+        self.assertEqual(result["title"], "2nd Round")
+        self.assertEqual(result["topSeedAbbrev"], "EDM")
+        self.assertEqual(result["topSeedWins"], 2)
+        self.assertEqual(result["bottomSeedAbbrev"], "VAN")
+        self.assertEqual(result["bottomSeedWins"], 1)
+        self.assertEqual(result["gameNumber"], 4)
+
+
+class AbsoluteUrlTests(unittest.TestCase):
+    def test_passes_through_absolute_url(self):
+        self.assertEqual(
+            nhl._absolute_nhl_url("https://example.com/x"),
+            "https://example.com/x",
+        )
+
+    def test_roots_relative_path_at_nhl(self):
+        self.assertEqual(
+            nhl._absolute_nhl_url("/gamecenter/foo"),
+            "https://www.nhl.com/gamecenter/foo",
+        )
+
+    def test_empty_in_yields_empty_out(self):
+        self.assertEqual(nhl._absolute_nhl_url(""), "")
+
+
 class FetchNhlTests(unittest.TestCase):
     def setUp(self):
         self._raw = fixture_bytes("nhl_schedule.json")
@@ -326,6 +455,73 @@ class FetchNhlTests(unittest.TestCase):
         with patch.object(nhl, "fetch_cached", return_value=b"<html>oops</html>"):
             with self.assertRaises(ValueError):
                 nhl.fetch_nhl("2026-04-21", favorites=[])
+
+    def test_fetch_nhl_exposes_details_for_playoff_game(self):
+        with patch.object(nhl, "fetch_cached", side_effect=self._patched_fetch):
+            games = nhl.fetch_nhl("2026-04-21", favorites=[])
+
+        edm = next(g for g in games if g["home"]["abbrev"] == "EDM")
+        self.assertEqual(edm["id"], 1)
+        self.assertEqual(edm["venue"], "Rogers Place")
+        self.assertEqual(edm["venueTimezone"], "America/Edmonton")
+        self.assertFalse(edm["neutralSite"])
+        self.assertEqual(edm["gameType"], 3)
+        self.assertEqual(edm["gameTypeLabel"], "Playoffs")
+        self.assertEqual(edm["home"]["fullName"], "Edmonton Oilers")
+        self.assertEqual(edm["away"]["fullName"], "Vancouver Canucks")
+        self.assertEqual(edm["home"]["odds"], "-170")
+        self.assertEqual(edm["away"]["odds"], "+142")
+        self.assertEqual(
+            edm["broadcasts"],
+            [
+                {"network": "TNT", "country": "US", "market": "N"},
+                {"network": "CBC", "country": "CA", "market": "N"},
+            ],
+        )
+        self.assertEqual(edm["series"]["round"], 2)
+        self.assertEqual(edm["series"]["title"], "2nd Round")
+        self.assertEqual(edm["series"]["gameNumber"], 4)
+        self.assertEqual(
+            edm["seriesUrl"],
+            "https://www.nhl.com/schedule/playoff-series/2026/series-e/oilers-vs-canucks",
+        )
+        self.assertEqual(
+            edm["gameCenterLink"],
+            "https://www.nhl.com/gamecenter/van-vs-edm/2026/04/21/1",
+        )
+        self.assertEqual(edm["ticketsLink"], "https://www.ticketmaster.com/event/1")
+
+    def test_fetch_nhl_omits_optional_fields_for_regular_season(self):
+        with patch.object(nhl, "fetch_cached", side_effect=self._patched_fetch):
+            games = nhl.fetch_nhl("2026-04-21", favorites=[])
+
+        tor = next(g for g in games if g["home"]["abbrev"] == "TOR")
+        self.assertEqual(tor["venue"], "")
+        self.assertEqual(tor["broadcasts"], [])
+        self.assertIsNone(tor["series"])
+        self.assertEqual(tor["seriesUrl"], "")
+        self.assertEqual(tor["gameCenterLink"], "")
+        self.assertEqual(tor["ticketsLink"], "")
+        self.assertEqual(tor["home"]["odds"], "")
+        self.assertEqual(tor["home"]["fullName"], "Maple Leafs")
+        self.assertEqual(tor["gameType"], 2)
+        self.assertEqual(tor["gameTypeLabel"], "Regular Season")
+
+    def test_fetch_nhl_absolutizes_relative_tickets_link(self):
+        import json
+
+        raw = json.loads(self._raw.decode("utf-8"))
+        for week in raw.get("gameWeek", []):
+            for game in week.get("games", []):
+                game["ticketsLink"] = "/tickets/event/123"
+        patched = json.dumps(raw).encode("utf-8")
+
+        with patch.object(nhl, "fetch_cached", return_value=patched):
+            games = nhl.fetch_nhl("2026-04-21", favorites=[])
+
+        self.assertTrue(games)
+        for game in games:
+            self.assertEqual(game["ticketsLink"], "https://www.nhl.com/tickets/event/123")
 
 
 if __name__ == "__main__":

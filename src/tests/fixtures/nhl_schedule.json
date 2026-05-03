@@ -7,36 +7,61 @@
           "id": 1,
           "gameType": 3,
           "gameState": "LIVE",
+          "gameType": 3,
           "startTimeUTC": "2026-04-22T01:00:00Z",
+          "venue": {"default": "Rogers Place"},
+          "venueTimezone": "America/Edmonton",
+          "neutralSite": false,
           "homeTeam": {
             "abbrev": "EDM",
             "commonName": {"default": "Oilers"},
+            "placeName": {"default": "Edmonton"},
             "score": 2,
-            "logo": "https://example.com/edm.svg"
+            "logo": "https://example.com/edm.svg",
+            "odds": [
+              {"providerId": 8, "value": "-170"},
+              {"providerId": 6, "value": "1.67"}
+            ]
           },
           "awayTeam": {
             "abbrev": "VAN",
             "commonName": {"default": "Canucks"},
+            "placeName": {"default": "Vancouver"},
             "score": 1,
-            "logo": "https://example.com/van.svg"
+            "logo": "https://example.com/van.svg",
+            "odds": [
+              {"providerId": 8, "value": "+142"},
+              {"providerId": 6, "value": "2.17"}
+            ]
           },
+          "tvBroadcasts": [
+            {"id": 385, "market": "N", "countryCode": "US", "network": "TNT", "sequenceNumber": 11},
+            {"id": 4, "market": "N", "countryCode": "CA", "network": "CBC", "sequenceNumber": 101},
+            {"id": 999, "market": "N", "countryCode": "CA", "network": "CBC", "sequenceNumber": 102}
+          ],
           "periodDescriptor": {"number": 2, "periodType": "REG"},
           "clock": {"timeRemaining": "08:32", "inIntermission": false},
           "seriesStatus": {
             "round": 2,
+            "seriesTitle": "2nd Round",
             "seriesAbbrev": "R2",
+            "seriesLetter": "E",
             "topSeedTeamAbbrev": "EDM",
             "topSeedWins": 2,
             "bottomSeedTeamAbbrev": "VAN",
             "bottomSeedWins": 1,
             "neededToWin": 4,
             "gameNumberOfSeries": 4
-          }
+          },
+          "seriesUrl": "/schedule/playoff-series/2026/series-e/oilers-vs-canucks",
+          "gameCenterLink": "/gamecenter/van-vs-edm/2026/04/21/1",
+          "ticketsLink": "https://www.ticketmaster.com/event/1"
         },
         {
           "id": 2,
           "gameType": 2,
           "gameState": "FINAL",
+          "gameType": 2,
           "startTimeUTC": "2026-04-21T23:00:00Z",
           "homeTeam": {
             "abbrev": "TOR",

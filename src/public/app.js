@@ -231,12 +231,18 @@ function createRotator({ dotsEl, navEl, viewsContainer, viewClassPrefix, titleEl
 
 // ---------- NHL ----------
 
-function renderNHL(games, containerSelector, emptyMessage = "No games.") {
+// Map of bucket name -> sorted games list, populated by renderNHL. The
+// click handler reads from this to resolve a clicked DOM node back to the
+// rich game payload without stuffing it into data attributes.
+const _nhlGamesByBucket = { today: [], yesterday: [] };
+
+function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket = null) {
   const el = document.querySelector(containerSelector);
   if (!el) return;
   el.classList.remove("error");
   if (!games || !games.length) {
     el.innerHTML = `<p style="color: var(--text-muted)">${emptyMessage}</p>`;
+    if (bucket) _nhlGamesByBucket[bucket] = [];
     return;
   }
 
@@ -251,6 +257,7 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.") {
     if (s !== 0) return s;
     return (b.isFavorite ? 1 : 0) - (a.isFavorite ? 1 : 0);
   });
+  if (bucket) _nhlGamesByBucket[bucket] = sorted;
 
   const pillFor = g => {
     if (isLive(g)) return `<span class="status-pill live">${escapeHtml(g.statusText || "LIVE")}</span>`;
@@ -283,7 +290,7 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.") {
     return `<span class="series-tag round-tag" aria-label="${label}" title="${label}">${ROUND_NUMERALS[r]}</span>`;
   };
 
-  const renderGame = g => {
+  const renderGame = (g, idx) => {
     let awayCls = "", homeCls = "";
     const bothScores = g.away.score != null && g.home.score != null;
     if (isFinal(g) && bothScores) {
@@ -294,8 +301,11 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.") {
       else if (g.home.score > g.away.score) homeCls = "leading";
     }
     const stateCls = isLive(g) ? "is-live" : isFinal(g) ? "is-final" : "";
+    const clickAttrs = bucket
+      ? `class="game game-clickable ${stateCls}" tabindex="0" role="button" aria-label="Show details for ${escapeHtml(g.away.fullName || g.away.name || g.away.abbrev || "away")} at ${escapeHtml(g.home.fullName || g.home.name || g.home.abbrev || "home")}" data-nhl-bucket="${escapeHtml(bucket)}" data-nhl-index="${idx}"`
+      : `class="game ${stateCls}"`;
     return `
-    <div class="game ${stateCls}">
+    <div ${clickAttrs}>
       <div class="game-meta">
         ${pillFor(g)}
         ${renderRoundBadge(g.playoffRound)}
@@ -313,6 +323,277 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.") {
   el.innerHTML = `<div class="games-grid">${sorted.map(renderGame).join("")}</div>`;
 }
 
+// ---------- NHL game details modal ----------
+
+const COUNTRY_FLAG = { US: "US", CA: "CA" };
+
+// Build the modal contents using DOM APIs (textContent + appendChild) rather
+// than HTML-string concatenation. Team names, venue, broadcaster strings,
+// odds, etc. all originate from a third-party API (proxied through our
+// backend) — treat as untrusted and never inject as HTML. Returns a
+// DocumentFragment ready to be swapped into #game-body.
+function renderGameDetails(g) {
+  const frag = document.createDocumentFragment();
+
+  const el = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null && text !== "") node.textContent = String(text);
+    return node;
+  };
+
+  const buildTeamBlock = (t, scoreClass) => {
+    const wrap = el("div", "gd-team");
+    const logoUrl = safeUrl(t.logo);
+    if (logoUrl) {
+      const img = document.createElement("img");
+      img.src = logoUrl;
+      img.alt = "";
+      img.onerror = function () { this.remove(); };
+      wrap.appendChild(img);
+    }
+    const name = el("span", "gd-team-name", t.fullName || t.name || t.abbrev || "");
+    if (t.isFavorite) {
+      name.appendChild(document.createTextNode(" "));
+      const star = el("span", "fav-star", "★");
+      star.setAttribute("aria-label", "Favorite team");
+      name.appendChild(star);
+    }
+    wrap.appendChild(name);
+    wrap.appendChild(el("span", "gd-team-abbrev", t.abbrev || ""));
+    if (t.score != null) {
+      wrap.appendChild(el("span", `gd-team-score ${scoreClass}`.trim(), String(t.score)));
+    }
+    return wrap;
+  };
+
+  const isLive = g.state === "LIVE" || g.state === "CRIT";
+  const isFinal = g.state === "OFF" || g.state === "FINAL";
+  const startLabel = g.startTime ? formatTime(g.startTime) : "";
+  const headlineStatus = g.statusText || (isLive ? "Live" : isFinal ? "Final" : startLabel);
+
+  const matchup = el("div", "gd-matchup");
+  matchup.appendChild(buildTeamBlock(g.away, ""));
+  matchup.appendChild(el("div", "gd-vs", "@"));
+  matchup.appendChild(buildTeamBlock(g.home, ""));
+  frag.appendChild(matchup);
+
+  // Build the rows as [label, valueNode] pairs. valueNode is a Node so the
+  // caller can never accidentally inject HTML.
+  const rows = [];
+  const textNode = s => document.createTextNode(String(s));
+
+  if (headlineStatus) rows.push(["Status", textNode(headlineStatus)]);
+  if (startLabel) rows.push(["Start", textNode(startLabel)]);
+  if (g.venue) {
+    const venueWrap = document.createDocumentFragment();
+    venueWrap.appendChild(textNode(g.venue));
+    if (g.neutralSite) {
+      venueWrap.appendChild(textNode(" "));
+      const neutral = el("span", null, "(neutral site)");
+      neutral.style.color = "var(--text-muted)";
+      venueWrap.appendChild(neutral);
+    }
+    rows.push(["Venue", venueWrap]);
+  }
+  if (g.gameTypeLabel) rows.push(["Game type", textNode(g.gameTypeLabel)]);
+  if (g.series) {
+    const seriesWrap = document.createDocumentFragment();
+    seriesWrap.appendChild(textNode(g.series.title || ""));
+    if (g.series.gameNumber) {
+      seriesWrap.appendChild(textNode(` · Game ${String(g.series.gameNumber)}`));
+    }
+    if (g.seriesText) {
+      seriesWrap.appendChild(textNode(` · ${g.seriesText}`));
+    }
+    rows.push(["Series", seriesWrap]);
+  }
+
+  if ((g.broadcasts || []).length) {
+    const list = el("div", "gd-broadcasts");
+    g.broadcasts.forEach(b => {
+      const span = el("span", "gd-broadcast", b.network || "");
+      const country = COUNTRY_FLAG[b.country] || b.country || "";
+      if (country) {
+        span.appendChild(textNode(" "));
+        span.appendChild(el("span", "gd-country", country));
+      }
+      list.appendChild(span);
+    });
+    rows.push(["Broadcasts", list]);
+  }
+
+  if (g.away.odds || g.home.odds) {
+    const oddsWrap = el("div", "gd-odds");
+    const addOddsTeam = (abbrev, odds) => {
+      if (!odds) return;
+      const team = el("span", "gd-odds-team");
+      team.appendChild(el("span", "gd-odds-abbrev", abbrev || ""));
+      team.appendChild(textNode(` ${odds}`));
+      oddsWrap.appendChild(team);
+    };
+    addOddsTeam(g.away.abbrev, g.away.odds);
+    addOddsTeam(g.home.abbrev, g.home.odds);
+    rows.push(["Odds", oddsWrap]);
+  }
+
+  const linkSpecs = [
+    [g.gameCenterLink, "Game center"],
+    [g.seriesUrl, "Series page"],
+    [g.ticketsLink, "Tickets"],
+  ].filter(([href]) => !!href);
+  if (linkSpecs.length) {
+    const linksWrap = document.createDocumentFragment();
+    linkSpecs.forEach(([href, label], i) => {
+      if (i > 0) linksWrap.appendChild(textNode(" · "));
+      const a = document.createElement("a");
+      a.href = href;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.textContent = label;
+      linksWrap.appendChild(a);
+    });
+    rows.push(["Links", linksWrap]);
+  }
+
+  if (rows.length) {
+    const dl = document.createElement("dl");
+    rows.forEach(([label, valueNode]) => {
+      const dt = el("dt", null, label);
+      const dd = document.createElement("dd");
+      dd.appendChild(valueNode);
+      dl.appendChild(dt);
+      dl.appendChild(dd);
+    });
+    frag.appendChild(dl);
+  } else {
+    const empty = el("p", null, "No additional info available.");
+    empty.style.color = "var(--text-muted)";
+    frag.appendChild(empty);
+  }
+
+  return frag;
+}
+
+function setupGameDetails() {
+  const sheet = document.getElementById("game-sheet");
+  const backdrop = document.getElementById("game-backdrop");
+  const body = document.getElementById("game-body");
+  const titleEl = document.getElementById("game-sheet-title");
+  const closeBtn = document.getElementById("game-close");
+  if (!sheet || !backdrop || !body || !closeBtn || !titleEl) return;
+
+  let open = false;
+  let returnFocusTo = null;
+
+  // Selectors for elements considered focusable for the focus-trap.
+  const FOCUSABLE_SEL = [
+    "a[href]",
+    "button:not([disabled])",
+    "input:not([disabled])",
+    "select:not([disabled])",
+    "textarea:not([disabled])",
+    "[tabindex]:not([tabindex='-1'])",
+  ].join(",");
+
+  function focusableElements() {
+    return Array.from(sheet.querySelectorAll(FOCUSABLE_SEL))
+      .filter(el => !el.hasAttribute("disabled") && el.offsetParent !== null);
+  }
+
+  function openDetails(game, originEl) {
+    if (!game) return;
+    open = true;
+    returnFocusTo = originEl || null;
+    const headline = `${game.away.fullName || game.away.name || game.away.abbrev || "Away"} @ ${game.home.fullName || game.home.name || game.home.abbrev || "Home"}`;
+    titleEl.textContent = headline;
+    body.replaceChildren(renderGameDetails(game));
+    sheet.classList.add("open");
+    backdrop.classList.add("open");
+    sheet.setAttribute("aria-hidden", "false");
+    sheet.focus();
+  }
+
+  function closeDetails() {
+    if (!open) return;
+    open = false;
+    sheet.classList.remove("open");
+    backdrop.classList.remove("open");
+    sheet.setAttribute("aria-hidden", "true");
+    if (returnFocusTo && typeof returnFocusTo.focus === "function") {
+      returnFocusTo.focus();
+    }
+    returnFocusTo = null;
+  }
+
+  // Delegate clicks on rendered game cards (works across re-renders without
+  // re-wiring listeners). Cards carry data-nhl-bucket / data-nhl-index that
+  // resolve back to the cached payload in _nhlGamesByBucket.
+  document.getElementById("nhl").addEventListener("click", (e) => {
+    const target = e.target.closest("[data-nhl-bucket][data-nhl-index]");
+    if (!target) return;
+    const bucket = target.dataset.nhlBucket;
+    const idx = Number(target.dataset.nhlIndex);
+    const list = _nhlGamesByBucket[bucket];
+    const game = list && list[idx];
+    if (game) openDetails(game, target);
+  });
+
+  // Keyboard activation for the role="button" cards: Enter / Space behave
+  // like a click. Space is preventDefault'd so the page doesn't scroll.
+  document.getElementById("nhl").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const target = e.target.closest("[data-nhl-bucket][data-nhl-index]");
+    if (!target) return;
+    e.preventDefault();
+    const bucket = target.dataset.nhlBucket;
+    const idx = Number(target.dataset.nhlIndex);
+    const list = _nhlGamesByBucket[bucket];
+    const game = list && list[idx];
+    if (game) openDetails(game, target);
+  });
+
+  closeBtn.addEventListener("click", closeDetails);
+  backdrop.addEventListener("click", closeDetails);
+
+  document.addEventListener("keydown", (e) => {
+    if (!open) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeDetails();
+      return;
+    }
+    // Focus trap: keep Tab / Shift+Tab cycling within the modal's focusable
+    // elements while open. The sheet itself is tabindex=-1 (programmatic focus
+    // only), so we restrict the cycle to its descendants plus a fallback to
+    // the close button.
+    if (e.key !== "Tab") return;
+    const focusables = focusableElements();
+    if (focusables.length === 0) {
+      e.preventDefault();
+      closeBtn.focus();
+      return;
+    }
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    const active = document.activeElement;
+    // If focus has somehow escaped the modal (e.g. the sheet itself, or a
+    // background element), pull it back to the first focusable.
+    if (!sheet.contains(active)) {
+      e.preventDefault();
+      first.focus();
+      return;
+    }
+    if (e.shiftKey && active === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  });
+}
+
 const NHL_TITLES = { today: "NHL Scores", yesterday: "Yesterday" };
 let nhlRotationMs = 10000;
 let nhlRotator = null;
@@ -324,9 +605,9 @@ async function refreshNHL() {
       showError("nhl", data.error, ".view-nhl-today");
       return;
     }
-    renderNHL(data.today?.games, "#nhl .view-nhl-today", "No games today.");
+    renderNHL(data.today?.games, "#nhl .view-nhl-today", "No games today.", "today");
     if (data.yesterday) {
-      renderNHL(data.yesterday.games, "#nhl .view-nhl-yesterday", "No games yesterday.");
+      renderNHL(data.yesterday.games, "#nhl .view-nhl-yesterday", "No games yesterday.", "yesterday");
     }
     const canRotate = !!(data.yesterday && !data.hasLiveToday);
     nhlRotator.setViews(canRotate ? ["today", "yesterday"] : ["today"]);
@@ -356,6 +637,14 @@ function wxLabel(code) {
 const fmtNum = (v, suffix = "") =>
   (v == null || Number.isNaN(v)) ? "—" : `${Math.round(v)}${suffix}`;
 
+// Build a Windy.com URL for the given lat/lon. Windy accepts `?<lat>,<lon>,<zoom>`
+// directly with no account/API key, supports any coordinates worldwide, and
+// shows a rich detailed-forecast UI — a good "more weather info" target.
+function windyUrl(lat, lon) {
+  if (typeof lat !== "number" || typeof lon !== "number") return "";
+  return `https://www.windy.com/?${lat},${lon},9`;
+}
+
 function renderWeather(data) {
   const labelEl = document.getElementById("weather-label");
   labelEl.textContent = data.label || "";
@@ -381,28 +670,91 @@ function renderWeather(data) {
     return d.toLocaleDateString([], { weekday: "short" });
   };
 
-  el.innerHTML = `
-    <div class="wx-hero">
-      <div class="wx-hero-icon">${curIcon}</div>
-      <div class="wx-hero-main">
-        <div class="wx-temp">${fmtNum(cur.temperature_2m, tempUnit)}</div>
-        <div class="wx-condition">${curDesc}</div>
-        <div class="wx-meta">
-          <span>Wind ${fmtNum(cur.wind_speed_10m)} ${windUnit}</span>
-          <span>Humidity ${fmtNum(cur.relative_humidity_2m, "%")}</span>
-        </div>
-      </div>
-    </div>
-    <div class="wx-daily">
-      ${days.map((d, i) => `
-        <div class="wx-day">
-          <div class="wx-day-label">${dayLabel(d.date, i)}</div>
-          <div class="wx-day-icon">${d.icon}</div>
-          <div class="wx-day-range"><span class="wx-min">${fmtNum(d.min, "°")}</span> ${fmtNum(d.max, "°")}</div>
-        </div>
-      `).join("")}
-    </div>
-  `;
+  // Wrap the weather view content in an <a> so the entire view is clickable
+  // and right-click-friendly. Only this view (.view-weather) gets the link —
+  // the calendar/clock/countdown views in the same panel are left untouched.
+  // Build via DOM APIs (createElement / textContent / appendChild) instead of
+  // innerHTML — the upstream weather payload comes from a third-party API
+  // (Open-Meteo) and should be treated as untrusted input. See PR #13 for the
+  // same pattern applied to the NHL details modal.
+  const link = safeUrl(windyUrl(data.latitude, data.longitude));
+  let wrapper;
+  if (link) {
+    wrapper = document.createElement("a");
+    wrapper.className = "wx-link";
+    wrapper.href = link;
+    wrapper.target = "_blank";
+    wrapper.rel = "noopener noreferrer";
+    wrapper.title = "Open detailed forecast on Windy.com";
+  } else {
+    wrapper = document.createElement("div");
+    wrapper.className = "wx-link";
+  }
+
+  const hero = document.createElement("div");
+  hero.className = "wx-hero";
+
+  const heroIcon = document.createElement("div");
+  heroIcon.className = "wx-hero-icon";
+  heroIcon.textContent = curIcon;
+  hero.appendChild(heroIcon);
+
+  const heroMain = document.createElement("div");
+  heroMain.className = "wx-hero-main";
+
+  const tempEl = document.createElement("div");
+  tempEl.className = "wx-temp";
+  tempEl.textContent = fmtNum(cur.temperature_2m, tempUnit);
+  heroMain.appendChild(tempEl);
+
+  const condEl = document.createElement("div");
+  condEl.className = "wx-condition";
+  condEl.textContent = curDesc;
+  heroMain.appendChild(condEl);
+
+  const metaEl = document.createElement("div");
+  metaEl.className = "wx-meta";
+  const windSpan = document.createElement("span");
+  windSpan.textContent = `Wind ${fmtNum(cur.wind_speed_10m)} ${windUnit}`;
+  metaEl.appendChild(windSpan);
+  const humSpan = document.createElement("span");
+  humSpan.textContent = `Humidity ${fmtNum(cur.relative_humidity_2m, "%")}`;
+  metaEl.appendChild(humSpan);
+  heroMain.appendChild(metaEl);
+
+  hero.appendChild(heroMain);
+  wrapper.appendChild(hero);
+
+  const dailyEl = document.createElement("div");
+  dailyEl.className = "wx-daily";
+  days.forEach((d, i) => {
+    const dayEl = document.createElement("div");
+    dayEl.className = "wx-day";
+
+    const dayLabelEl = document.createElement("div");
+    dayLabelEl.className = "wx-day-label";
+    dayLabelEl.textContent = dayLabel(d.date, i);
+    dayEl.appendChild(dayLabelEl);
+
+    const dayIconEl = document.createElement("div");
+    dayIconEl.className = "wx-day-icon";
+    dayIconEl.textContent = d.icon;
+    dayEl.appendChild(dayIconEl);
+
+    const rangeEl = document.createElement("div");
+    rangeEl.className = "wx-day-range";
+    const minSpan = document.createElement("span");
+    minSpan.className = "wx-min";
+    minSpan.textContent = fmtNum(d.min, "°");
+    rangeEl.appendChild(minSpan);
+    rangeEl.appendChild(document.createTextNode(` ${fmtNum(d.max, "°")}`));
+    dayEl.appendChild(rangeEl);
+
+    dailyEl.appendChild(dayEl);
+  });
+  wrapper.appendChild(dailyEl);
+
+  el.replaceChildren(wrapper);
 }
 
 async function refreshWeather() {
@@ -705,6 +1057,7 @@ async function start() {
   setInterval(refreshUpdatedLabels, 5 * 1000);
 
   setupDebugOverlay();
+  setupGameDetails();
   watchVersion();
 }
 
@@ -754,14 +1107,15 @@ function renderDebugFields(data) {
     : '<span style="color:var(--text-muted)">(empty)</span>';
 
   const ghCommitUrl = `${GITHUB_REPO_URL}/commit/${encodeURIComponent(data.version)}`;
+  const pyDocsUrl = `https://docs.python.org/release/${encodeURIComponent(data.pythonVersion)}/`;
 
   return `<dl>
     <dt>SHA</dt><dd class="mono"><a href="${escapeHtml(ghCommitUrl)}" target="_blank" rel="noopener">${escapeHtml(data.versionShort)}</a> <a href="${escapeHtml(ghCommitUrl)}" target="_blank" rel="noopener" style="color:var(--text-muted)">(${escapeHtml(data.version)})</a></dd>
     <dt>Latest commit</dt><dd>${commit}</dd>
     <dt>Server uptime</dt><dd><span id="debug-uptime">${uptime}</span></dd>
     <dt>Viewport</dt><dd>${window.innerWidth}×${window.innerHeight}</dd>
-    <dt>User agent</dt><dd>${escapeHtml(navigator.userAgent)}</dd>
-    <dt>Python</dt><dd>${escapeHtml(data.pythonVersion)}</dd>
+    <dt>User agent</dt><dd id="debug-ua"></dd>
+    <dt>Python</dt><dd><a href="${escapeHtml(pyDocsUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(data.pythonVersion)}</a></dd>
     <dt>Platform</dt><dd>${escapeHtml(data.platform)}</dd>
     <dt>RSS feeds</dt><dd>${data.rssFeedCount}</dd>
     <dt>Calendar URLs</dt><dd>${data.calendarUrlCount}</dd>
@@ -770,6 +1124,43 @@ function renderDebugFields(data) {
     <dt>Update log</dt><dd><button class="debug-action" data-debug-action="log-update">view ›</button></dd>
     <dt>Force update</dt><dd><button class="debug-action danger" data-debug-action="update">run</button></dd>
   </dl>`;
+}
+
+// Populate the User agent <dd> with structured fields (when navigator.userAgentData
+// is available) plus the raw UA string as a clickable link to a parsing site.
+// Uses DOM APIs (textContent / setAttribute) rather than innerHTML — the UA
+// string comes from navigator but is treated as untrusted text.
+function populateUserAgent(container) {
+  if (!container) return;
+  while (container.firstChild) container.removeChild(container.firstChild);
+
+  const uaData = navigator.userAgentData;
+  if (uaData) {
+    const parts = [];
+    if (Array.isArray(uaData.brands) && uaData.brands.length) {
+      const brands = uaData.brands
+        .filter(b => b && b.brand && !/Not.?A.?Brand/i.test(b.brand))
+        .map(b => b.version ? `${b.brand} ${b.version}` : b.brand);
+      if (brands.length) parts.push(brands.join(", "));
+    }
+    if (uaData.platform) parts.push(uaData.platform);
+    parts.push(uaData.mobile ? "mobile" : "desktop");
+
+    if (parts.length) {
+      const summary = document.createElement("div");
+      summary.textContent = parts.join(" • ");
+      container.appendChild(summary);
+    }
+  }
+
+  const link = document.createElement("a");
+  link.textContent = navigator.userAgent;
+  link.setAttribute("href", "https://www.whatismybrowser.com/detect/what-is-my-user-agent");
+  link.setAttribute("target", "_blank");
+  link.setAttribute("rel", "noopener noreferrer");
+  link.setAttribute("title", "Open user-agent parser in a new tab");
+  link.className = "mono";
+  container.appendChild(link);
 }
 
 function renderDebugLog(title, data) {
@@ -826,6 +1217,7 @@ function setupDebugOverlay() {
       if (data.error) throw new Error(data.error);
       serverStartedAt = data.serverStartedAt;
       body.innerHTML = renderDebugFields(data);
+      populateUserAgent(document.getElementById("debug-ua"));
       if (!tickTimer) tickTimer = setInterval(tick, 1000);
     } catch (e) {
       body.innerHTML = `<p style="color: var(--live)">Failed to load debug info: ${escapeHtml(e.message)}</p>`;
