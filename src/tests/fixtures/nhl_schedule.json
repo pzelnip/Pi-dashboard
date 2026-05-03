@@ -5,6 +5,7 @@
       "games": [
         {
           "id": 1,
+          "gameType": 3,
           "gameState": "LIVE",
           "startTimeUTC": "2026-04-22T01:00:00Z",
           "homeTeam": {
@@ -22,6 +23,8 @@
           "periodDescriptor": {"number": 2, "periodType": "REG"},
           "clock": {"timeRemaining": "08:32", "inIntermission": false},
           "seriesStatus": {
+            "round": 2,
+            "seriesAbbrev": "R2",
             "topSeedTeamAbbrev": "EDM",
             "topSeedWins": 2,
             "bottomSeedTeamAbbrev": "VAN",
@@ -32,6 +35,7 @@
         },
         {
           "id": 2,
+          "gameType": 2,
           "gameState": "FINAL",
           "startTimeUTC": "2026-04-21T23:00:00Z",
           "homeTeam": {
@@ -51,6 +55,7 @@
         },
         {
           "id": 3,
+          "gameType": 2,
           "gameState": "FUT",
           "startTimeUTC": "2026-04-22T03:00:00Z",
           "homeTeam": {
@@ -75,6 +80,7 @@
       "games": [
         {
           "id": 99,
+          "gameType": 2,
           "gameState": "FUT",
           "startTimeUTC": "2026-04-23T01:00:00Z",
           "homeTeam": {"abbrev": "BOS", "commonName": {"default": "Bruins"}, "score": 0},

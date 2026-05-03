@@ -283,6 +283,7 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.") {
     <div class="game ${stateCls}">
       <div class="game-meta">
         ${pillFor(g)}
+        ${g.playoffRound ? `<span class="series-tag round-tag">R${escapeHtml(String(g.playoffRound))}</span>` : ""}
         ${g.seriesText ? `<span class="series-tag">${escapeHtml(g.seriesText)}</span>` : ""}
       </div>
       <div class="game-body">
