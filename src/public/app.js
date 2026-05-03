@@ -268,23 +268,19 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.") {
     </div>`;
   };
 
-  const roundEmoji = round => {
-    switch (round) {
-      case 1: return { icon: "\u{1F949}", label: "Round 1" };
-      case 2: return { icon: "\u{1F948}", label: "Round 2" };
-      case 3: return { icon: "\u{1F947}", label: "Conference Final" };
-      case 4: return { icon: "\u{1F3C6}", label: "Stanley Cup Final" };
-      default: return null;
-    }
+  const ROUND_LABELS = {
+    1: "Round 1",
+    2: "Round 2",
+    3: "Conference Final",
+    4: "Stanley Cup Final",
   };
 
   const renderRoundBadge = round => {
     const r = Number(round);
-    if (!Number.isInteger(r)) return "";
-    const info = roundEmoji(r);
-    if (!info) return "";
-    const label = escapeHtml(info.label);
-    return `<span class="series-tag round-tag" role="img" aria-label="${label}" title="${label}"><span aria-hidden="true">${info.icon}</span></span>`;
+    if (!Number.isInteger(r) || r < 1 || r > 4) return "";
+    const dots = "●".repeat(r) + "○".repeat(4 - r);
+    const label = escapeHtml(ROUND_LABELS[r]);
+    return `<span class="series-tag round-tag" role="img" aria-label="${label}" title="${label}"><span aria-hidden="true">${dots}</span></span>`;
   };
 
   const renderGame = g => {

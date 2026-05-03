@@ -285,9 +285,9 @@ html, body {
 }
 .series-tag.round-tag {
   padding: 2px 8px;
-  font-size: 1.25em;
+  font-family: monospace;
+  letter-spacing: 0.15em;
   line-height: 1;
-  letter-spacing: 0;
 }
 
 @keyframes pulse {
