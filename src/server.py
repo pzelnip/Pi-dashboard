@@ -33,6 +33,11 @@ PUBLIC_DIR = os.path.join(HERE, "public")
 PUBLIC_REAL = os.path.realpath(PUBLIC_DIR)
 PORT = int(os.environ.get("DASHBOARD_PORT", "8080"))
 
+# Repo root is the parent of src/. The update script and its log live there:
+# update-dashboard.sh is admin/deployment tooling (not Pi-runtime code), and
+# the Pi cron writes update.log next to the script per deployment.md.
+REPO_ROOT = os.path.dirname(HERE)
+
 
 def _current_version() -> str:
     try:
@@ -67,8 +72,8 @@ SERVER_STARTED_AT = time.time()
 # Held while update-dashboard.sh is running so concurrent POST /api/update
 # requests don't fan out into multiple git pull / restart attempts.
 _update_lock = threading.Lock()
-UPDATE_LOG_PATH = os.path.join(HERE, "update.log")
-UPDATE_SCRIPT_PATH = os.path.join(HERE, "update-dashboard.sh")
+UPDATE_LOG_PATH = os.path.join(REPO_ROOT, "update.log")
+UPDATE_SCRIPT_PATH = os.path.join(REPO_ROOT, "update-dashboard.sh")
 
 
 # ---------- HTTP handler ----------
@@ -370,7 +375,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             # frontend's /api/version poll picks up the new SHA and reloads.
             subprocess.Popen(
                 ["/usr/bin/env", "bash", UPDATE_SCRIPT_PATH, "--force"],
-                cwd=HERE,
+                cwd=REPO_ROOT,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,

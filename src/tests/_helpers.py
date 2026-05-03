@@ -1,4 +1,4 @@
-"""Shared test helpers: import server.py from the worktree root and load fixtures."""
+"""Shared test helpers: put src/ on sys.path so tests can import the server modules and load fixtures."""
 
 import os
 import sys

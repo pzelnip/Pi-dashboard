@@ -2,8 +2,11 @@
 
 ## Overview
 
-The Pi runs a Python HTTP server ([server.py](../server.py)) on port 8080,
-displayed via Chromium in kiosk mode.
+The Pi runs a Python HTTP server ([src/server.py](../src/server.py)) on port
+8080, displayed via Chromium in kiosk mode. All Pi-runtime code (server,
+parsers, config, static frontend) lives under [`src/`](../src/); deployment
+tooling (`update-dashboard.sh`) stays at the repo root, and docs (this file
+included) live in [`docs/`](.).
 
 - **URL:** <http://localhost:8080>
 - **Kiosk command:** `chromium --kiosk http://localhost:8080`
@@ -22,7 +25,9 @@ displayed via Chromium in kiosk mode.
 
 | File | Purpose |
 | --- | --- |
-| `server.py` | HTTP server serving the dashboard |
+| `src/server.py` | HTTP server serving the dashboard |
+| `src/public/` | Static frontend (HTML/CSS/JS) served by the kiosk |
+| `src/config.json` | Dashboard config (rotation, weather, NHL, RSS, calendar) |
 | `update-dashboard.sh` | Poll + pull + restart script (run by cron) |
 | `update.log` | Output of the cron-driven update script |
 
@@ -42,7 +47,7 @@ Wants=network-online.target
 Type=simple
 User=pi
 WorkingDirectory=/home/pi/temp/sandbox/Pi-dashboard
-ExecStart=/usr/bin/python3 /home/pi/temp/sandbox/Pi-dashboard/server.py
+ExecStart=/usr/bin/python3 /home/pi/temp/sandbox/Pi-dashboard/src/server.py
 Restart=always
 RestartSec=5
 
@@ -141,4 +146,56 @@ curl http://localhost:8080
 ```bash
 /home/pi/temp/sandbox/Pi-dashboard/update-dashboard.sh
 ```
+
+---
+
+## Migrating an existing Pi to the `src/` layout
+
+The code now lives under `src/`. After pulling the move-to-`src/` change on an
+existing Pi, the systemd service file points at the wrong path and must be
+updated before the service can come back up:
+
+1. Pull the change (cron will do this on its next tick, or run
+   `update-dashboard.sh` manually):
+
+   ```bash
+   /home/pi/temp/sandbox/Pi-dashboard/update-dashboard.sh
+   ```
+
+   The first restart attempt against the new tree will fail because
+   `ExecStart` still points at the old path.
+
+2. Update `/etc/systemd/system/dashboard.service`. Change:
+
+   ```ini
+   ExecStart=/usr/bin/python3 /home/pi/temp/sandbox/Pi-dashboard/server.py
+   ```
+
+   to:
+
+   ```ini
+   ExecStart=/usr/bin/python3 /home/pi/temp/sandbox/Pi-dashboard/src/server.py
+   ```
+
+   `WorkingDirectory` stays the repo root (so `git rev-parse HEAD` and
+   `update-dashboard.sh` keep working).
+
+3. Reload systemd and restart:
+
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl restart dashboard.service
+   systemctl status dashboard.service
+   ```
+
+4. If you have a `config.local.json`, move it from the repo root into `src/`:
+
+   ```bash
+   mv /home/pi/temp/sandbox/Pi-dashboard/config.local.json \
+      /home/pi/temp/sandbox/Pi-dashboard/src/config.local.json
+   ```
+
+5. Cron entry, sudo config, kiosk autostart command, and `update-dashboard.sh`
+   itself need no changes — `update.log` and `update-dashboard.sh` still live
+   at the repo root.
 
