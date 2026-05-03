@@ -281,14 +281,6 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
     3: "Conference Final",
     4: "Stanley Cup Final",
   };
-  const ROUND_NUMERALS = { 1: "I", 2: "II", 3: "III", 4: "IV" };
-
-  const renderRoundBadge = round => {
-    const r = Number(round);
-    if (!Number.isInteger(r) || r < 1 || r > 4) return "";
-    const label = escapeHtml(ROUND_LABELS[r]);
-    return `<span class="series-tag round-tag" aria-label="${label}" title="${label}">${ROUND_NUMERALS[r]}</span>`;
-  };
 
   const renderGame = (g, idx) => {
     let awayCls = "", homeCls = "";
@@ -301,14 +293,18 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
       else if (g.home.score > g.away.score) homeCls = "leading";
     }
     const stateCls = isLive(g) ? "is-live" : isFinal(g) ? "is-final" : "";
+    const r = Number(g.playoffRound);
+    const hasRound = Number.isInteger(r) && r >= 1 && r <= 4;
+    const roundLabel = hasRound ? escapeHtml(ROUND_LABELS[r]) : "";
+    const roundAttr = hasRound ? ` data-playoff-round="${r}"` : "";
+    const matchupLabel = `${escapeHtml(g.away.fullName || g.away.name || g.away.abbrev || "away")} at ${escapeHtml(g.home.fullName || g.home.name || g.home.abbrev || "home")}`;
     const clickAttrs = bucket
-      ? `class="game game-clickable ${stateCls}" tabindex="0" role="button" aria-label="Show details for ${escapeHtml(g.away.fullName || g.away.name || g.away.abbrev || "away")} at ${escapeHtml(g.home.fullName || g.home.name || g.home.abbrev || "home")}" data-nhl-bucket="${escapeHtml(bucket)}" data-nhl-index="${idx}"`
-      : `class="game ${stateCls}"`;
+      ? `class="game game-clickable ${stateCls}" tabindex="0" role="button" aria-label="Show details for ${matchupLabel}${hasRound ? `, ${roundLabel}` : ""}" data-nhl-bucket="${escapeHtml(bucket)}" data-nhl-index="${idx}"${hasRound ? ` title="${roundLabel}"` : ""}${roundAttr}`
+      : `class="game ${stateCls}"${hasRound ? ` aria-label="${roundLabel}" title="${roundLabel}"` : ""}${roundAttr}`;
     return `
     <div ${clickAttrs}>
       <div class="game-meta">
         ${pillFor(g)}
-        ${renderRoundBadge(g.playoffRound)}
         ${g.seriesText ? `<span class="series-tag">${escapeHtml(g.seriesText)}</span>` : ""}
       </div>
       <div class="game-body">
