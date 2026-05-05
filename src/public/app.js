@@ -472,6 +472,10 @@ function renderGameDetails(g) {
   };
 
   const matchup = el("div", "gd-matchup");
+  // Drive the soft team-color fade in CSS via custom props so each game
+  // renders its own palette without inline gradients.
+  matchup.style.setProperty("--gd-team-color-away", _teamColor(g.away.abbrev));
+  matchup.style.setProperty("--gd-team-color-home", _teamColor(g.home.abbrev));
   matchup.appendChild(buildTeamBlock(g.away, "away"));
   matchup.appendChild(buildScoreStack());
   matchup.appendChild(buildTeamBlock(g.home, "home"));

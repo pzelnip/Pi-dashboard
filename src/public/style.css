@@ -909,9 +909,25 @@ a.wx-link:focus-visible {
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 16px;
-  margin-bottom: 18px;
-  padding-bottom: 18px;
+  /* Negative side margin + matching side padding lets the fade bleed to the
+     modal edges while leaving the team-block layout unchanged. */
+  margin: 0 -18px 18px;
+  padding: 0 18px 18px;
   border-bottom: 1px solid var(--border);
+  /* Soft team-color fade: each team's primary color emanates from its side
+     of the header and falls off toward the center. Colors are set inline as
+     --gd-team-color-{away,home} CSS vars from _TEAM_COLORS. */
+  background:
+    radial-gradient(
+      ellipse 70% 90% at 0% 50%,
+      color-mix(in srgb, var(--gd-team-color-away, transparent) 22%, transparent) 0%,
+      transparent 75%
+    ),
+    radial-gradient(
+      ellipse 70% 90% at 100% 50%,
+      color-mix(in srgb, var(--gd-team-color-home, transparent) 22%, transparent) 0%,
+      transparent 75%
+    );
 }
 .gd-team {
   display: flex;
