@@ -156,7 +156,6 @@ def _series_info(s: dict | None) -> dict | None:
         "title": s.get("seriesTitle", ""),
         "abbrev": s.get("seriesAbbrev", ""),
         "letter": s.get("seriesLetter", ""),
-        "gameNumber": s.get("gameNumberOfSeries"),
         "neededToWin": s.get("neededToWin", 4),
         "topSeedAbbrev": s.get("topSeedTeamAbbrev", ""),
         "topSeedWins": s.get("topSeedWins", 0),

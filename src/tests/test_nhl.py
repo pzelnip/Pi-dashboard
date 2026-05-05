@@ -377,7 +377,6 @@ class SeriesInfoTests(unittest.TestCase):
         self.assertEqual(result["topSeedWins"], 2)
         self.assertEqual(result["bottomSeedAbbrev"], "VAN")
         self.assertEqual(result["bottomSeedWins"], 1)
-        self.assertEqual(result["gameNumber"], 4)
 
 
 class AbsoluteUrlTests(unittest.TestCase):
@@ -480,7 +479,6 @@ class FetchNhlTests(unittest.TestCase):
         )
         self.assertEqual(edm["series"]["round"], 2)
         self.assertEqual(edm["series"]["title"], "2nd Round")
-        self.assertEqual(edm["series"]["gameNumber"], 4)
         self.assertEqual(
             edm["seriesUrl"],
             "https://www.nhl.com/schedule/playoff-series/2026/series-e/oilers-vs-canucks",

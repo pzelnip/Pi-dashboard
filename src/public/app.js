@@ -396,9 +396,6 @@ function renderGameDetails(g) {
   if (g.series) {
     const seriesWrap = document.createDocumentFragment();
     seriesWrap.appendChild(textNode(g.series.title || ""));
-    if (g.series.gameNumber) {
-      seriesWrap.appendChild(textNode(` · Game ${String(g.series.gameNumber)}`));
-    }
     if (g.seriesText) {
       seriesWrap.appendChild(textNode(` · ${g.seriesText}`));
     }
