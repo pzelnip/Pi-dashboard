@@ -325,7 +325,17 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
 
 // ---------- NHL game details modal ----------
 
-const COUNTRY_FLAG = { US: "US", CA: "CA" };
+// Convert a 2-letter ISO country code to a flag emoji using Unicode regional
+// indicator symbols. Each ASCII A-Z maps to U+1F1E6..U+1F1FF; a 2-char code
+// "XY" becomes the two regional-indicator codepoints, which most platforms
+// render as a single flag glyph. Pure function, no static map needed.
+function countryFlag(code) {
+  if (typeof code !== "string" || code.length !== 2) return "";
+  const upper = code.toUpperCase();
+  if (!/^[A-Z]{2}$/.test(upper)) return "";
+  const A = 0x1F1E6;
+  return String.fromCodePoint(A + upper.charCodeAt(0) - 65, A + upper.charCodeAt(1) - 65);
+}
 
 const GD_ROUND_LABELS = {
   1: "Round 1",
@@ -558,16 +568,34 @@ function renderGameDetails(g) {
     frag.appendChild(seriesWrap);
   }
 
-  // ---- Other detail rows preserved as <dl> (start, game type, odds) ----
-  const rows = [];
-
-  // Only show start time as a dedicated row when not scheduled or pre-game
-  // (the scheduled / pre-game pill in the header already shows it). For
-  // live/final games it's still useful context (when did this thing start).
-  if (startLabel && !isScheduled && !isPregame) {
-    rows.push(["Start", textNode(startLabel)]);
+  // ---- Start time + game type, combined on a single centered line ----
+  // On desktop these sit side-by-side separated by a "·"; on narrow widths the
+  // CSS stacks them. Only shows the start time as a dedicated entry when not
+  // scheduled or pre-game (the scheduled / pre-game pill in the header already
+  // shows it).
+  const showStart = startLabel && !isScheduled && !isPregame;
+  if (showStart || g.gameTypeLabel) {
+    const metaRow = el("div", "gd-meta-row");
+    if (showStart) {
+      const startSpan = el("span", "gd-meta-item");
+      startSpan.appendChild(el("span", "gd-meta-label", "Start"));
+      startSpan.appendChild(textNode(" "));
+      startSpan.appendChild(el("span", "gd-meta-value", startLabel));
+      metaRow.appendChild(startSpan);
+    }
+    if (showStart && g.gameTypeLabel) {
+      metaRow.appendChild(el("span", "gd-meta-sep", "·"));
+    }
+    if (g.gameTypeLabel) {
+      const typeSpan = el("span", "gd-meta-item");
+      typeSpan.appendChild(el("span", "gd-meta-value", g.gameTypeLabel));
+      metaRow.appendChild(typeSpan);
+    }
+    frag.appendChild(metaRow);
   }
-  if (g.gameTypeLabel) rows.push(["Game type", textNode(g.gameTypeLabel)]);
+
+  // ---- Other detail rows preserved as <dl> (odds) ----
+  const rows = [];
 
   if (g.away.odds || g.home.odds) {
     const oddsWrap = el("div", "gd-odds");
@@ -629,7 +657,11 @@ function renderGameDetails(g) {
   // ---- Broadcasts row (with TV icon) ----
   // Pulled out of the old combined venue/broadcasts line so the user can
   // scan "where to watch" at a glance. Each broadcast is still an anchor
-  // when the server provides a URL, plain span otherwise.
+  // when the server provides a URL, plain span otherwise. Country is
+  // rendered as a flag emoji (via `countryFlag`) when the code is a
+  // recognizable ISO alpha-2; falls back to the raw country text otherwise.
+  // The original country code is preserved on each broadcast's `aria-label`
+  // since flag-emoji accessibility varies between AT/platforms.
   let broadcastsRow = null;
   const broadcasts = g.broadcasts || [];
   if (broadcasts.length) {
@@ -639,6 +671,7 @@ function renderGameDetails(g) {
     broadcastsRow.appendChild(tvIcon);
     broadcasts.forEach((b, i) => {
       if (i > 0) broadcastsRow.appendChild(el("span", "gd-meta-sep", "·"));
+      const network = b.network || "";
       let node;
       if (b.url) {
         node = document.createElement("a");
@@ -646,14 +679,25 @@ function renderGameDetails(g) {
         node.href = b.url;
         node.target = "_blank";
         node.rel = "noopener noreferrer";
-        node.textContent = b.network || "";
+        node.textContent = network;
       } else {
-        node = el("span", "gd-broadcast", b.network || "");
+        node = el("span", "gd-broadcast", network);
       }
-      const country = COUNTRY_FLAG[b.country] || b.country || "";
-      if (country) {
+      const country = b.country || "";
+      const flag = countryFlag(country);
+      if (flag) {
+        node.appendChild(textNode(" "));
+        node.appendChild(el("span", "gd-country", flag));
+      } else if (country) {
+        // Unknown / non-ISO code — fall back to the raw text so info isn't lost.
         node.appendChild(textNode(" "));
         node.appendChild(el("span", "gd-country", country));
+      }
+      // Preserve the country code for screen readers since flag-emoji a11y
+      // varies between AT/platforms. Sighted users see network + flag.
+      if (country) {
+        const label = network ? `${network}, ${country}` : country;
+        node.setAttribute("aria-label", label);
       }
       broadcastsRow.appendChild(node);
     });
