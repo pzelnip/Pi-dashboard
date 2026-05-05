@@ -412,13 +412,26 @@ function renderGameDetails(g) {
   if ((g.broadcasts || []).length) {
     const list = el("div", "gd-broadcasts");
     g.broadcasts.forEach(b => {
-      const span = el("span", "gd-broadcast", b.network || "");
+      // When the server provides a homepage URL for the network, render the
+      // network name as an anchor so kiosk viewers can click through to watch.
+      // Otherwise fall back to a plain span (preserves prior behavior).
+      let node;
+      if (b.url) {
+        node = document.createElement("a");
+        node.className = "gd-broadcast";
+        node.href = b.url;
+        node.target = "_blank";
+        node.rel = "noopener noreferrer";
+        node.textContent = b.network || "";
+      } else {
+        node = el("span", "gd-broadcast", b.network || "");
+      }
       const country = COUNTRY_FLAG[b.country] || b.country || "";
       if (country) {
-        span.appendChild(textNode(" "));
-        span.appendChild(el("span", "gd-country", country));
+        node.appendChild(textNode(" "));
+        node.appendChild(el("span", "gd-country", country));
       }
-      list.appendChild(span);
+      list.appendChild(node);
     });
     rows.push(["Broadcasts", list]);
   }

@@ -115,12 +115,30 @@ def _series_text(s: dict | None) -> str:
     return f"Game {game_num} (tied {top_w}-{bot_w})"
 
 
+# Map (network, country) -> homepage URL for the network's hockey coverage.
+# Keyed on the tuple (not just network name) so unrelated same-named networks
+# in different countries don't collide. Networks not in this map render as
+# plain text in the modal (the frontend branches on `url` being None).
+_BROADCAST_URLS: dict[tuple[str, str], str] = {
+    ("ESPN", "US"): "https://www.espn.com/nhl/",
+    ("TNT", "US"): "https://www.tntdrama.com/nhl",
+    ("truTV", "US"): "https://www.trutv.com/",
+    ("MAX", "US"): "https://www.max.com/",
+    ("CBC", "CA"): "https://www.cbc.ca/sports/hockey",
+    ("SN", "CA"): "https://www.sportsnet.ca/hockey/nhl/",
+    ("TVAS", "CA"): "https://www.tvasports.ca/",
+    ("CITY", "CA"): "https://www.citytv.com/",
+}
+
+
 def _broadcasts(game: dict) -> list[dict]:
-    """Distill tvBroadcasts to {network, country, market} entries.
+    """Distill tvBroadcasts to {network, country, market, url} entries.
 
     The upstream list often contains sequence/id internals that aren't useful
     to the kiosk viewer; we keep only the human-meaningful fields and dedupe
-    on (network, country) so the panel doesn't show "TNT" three times.
+    on (network, country) so the panel doesn't show "TNT" three times. Each
+    entry gets a `url` looked up from `_BROADCAST_URLS`; networks we don't
+    know about get `None` so the frontend can fall back to plain text.
     """
     raw = game.get("tvBroadcasts") or []
     out = []
@@ -138,6 +156,7 @@ def _broadcasts(game: dict) -> list[dict]:
             "network": network,
             "country": country,
             "market": b.get("market", ""),
+            "url": _BROADCAST_URLS.get(key),
         })
     return out
 
