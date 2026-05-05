@@ -321,7 +321,17 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
 
 // ---------- NHL game details modal ----------
 
-const COUNTRY_FLAG = { US: "US", CA: "CA" };
+// Convert a 2-letter ISO country code to a flag emoji using Unicode regional
+// indicator symbols. Each ASCII A-Z maps to U+1F1E6..U+1F1FF; a 2-char code
+// "XY" becomes the two regional-indicator codepoints, which most platforms
+// render as a single flag glyph. Pure function, no static map needed.
+function countryFlag(code) {
+  if (typeof code !== "string" || code.length !== 2) return "";
+  const upper = code.toUpperCase();
+  if (!/^[A-Z]{2}$/.test(upper)) return "";
+  const A = 0x1F1E6;
+  return String.fromCodePoint(A + upper.charCodeAt(0) - 65, A + upper.charCodeAt(1) - 65);
+}
 
 // Build the modal contents using DOM APIs (textContent + appendChild) rather
 // than HTML-string concatenation. Team names, venue, broadcaster strings,
@@ -443,6 +453,7 @@ function renderGameDetails(g) {
       // When the server provides a homepage URL for the network, render the
       // network name as an anchor so kiosk viewers can click through to watch.
       // Otherwise fall back to a plain span (preserves prior behavior).
+      const network = b.network || "";
       let node;
       if (b.url) {
         node = document.createElement("a");
@@ -450,14 +461,25 @@ function renderGameDetails(g) {
         node.href = b.url;
         node.target = "_blank";
         node.rel = "noopener noreferrer";
-        node.textContent = b.network || "";
+        node.textContent = network;
       } else {
-        node = el("span", "gd-broadcast", b.network || "");
+        node = el("span", "gd-broadcast", network);
       }
-      const country = COUNTRY_FLAG[b.country] || b.country || "";
-      if (country) {
+      const country = b.country || "";
+      const flag = countryFlag(country);
+      if (flag) {
+        node.appendChild(textNode(" "));
+        node.appendChild(el("span", "gd-country", flag));
+      } else if (country) {
+        // Unknown / non-ISO code — fall back to the raw text so info isn't lost.
         node.appendChild(textNode(" "));
         node.appendChild(el("span", "gd-country", country));
+      }
+      // Preserve the country code for screen readers since flag-emoji a11y
+      // varies between AT/platforms. Sighted users see network + flag.
+      if (country) {
+        const label = network ? `${network}, ${country}` : country;
+        node.setAttribute("aria-label", label);
       }
       list.appendChild(node);
     });
