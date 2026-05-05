@@ -390,7 +390,21 @@ function renderGameDetails(g) {
   if (startLabel) rows.push(["Start", textNode(startLabel)]);
   if (g.venue) {
     const venueWrap = document.createDocumentFragment();
-    venueWrap.appendChild(textNode(g.venue));
+    // When the server provides a URL (Wikipedia for known arenas, Google
+    // search fallback otherwise), render the venue as an anchor so kiosk
+    // viewers can click through. Plain text when no URL is available.
+    let venueNode;
+    if (g.venueUrl) {
+      venueNode = document.createElement("a");
+      venueNode.href = g.venueUrl;
+      venueNode.target = "_blank";
+      venueNode.rel = "noopener noreferrer";
+      venueNode.textContent = g.venue;
+    } else {
+      venueNode = document.createElement("span");
+      venueNode.textContent = g.venue;
+    }
+    venueWrap.appendChild(venueNode);
     if (g.neutralSite) {
       venueWrap.appendChild(textNode(" "));
       const neutral = el("span", null, "(neutral site)");
