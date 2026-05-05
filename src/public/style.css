@@ -1271,6 +1271,8 @@ a.wx-link:focus-visible {
   /* Stack start + game type on narrow widths so they don't crowd each other. */
   .gd-meta-row {
     flex-direction: column;
+    align-items: center;
+    text-align: center;
     gap: 4px;
   }
   .gd-meta-row .gd-meta-sep {
