@@ -388,6 +388,17 @@ class BroadcastsTests(unittest.TestCase):
         self.assertEqual(result[0]["country"], "US")
         self.assertIsNone(result[0]["url"])
 
+    def test_sn360_resolves_to_sportsnet_url(self):
+        # SN360 is a Sportsnet sub-channel; it should link to the same
+        # landing page as the parent SN entry.
+        game = {"tvBroadcasts": [{"network": "SN360", "countryCode": "CA", "market": "N"}]}
+
+        result = nhl._broadcasts(game)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["network"], "SN360")
+        self.assertEqual(result[0]["url"], "https://www.sportsnet.ca/hockey/nhl/")
+
 
 class SeriesInfoTests(unittest.TestCase):
     def test_returns_none_when_no_series(self):
