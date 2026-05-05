@@ -379,7 +379,14 @@ function renderGameDetails(g) {
   const rows = [];
   const textNode = s => document.createTextNode(String(s));
 
-  if (headlineStatus) rows.push(["Status", textNode(headlineStatus)]);
+  if (headlineStatus) {
+    if (isLive) {
+      const pill = el("span", "status-pill live", headlineStatus);
+      rows.push(["Status", pill]);
+    } else {
+      rows.push(["Status", textNode(headlineStatus)]);
+    }
+  }
   if (startLabel) rows.push(["Start", textNode(startLabel)]);
   if (g.venue) {
     const venueWrap = document.createDocumentFragment();
