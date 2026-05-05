@@ -323,11 +323,25 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
 
 const COUNTRY_FLAG = { US: "US", CA: "CA" };
 
+const GD_ROUND_LABELS = {
+  1: "Round 1",
+  2: "Round 2",
+  3: "Conference Final",
+  4: "Stanley Cup Final",
+};
+
 // Build the modal contents using DOM APIs (textContent + appendChild) rather
 // than HTML-string concatenation. Team names, venue, broadcaster strings,
 // odds, etc. all originate from a third-party API (proxied through our
 // backend) — treat as untrusted and never inject as HTML. Returns a
 // DocumentFragment ready to be swapped into #game-body.
+//
+// Layout (Phase 1 redesign — see GH issue #40):
+//   1. Matchup header: away block | hero score + state pill | home block
+//   2. Series-progress row (playoff games only): label, dots, leader text
+//   3. Detail rows (start time, game type, odds — preserved as <dl>)
+//   4. Muted meta line: venue · broadcast · broadcast · …
+//   5. Footer action buttons: Game Center | Series Page
 function renderGameDetails(g) {
   const frag = document.createDocumentFragment();
 
@@ -337,12 +351,21 @@ function renderGameDetails(g) {
     if (text != null && text !== "") node.textContent = String(text);
     return node;
   };
+  const textNode = s => document.createTextNode(String(s));
 
-  const buildTeamBlock = (t, scoreClass) => {
-    const wrap = el("div", "gd-team");
+  const isLive = g.state === "LIVE" || g.state === "CRIT";
+  const isPregame = g.state === "PRE";
+  const isScheduled = g.state === "FUT" || isPregame;
+  const isFinal = g.state === "OFF" || g.state === "FINAL";
+  const startLabel = g.startTime ? formatTime(g.startTime) : "";
+
+  // ---- Matchup header (logos + names + hero score + state pill) ----
+  const buildTeamBlock = (t, side) => {
+    const wrap = el("div", `gd-team gd-team-${side}`);
     const logoUrl = safeUrl(t.logo);
     if (logoUrl) {
       const img = document.createElement("img");
+      img.className = "gd-team-logo";
       img.src = logoUrl;
       img.alt = "";
       img.onerror = function () { this.remove(); };
@@ -350,105 +373,120 @@ function renderGameDetails(g) {
     }
     const name = el("span", "gd-team-name", t.fullName || t.name || t.abbrev || "");
     if (t.isFavorite) {
-      name.appendChild(document.createTextNode(" "));
+      name.appendChild(textNode(" "));
       const star = el("span", "fav-star", "★");
       star.setAttribute("aria-label", "Favorite team");
       name.appendChild(star);
     }
     wrap.appendChild(name);
     wrap.appendChild(el("span", "gd-team-abbrev", t.abbrev || ""));
-    if (t.score != null) {
-      wrap.appendChild(el("span", `gd-team-score ${scoreClass}`.trim(), String(t.score)));
-    }
     return wrap;
   };
 
-  const isLive = g.state === "LIVE" || g.state === "CRIT";
-  const isFinal = g.state === "OFF" || g.state === "FINAL";
-  const startLabel = g.startTime ? formatTime(g.startTime) : "";
-  const headlineStatus = g.statusText || (isLive ? "Live" : isFinal ? "Final" : startLabel);
+  const buildScoreStack = () => {
+    const stack = el("div", "gd-score-stack");
+    const awayScore = g.away.score != null ? String(g.away.score) : "";
+    const homeScore = g.home.score != null ? String(g.home.score) : "";
+    const showScore = (isLive || isFinal) && (awayScore !== "" || homeScore !== "");
+
+    if (showScore) {
+      const scoreRow = el("div", "gd-score");
+      scoreRow.appendChild(el("span", "gd-score-num gd-score-away", awayScore || "0"));
+      scoreRow.appendChild(el("span", "gd-score-sep", "–"));
+      scoreRow.appendChild(el("span", "gd-score-num gd-score-home", homeScore || "0"));
+      stack.appendChild(scoreRow);
+    } else {
+      // Pre-game / scheduled — show "@" as a quiet visual anchor
+      stack.appendChild(el("div", "gd-score gd-score-vs", "@"));
+    }
+
+    // State pill (live / scheduled / final / pregame). Re-uses existing
+    // .status-pill classes from style.css.
+    let pill = null;
+    if (isLive) {
+      pill = el("span", "status-pill live gd-state-pill", g.statusText || "LIVE");
+    } else if (isFinal) {
+      pill = el("span", "status-pill final gd-state-pill", g.statusText || "Final");
+    } else if (isScheduled) {
+      pill = el("span", "status-pill scheduled gd-state-pill", startLabel || "Scheduled");
+    }
+    if (pill) stack.appendChild(pill);
+    return stack;
+  };
 
   const matchup = el("div", "gd-matchup");
-  matchup.appendChild(buildTeamBlock(g.away, ""));
-  matchup.appendChild(el("div", "gd-vs", "@"));
-  matchup.appendChild(buildTeamBlock(g.home, ""));
+  matchup.appendChild(buildTeamBlock(g.away, "away"));
+  matchup.appendChild(buildScoreStack());
+  matchup.appendChild(buildTeamBlock(g.home, "home"));
   frag.appendChild(matchup);
 
-  // Build the rows as [label, valueNode] pairs. valueNode is a Node so the
-  // caller can never accidentally inject HTML.
-  const rows = [];
-  const textNode = s => document.createTextNode(String(s));
+  // ---- Series progress row (playoff only) ----
+  if (g.series) {
+    const series = g.series;
+    const needed = Number(series.neededToWin) || 4;
+    const totalDots = needed * 2 - 1; // 7 for best-of-4
+    const gameNum = Number(series.gameNumber) || 0;
+    const top = series.topSeedAbbrev || "";
+    const bot = series.bottomSeedAbbrev || "";
+    const topW = Number(series.topSeedWins) || 0;
+    const botW = Number(series.bottomSeedWins) || 0;
+    const round = Number(series.round);
+    const roundLabel = GD_ROUND_LABELS[round] || series.title || "Playoffs";
 
-  if (headlineStatus) {
-    if (isLive) {
-      const pill = el("span", "status-pill live", headlineStatus);
-      rows.push(["Status", pill]);
-    } else {
-      rows.push(["Status", textNode(headlineStatus)]);
+    const seriesWrap = el("div", "gd-series-row");
+
+    const labelWrap = el("div", "gd-series-label");
+    const parts = [roundLabel];
+    if (gameNum) parts.push(`Game ${gameNum}`);
+    parts.push(`Best of ${totalDots}`);
+    labelWrap.appendChild(textNode(parts.join(" · ")));
+    seriesWrap.appendChild(labelWrap);
+
+    const dotsWrap = el("div", "gd-series-dots", null);
+    dotsWrap.setAttribute("role", "img");
+    dotsWrap.setAttribute(
+      "aria-label",
+      gameNum ? `Game ${gameNum} of ${totalDots}` : `Best of ${totalDots}`
+    );
+    for (let i = 1; i <= totalDots; i++) {
+      const cls = i === gameNum ? "gd-series-dot is-current" : "gd-series-dot";
+      dotsWrap.appendChild(el("span", cls));
     }
+    seriesWrap.appendChild(dotsWrap);
+
+    let leaderText;
+    if (top && bot) {
+      if (topW === 0 && botW === 0) {
+        leaderText = "Series tied 0–0";
+      } else if (topW === botW) {
+        leaderText = `Series tied ${topW}–${botW}`;
+      } else if (topW > botW) {
+        leaderText = topW >= needed
+          ? `${top} won ${topW}–${botW}`
+          : `${top} leads ${topW}–${botW}`;
+      } else {
+        leaderText = botW >= needed
+          ? `${bot} won ${botW}–${topW}`
+          : `${bot} leads ${botW}–${topW}`;
+      }
+    }
+    if (leaderText) {
+      seriesWrap.appendChild(el("div", "gd-series-leader", leaderText));
+    }
+
+    frag.appendChild(seriesWrap);
   }
-  if (startLabel) rows.push(["Start", textNode(startLabel)]);
-  if (g.venue) {
-    const venueWrap = document.createDocumentFragment();
-    venueWrap.appendChild(textNode(g.venue));
-    if (g.neutralSite) {
-      venueWrap.appendChild(textNode(" "));
-      const neutral = el("span", null, "(neutral site)");
-      neutral.style.color = "var(--text-muted)";
-      venueWrap.appendChild(neutral);
-    }
-    rows.push(["Venue", venueWrap]);
+
+  // ---- Other detail rows preserved as <dl> (start, game type, odds) ----
+  const rows = [];
+
+  // Only show start time as a dedicated row when not scheduled (the scheduled
+  // pill in the header already shows it). For live/final games it's still
+  // useful context (when did this thing start).
+  if (startLabel && !isScheduled) {
+    rows.push(["Start", textNode(startLabel)]);
   }
   if (g.gameTypeLabel) rows.push(["Game type", textNode(g.gameTypeLabel)]);
-  if (g.series) {
-    const seriesWrap = document.createDocumentFragment();
-    seriesWrap.appendChild(textNode(g.series.title || ""));
-    if (g.seriesText) {
-      seriesWrap.appendChild(textNode(` · ${g.seriesText}`));
-    } else if (g.series.gameNumber) {
-      seriesWrap.appendChild(textNode(` · Game ${String(g.series.gameNumber)}`));
-    }
-    rows.push(["Series", seriesWrap]);
-
-    const top = g.series.topSeedAbbrev;
-    const bot = g.series.bottomSeedAbbrev;
-    const topW = g.series.topSeedWins || 0;
-    const botW = g.series.bottomSeedWins || 0;
-    if (top && bot && (topW > 0 || botW > 0)) {
-      const stateWrap = el("div", "gd-series-state");
-      stateWrap.appendChild(el("span", "gd-series-team", `${top} ${topW}`));
-      stateWrap.appendChild(textNode(" — "));
-      stateWrap.appendChild(el("span", "gd-series-team", `${bot} ${botW}`));
-      rows.push(["Series state", stateWrap]);
-    }
-  }
-
-  if ((g.broadcasts || []).length) {
-    const list = el("div", "gd-broadcasts");
-    g.broadcasts.forEach(b => {
-      // When the server provides a homepage URL for the network, render the
-      // network name as an anchor so kiosk viewers can click through to watch.
-      // Otherwise fall back to a plain span (preserves prior behavior).
-      let node;
-      if (b.url) {
-        node = document.createElement("a");
-        node.className = "gd-broadcast";
-        node.href = b.url;
-        node.target = "_blank";
-        node.rel = "noopener noreferrer";
-        node.textContent = b.network || "";
-      } else {
-        node = el("span", "gd-broadcast", b.network || "");
-      }
-      const country = COUNTRY_FLAG[b.country] || b.country || "";
-      if (country) {
-        node.appendChild(textNode(" "));
-        node.appendChild(el("span", "gd-country", country));
-      }
-      list.appendChild(node);
-    });
-    rows.push(["Broadcasts", list]);
-  }
 
   if (g.away.odds || g.home.odds) {
     const oddsWrap = el("div", "gd-odds");
@@ -464,24 +502,6 @@ function renderGameDetails(g) {
     rows.push(["Odds", oddsWrap]);
   }
 
-  const linkSpecs = [
-    [g.seriesUrl, "Series page"],
-    [g.gameCenterLink, "Game center"],
-  ].filter(([href]) => !!href);
-  if (linkSpecs.length) {
-    const linksWrap = document.createDocumentFragment();
-    linkSpecs.forEach(([href, label], i) => {
-      if (i > 0) linksWrap.appendChild(textNode(" · "));
-      const a = document.createElement("a");
-      a.href = href;
-      a.target = "_blank";
-      a.rel = "noopener";
-      a.textContent = label;
-      linksWrap.appendChild(a);
-    });
-    rows.push(["Links", linksWrap]);
-  }
-
   if (rows.length) {
     const dl = document.createElement("dl");
     rows.forEach(([label, valueNode]) => {
@@ -492,7 +512,69 @@ function renderGameDetails(g) {
       dl.appendChild(dd);
     });
     frag.appendChild(dl);
-  } else {
+  }
+
+  // ---- Muted meta line: venue · broadcast · broadcast · … ----
+  const metaParts = [];
+  if (g.venue) {
+    const venueNode = el("span", "gd-meta-venue");
+    venueNode.appendChild(textNode(g.venue));
+    if (g.neutralSite) {
+      venueNode.appendChild(textNode(" (neutral site)"));
+    }
+    metaParts.push(venueNode);
+  }
+  (g.broadcasts || []).forEach(b => {
+    let node;
+    if (b.url) {
+      node = document.createElement("a");
+      node.className = "gd-meta-broadcast";
+      node.href = b.url;
+      node.target = "_blank";
+      node.rel = "noopener noreferrer";
+      node.textContent = b.network || "";
+    } else {
+      node = el("span", "gd-meta-broadcast", b.network || "");
+    }
+    const country = COUNTRY_FLAG[b.country] || b.country || "";
+    if (country) {
+      node.appendChild(textNode(" "));
+      node.appendChild(el("span", "gd-country", country));
+    }
+    metaParts.push(node);
+  });
+  if (metaParts.length) {
+    const metaRow = el("div", "gd-meta-row");
+    metaParts.forEach((part, i) => {
+      if (i > 0) metaRow.appendChild(el("span", "gd-meta-sep", "·"));
+      metaRow.appendChild(part);
+    });
+    frag.appendChild(metaRow);
+  }
+
+  // ---- Footer action buttons ----
+  const actionSpecs = [
+    [g.gameCenterLink, "Game Center"],
+    [g.seriesUrl, "Series Page"],
+  ].filter(([href]) => !!href);
+  if (actionSpecs.length) {
+    const actions = el("div", "gd-actions");
+    if (actionSpecs.length === 1) actions.classList.add("gd-actions-single");
+    actionSpecs.forEach(([href, label]) => {
+      const a = document.createElement("a");
+      a.className = "gd-action";
+      a.href = href;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = label;
+      actions.appendChild(a);
+    });
+    frag.appendChild(actions);
+  }
+
+  // Empty-state fallback (no scores/series/meta/actions). Rare but possible
+  // for malformed payloads.
+  if (!matchup.childElementCount && !rows.length && !metaParts.length && !actionSpecs.length) {
     const empty = el("p", null, "No additional info available.");
     empty.style.color = "var(--text-muted)";
     frag.appendChild(empty);
