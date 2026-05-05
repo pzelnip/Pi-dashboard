@@ -434,9 +434,8 @@ function renderGameDetails(g) {
   }
 
   const linkSpecs = [
-    [g.gameCenterLink, "Game center"],
     [g.seriesUrl, "Series page"],
-    [g.ticketsLink, "Tickets"],
+    [g.gameCenterLink, "Game center"],
   ].filter(([href]) => !!href);
   if (linkSpecs.length) {
     const linksWrap = document.createDocumentFragment();
