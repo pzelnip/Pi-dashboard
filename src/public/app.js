@@ -62,6 +62,13 @@ async function fetchJson(url) {
 const TIME_FMT = { hour: "numeric", minute: "2-digit", hour12: true };
 const formatTime = d => new Date(d).toLocaleTimeString("en-US", TIME_FMT);
 
+// NHL game state predicates. Hoisted to module scope so card render
+// (renderNHL) and modal render (renderGameDetails) share one source of truth.
+const isLive = g => g.state === "LIVE" || g.state === "CRIT";
+const isPregame = g => g.state === "PRE";
+const isScheduled = g => g.state === "FUT";
+const isFinal = g => !isLive(g) && !isPregame(g) && !isScheduled(g);
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
@@ -246,11 +253,6 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
     return;
   }
 
-  const isLive = g => g.state === "LIVE" || g.state === "CRIT";
-  const isPregame = g => g.state === "PRE";
-  const isScheduled = g => g.state === "FUT";
-  const isFinal = g => !isLive(g) && !isPregame(g) && !isScheduled(g);
-
   // Sort: live → pre-game → scheduled → final, with favorites bubbled to the top of each group.
   const statusRank = g => (isLive(g) ? 0 : isPregame(g) ? 1 : isScheduled(g) ? 2 : 3);
   const sorted = [...games].sort((a, b) => {
@@ -365,11 +367,8 @@ function renderGameDetails(g) {
     return wrap;
   };
 
-  const isLive = g.state === "LIVE" || g.state === "CRIT";
-  const isPregame = g.state === "PRE";
-  const isFinal = g.state === "OFF" || g.state === "FINAL";
   const startLabel = g.startTime ? formatTime(g.startTime) : "";
-  const headlineStatus = g.statusText || (isLive ? "Live" : isFinal ? "Final" : startLabel);
+  const headlineStatus = g.statusText || (isLive(g) ? "Live" : isFinal(g) ? "Final" : startLabel);
 
   const matchup = el("div", "gd-matchup");
   matchup.appendChild(buildTeamBlock(g.away, ""));
@@ -383,12 +382,19 @@ function renderGameDetails(g) {
   const textNode = s => document.createTextNode(String(s));
 
   if (headlineStatus) {
-    if (isLive) {
+    if (isLive(g)) {
       const pill = el("span", "status-pill live", headlineStatus);
       rows.push(["Status", pill]);
-    } else if (isPregame) {
-      const pill = el("span", "status-pill pregame", "Pre-game");
-      rows.push(["Status", pill]);
+    } else if (isPregame(g)) {
+      // Match the card pill: "<Pre-game pill> <scheduled-time pill>" so the
+      // modal preserves the puck-drop time alongside the pre-game label.
+      const wrap = document.createDocumentFragment();
+      wrap.appendChild(el("span", "status-pill pregame", "Pre-game"));
+      if (g.startTime) {
+        wrap.appendChild(textNode(" "));
+        wrap.appendChild(el("span", "status-pill scheduled", formatTime(g.startTime)));
+      }
+      rows.push(["Status", wrap]);
     } else {
       rows.push(["Status", textNode(headlineStatus)]);
     }
