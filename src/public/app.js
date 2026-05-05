@@ -281,6 +281,28 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
     3: "Conference Final",
     4: "Stanley Cup Final",
   };
+  const ROMAN_NUMERALS = { 1: "I", 2: "II", 3: "III", 4: "IV" };
+
+  // Ambient series-progress watermark for playoff games. Replaces the old
+  // 25/50/75/100% solid fill. Layout: 4 vertical segments, a centered Roman
+  // numeral for the current round, and a left-to-right gradient whose filled
+  // portion = (round / 4) * 100%. Foreground content sits on top via the
+  // .game's stacking context (isolation: isolate). See style.css for layering.
+  // TODO: source gradient color from per-team primary color once _TEAM_COLORS
+  // (introduced in PR #43, modal redesign) lands on main. For now we use the
+  // global accent color so this PR stays self-contained.
+  const renderRoundWatermark = round => {
+    const numeral = ROMAN_NUMERALS[round] || "";
+    const fillPct = round * 25;
+    return `
+      <div class="round-bg" style="--round-fill: ${fillPct}%" aria-hidden="true">
+        <div class="round-segment"></div>
+        <div class="round-segment"></div>
+        <div class="round-segment"></div>
+        <div class="round-segment"></div>
+        <span class="round-roman">${numeral}</span>
+      </div>`;
+  };
 
   const renderGame = (g, idx) => {
     let awayCls = "", homeCls = "";
@@ -297,12 +319,14 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
     const hasRound = Number.isInteger(r) && r >= 1 && r <= 4;
     const roundLabel = hasRound ? escapeHtml(ROUND_LABELS[r]) : "";
     const roundAttr = hasRound ? ` data-playoff-round="${r}"` : "";
+    const watermark = hasRound ? renderRoundWatermark(r) : "";
     const matchupLabel = `${escapeHtml(g.away.fullName || g.away.name || g.away.abbrev || "away")} at ${escapeHtml(g.home.fullName || g.home.name || g.home.abbrev || "home")}`;
     const clickAttrs = bucket
       ? `class="game game-clickable ${stateCls}" tabindex="0" role="button" aria-label="Show details for ${matchupLabel}${hasRound ? `, ${roundLabel}` : ""}" data-nhl-bucket="${escapeHtml(bucket)}" data-nhl-index="${idx}"${hasRound ? ` title="${roundLabel}"` : ""}${roundAttr}`
       : `class="game ${stateCls}"${hasRound ? ` title="${roundLabel}"` : ""}${roundAttr}`;
     return `
     <div ${clickAttrs}>
+      ${watermark}
       <div class="game-meta">
         ${pillFor(g)}
         ${g.seriesText ? `<span class="series-tag">${escapeHtml(g.seriesText)}</span>` : ""}
