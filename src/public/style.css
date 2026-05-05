@@ -1007,6 +1007,17 @@ a.wx-link:focus-visible {
   font-size: 0.85em;
 }
 
+.gd-series-state {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.gd-series-team {
+  letter-spacing: 0.02em;
+}
+
 @media (max-width: 720px) {
   #game-sheet {
     width: calc(100vw - 16px);

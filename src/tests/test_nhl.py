@@ -412,10 +412,28 @@ class SeriesInfoTests(unittest.TestCase):
 
         self.assertEqual(result["round"], 2)
         self.assertEqual(result["title"], "2nd Round")
+        self.assertEqual(result["gameNumber"], 4)
         self.assertEqual(result["topSeedAbbrev"], "EDM")
         self.assertEqual(result["topSeedWins"], 2)
         self.assertEqual(result["bottomSeedAbbrev"], "VAN")
         self.assertEqual(result["bottomSeedWins"], 1)
+
+    def test_game_number_falls_back_to_none_when_missing(self):
+        s = {
+            "round": 1,
+            "seriesTitle": "1st Round",
+            "seriesAbbrev": "R1",
+            "seriesLetter": "A",
+            "topSeedTeamAbbrev": "EDM",
+            "topSeedWins": 0,
+            "bottomSeedTeamAbbrev": "VAN",
+            "bottomSeedWins": 0,
+            "neededToWin": 4,
+        }
+
+        result = nhl._series_info(s)
+
+        self.assertIsNone(result["gameNumber"])
 
 
 class AbsoluteUrlTests(unittest.TestCase):
@@ -533,6 +551,7 @@ class FetchNhlTests(unittest.TestCase):
                 "title": "2nd Round",
                 "abbrev": "R2",
                 "letter": "E",
+                "gameNumber": 4,
                 "neededToWin": 4,
                 "topSeedAbbrev": "EDM",
                 "topSeedWins": 2,

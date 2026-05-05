@@ -405,8 +405,22 @@ function renderGameDetails(g) {
     seriesWrap.appendChild(textNode(g.series.title || ""));
     if (g.seriesText) {
       seriesWrap.appendChild(textNode(` · ${g.seriesText}`));
+    } else if (g.series.gameNumber) {
+      seriesWrap.appendChild(textNode(` · Game ${String(g.series.gameNumber)}`));
     }
     rows.push(["Series", seriesWrap]);
+
+    const top = g.series.topSeedAbbrev;
+    const bot = g.series.bottomSeedAbbrev;
+    const topW = g.series.topSeedWins || 0;
+    const botW = g.series.bottomSeedWins || 0;
+    if (top && bot && (topW > 0 || botW > 0)) {
+      const stateWrap = el("div", "gd-series-state");
+      stateWrap.appendChild(el("span", "gd-series-team", `${top} ${topW}`));
+      stateWrap.appendChild(textNode(" — "));
+      stateWrap.appendChild(el("span", "gd-series-team", `${bot} ${botW}`));
+      rows.push(["Series state", stateWrap]);
+    }
   }
 
   if ((g.broadcasts || []).length) {
