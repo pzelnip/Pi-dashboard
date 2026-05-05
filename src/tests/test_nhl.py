@@ -344,49 +344,10 @@ class BroadcastsTests(unittest.TestCase):
         self.assertEqual(
             result,
             [
-                {
-                    "network": "TNT",
-                    "country": "US",
-                    "market": "N",
-                    "url": "https://www.tntdrama.com/nhl",
-                },
-                {
-                    "network": "CBC",
-                    "country": "CA",
-                    "market": "N",
-                    "url": "https://www.cbc.ca/sports/hockey",
-                },
+                {"network": "TNT", "country": "US", "market": "N"},
+                {"network": "CBC", "country": "CA", "market": "N"},
             ],
         )
-
-    def test_known_network_gets_homepage_url(self):
-        game = {"tvBroadcasts": [{"network": "ESPN", "countryCode": "US", "market": "N"}]}
-
-        result = nhl._broadcasts(game)
-
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result[0]["network"], "ESPN")
-        self.assertEqual(result[0]["url"], "https://www.espn.com/nhl/")
-
-    def test_unknown_network_has_none_url(self):
-        game = {"tvBroadcasts": [{"network": "OBSCURE", "countryCode": "US", "market": "N"}]}
-
-        result = nhl._broadcasts(game)
-
-        self.assertEqual(len(result), 1)
-        self.assertIsNone(result[0]["url"])
-
-    def test_same_name_network_in_unmapped_country_resolves_to_no_url(self):
-        # SN is mapped only as ("SN", "CA") (Sportsnet). A US-broadcast "SN"
-        # entry must NOT inherit the Canadian URL — verifies tuple-keying.
-        game = {"tvBroadcasts": [{"network": "SN", "countryCode": "US", "market": "N"}]}
-
-        result = nhl._broadcasts(game)
-
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result[0]["network"], "SN")
-        self.assertEqual(result[0]["country"], "US")
-        self.assertIsNone(result[0]["url"])
 
 
 class SeriesInfoTests(unittest.TestCase):
@@ -512,18 +473,8 @@ class FetchNhlTests(unittest.TestCase):
         self.assertEqual(
             edm["broadcasts"],
             [
-                {
-                    "network": "TNT",
-                    "country": "US",
-                    "market": "N",
-                    "url": "https://www.tntdrama.com/nhl",
-                },
-                {
-                    "network": "CBC",
-                    "country": "CA",
-                    "market": "N",
-                    "url": "https://www.cbc.ca/sports/hockey",
-                },
+                {"network": "TNT", "country": "US", "market": "N"},
+                {"network": "CBC", "country": "CA", "market": "N"},
             ],
         )
         self.assertEqual(
