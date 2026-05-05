@@ -9,6 +9,7 @@ will reintroduce a real bug.
 
 import datetime as dt
 import json
+from urllib.parse import quote_plus
 
 from cache import fetch_cached
 
@@ -162,6 +163,103 @@ def _broadcasts(game: dict) -> list[dict]:
     return out
 
 
+# Map venue's `default` name (as the upstream NHL API returns it) to its
+# Wikipedia article URL. Where an arena has been recently renamed (e.g. Wells
+# Fargo Center -> Xfinity Mobile Arena), both the new and old names are listed
+# pointing at the same article so fixtures captured before/after the rename
+# both resolve. Venues not in this map fall back to a Google search URL.
+_VENUE_URLS: dict[str, str] = {
+    # Anaheim Ducks
+    "Honda Center": "https://en.wikipedia.org/wiki/Honda_Center",
+    # Boston Bruins
+    "TD Garden": "https://en.wikipedia.org/wiki/TD_Garden",
+    # Buffalo Sabres
+    "KeyBank Center": "https://en.wikipedia.org/wiki/KeyBank_Center",
+    # Calgary Flames
+    "Scotiabank Saddledome": "https://en.wikipedia.org/wiki/Scotiabank_Saddledome",
+    # Carolina Hurricanes (PNC Arena renamed to Lenovo Center in 2024)
+    "Lenovo Center": "https://en.wikipedia.org/wiki/Lenovo_Center",
+    "PNC Arena": "https://en.wikipedia.org/wiki/Lenovo_Center",
+    # Chicago Blackhawks
+    "United Center": "https://en.wikipedia.org/wiki/United_Center",
+    # Colorado Avalanche
+    "Ball Arena": "https://en.wikipedia.org/wiki/Ball_Arena",
+    # Columbus Blue Jackets
+    "Nationwide Arena": "https://en.wikipedia.org/wiki/Nationwide_Arena",
+    # Dallas Stars
+    "American Airlines Center": "https://en.wikipedia.org/wiki/American_Airlines_Center",
+    # Detroit Red Wings
+    "Little Caesars Arena": "https://en.wikipedia.org/wiki/Little_Caesars_Arena",
+    # Edmonton Oilers
+    "Rogers Place": "https://en.wikipedia.org/wiki/Rogers_Place",
+    # Florida Panthers (renamed from FLA Live Arena to Amerant Bank Arena)
+    "Amerant Bank Arena": "https://en.wikipedia.org/wiki/Amerant_Bank_Arena",
+    "FLA Live Arena": "https://en.wikipedia.org/wiki/Amerant_Bank_Arena",
+    # Los Angeles Kings (Staples Center renamed to Crypto.com Arena in 2021)
+    "Crypto.com Arena": "https://en.wikipedia.org/wiki/Crypto.com_Arena",
+    "Staples Center": "https://en.wikipedia.org/wiki/Crypto.com_Arena",
+    # Minnesota Wild (Xcel Energy Center renamed to Grand Casino Arena)
+    "Grand Casino Arena": "https://en.wikipedia.org/wiki/Grand_Casino_Arena",
+    "Xcel Energy Center": "https://en.wikipedia.org/wiki/Grand_Casino_Arena",
+    # Montreal Canadiens
+    "Bell Centre": "https://en.wikipedia.org/wiki/Bell_Centre",
+    # Nashville Predators
+    "Bridgestone Arena": "https://en.wikipedia.org/wiki/Bridgestone_Arena",
+    # New Jersey Devils
+    "Prudential Center": "https://en.wikipedia.org/wiki/Prudential_Center",
+    # New York Islanders
+    "UBS Arena": "https://en.wikipedia.org/wiki/UBS_Arena",
+    # New York Rangers
+    "Madison Square Garden": "https://en.wikipedia.org/wiki/Madison_Square_Garden",
+    # Ottawa Senators
+    "Canadian Tire Centre": "https://en.wikipedia.org/wiki/Canadian_Tire_Centre",
+    # Philadelphia Flyers (Wells Fargo Center renamed to Xfinity Mobile Arena)
+    "Xfinity Mobile Arena": "https://en.wikipedia.org/wiki/Xfinity_Mobile_Arena",
+    "Wells Fargo Center": "https://en.wikipedia.org/wiki/Xfinity_Mobile_Arena",
+    # Pittsburgh Penguins
+    "PPG Paints Arena": "https://en.wikipedia.org/wiki/PPG_Paints_Arena",
+    # San Jose Sharks
+    "SAP Center": "https://en.wikipedia.org/wiki/SAP_Center_at_San_Jose",
+    "SAP Center at San Jose": "https://en.wikipedia.org/wiki/SAP_Center_at_San_Jose",
+    # Seattle Kraken
+    "Climate Pledge Arena": "https://en.wikipedia.org/wiki/Climate_Pledge_Arena",
+    # St. Louis Blues
+    "Enterprise Center": "https://en.wikipedia.org/wiki/Enterprise_Center",
+    # Tampa Bay Lightning (Amalie Arena renamed to Benchmark International Arena)
+    "Benchmark International Arena": "https://en.wikipedia.org/wiki/Benchmark_International_Arena",
+    "Amalie Arena": "https://en.wikipedia.org/wiki/Benchmark_International_Arena",
+    # Toronto Maple Leafs
+    "Scotiabank Arena": "https://en.wikipedia.org/wiki/Scotiabank_Arena",
+    # Utah Mammoth
+    "Delta Center": "https://en.wikipedia.org/wiki/Delta_Center",
+    # Vancouver Canucks
+    "Rogers Arena": "https://en.wikipedia.org/wiki/Rogers_Arena",
+    # Vegas Golden Knights
+    "T-Mobile Arena": "https://en.wikipedia.org/wiki/T-Mobile_Arena",
+    # Washington Capitals
+    "Capital One Arena": "https://en.wikipedia.org/wiki/Capital_One_Arena",
+    # Winnipeg Jets
+    "Canada Life Centre": "https://en.wikipedia.org/wiki/Canada_Life_Centre",
+}
+
+
+def _venue_url(venue: str | None) -> str | None:
+    """Resolve a venue name to a clickable URL.
+
+    Known NHL arenas resolve to their Wikipedia article. Unknown but non-empty
+    venue names fall back to a Google search URL so the link is still useful
+    for neutral-site games or stadium-series venues we haven't catalogued.
+    Empty/missing venues yield None so the frontend can render plain text.
+    """
+    if isinstance(venue, str):
+        venue = venue.strip()
+    if not venue:
+        return None
+    if (mapped := _VENUE_URLS.get(venue)):
+        return mapped
+    return f"https://www.google.com/search?q={quote_plus(venue)}"
+
+
 def _series_info(s: dict | None) -> dict | None:
     """Shape the seriesStatus block for the details panel.
 
@@ -239,6 +337,7 @@ def fetch_nhl(date: str | None, favorites: list[str]) -> list[dict]:
                     "playoffRound": _playoff_round(game),
                     "isFavorite": is_fav,
                     "venue": venue,
+                    "venueUrl": _venue_url(venue),
                     "venueTimezone": game.get("venueTimezone", ""),
                     "neutralSite": bool(game.get("neutralSite", False)),
                     "gameType": game_type,

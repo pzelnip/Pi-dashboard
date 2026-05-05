@@ -909,56 +909,116 @@ a.wx-link:focus-visible {
   font-size: 0.92em;
 }
 
+/* ---- Matchup header (Phase 1 redesign) ---- */
 .gd-matchup {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-  padding-bottom: 14px;
+  gap: 16px;
+  /* Negative side margin + matching side padding lets the fade bleed to the
+     modal edges while leaving the team-block layout unchanged. */
+  margin: 0 -18px 18px;
+  padding: 0 18px 18px;
   border-bottom: 1px solid var(--border);
+  /* Soft team-color fade: each team's primary color emanates from its side
+     of the header and falls off toward the center. Colors are set inline as
+     --gd-team-color-{away,home} CSS vars from _TEAM_COLORS. */
+  background:
+    radial-gradient(
+      ellipse 70% 90% at 0% 50%,
+      color-mix(in srgb, var(--gd-team-color-away, transparent) 22%, transparent) 0%,
+      transparent 75%
+    ),
+    radial-gradient(
+      ellipse 70% 90% at 100% 50%,
+      color-mix(in srgb, var(--gd-team-color-home, transparent) 22%, transparent) 0%,
+      transparent 75%
+    );
 }
 .gd-team {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  min-width: 0;
+}
+/* Thin vertical color bar; color set inline from _TEAM_COLORS map. */
+.gd-team-bar {
+  flex: 0 0 var(--team-bar-width, 5px);
+  width: var(--team-bar-width, 5px);
+  border-radius: 3px;
+  align-self: stretch;
+  /* Fallback if inline style isn't applied for some reason. */
+  background: var(--accent);
+}
+.gd-team-away .gd-team-bar { order: 0; }
+.gd-team-home .gd-team-bar { order: 2; }
+.gd-team-inner {
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 4px;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+  order: 1;
 }
-.gd-team img {
-  width: 64px;
-  height: 64px;
+.gd-team-logo {
+  width: 96px;
+  height: 96px;
   object-fit: contain;
 }
 .gd-team-name {
-  font-size: 1.1em;
-  font-weight: 600;
-  line-height: 1.2;
+  font-size: 1.05em;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--text);
 }
 .gd-team-abbrev {
-  font-size: 0.75em;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.gd-team-score {
-  font-size: 2.4em;
-  font-weight: 300;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-.gd-vs {
-  font-size: 1em;
+  font-size: 0.78em;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-weight: 600;
 }
 
+.gd-score-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.gd-score {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  font-size: var(--fs-hero);
+  font-weight: 300;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.gd-score-sep {
+  color: var(--text-muted);
+  font-weight: 200;
+}
+.gd-score-vs {
+  color: var(--text-muted);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+}
+.gd-state-pill {
+  /* Slightly larger than the summary-card pill for the modal context. */
+  font-size: 0.85em;
+  padding: 4px 12px;
+}
+
+/* ---- Detail rows (start, game type, odds) ---- */
 #game-body dl {
   display: grid;
   grid-template-columns: max-content 1fr;
   gap: 8px 18px;
+  margin-bottom: 14px;
 }
 #game-body dt {
   color: var(--text-dim);
@@ -978,25 +1038,6 @@ a.wx-link:focus-visible {
 }
 #game-body a:hover { text-decoration: underline; }
 
-.gd-broadcasts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.gd-broadcast {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  font-size: 0.85em;
-}
-.gd-broadcast .gd-country {
-  color: var(--text-muted);
-  font-size: 0.85em;
-}
-
 .gd-odds {
   display: flex;
   gap: 16px;
@@ -1013,29 +1054,204 @@ a.wx-link:focus-visible {
   font-size: 0.85em;
 }
 
-.gd-series-state {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
+/* ---- Series-progress row ---- */
+.gd-series-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--surface-raised);
 }
-.gd-series-team {
-  letter-spacing: 0.02em;
+.gd-series-label {
+  font-size: 0.82em;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.gd-series-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+/* Numbered progress pills (replace old solid dots). Filled-up-through-current
+   pattern: pills <= current game get the accent fill; later pills stay muted
+   ring-only. The current game's pill gets a subtle outer ring on top. */
+.gd-series-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  font-size: 0.72em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--text-muted);
+  line-height: 1;
+}
+.gd-series-pill.is-filled {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0b0d10;
+}
+.gd-series-pill.is-current {
+  box-shadow: 0 0 0 3px rgba(79, 195, 247, 0.22);
+}
+.gd-series-leader {
+  margin-left: auto;
+  font-size: 0.9em;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
 }
 
+/* ---- Venue row (with location pin) ---- */
+.gd-venue-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 14px 0 8px;
+  font-size: 0.88em;
+  color: var(--text-dim);
+}
+.gd-venue-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-dim);
+}
+.gd-venue-link:hover { color: var(--accent); }
+.gd-venue-icon {
+  font-size: 0.95em;
+  line-height: 1;
+}
+.gd-venue-neutral { color: var(--text-muted); }
+
+/* ---- Broadcasts row (with TV icon) ---- */
+.gd-broadcasts-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 0 0 14px;
+  font-size: 0.88em;
+  color: var(--text-dim);
+}
+.gd-broadcast-icon {
+  font-size: 0.95em;
+  line-height: 1;
+  margin-right: 2px;
+}
+.gd-broadcasts-row a.gd-broadcast { color: var(--text-dim); }
+.gd-broadcasts-row a.gd-broadcast:hover { color: var(--accent); }
+.gd-meta-sep { color: var(--text-muted); }
+.gd-broadcasts-row .gd-country {
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+/* ---- Footer action buttons ---- */
+.gd-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 4px;
+}
+.gd-actions.gd-actions-single {
+  grid-template-columns: 1fr;
+}
+.gd-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.95em;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.gd-action-icon {
+  font-size: 0.95em;
+  line-height: 1;
+}
+/* Primary CTA — Game Center. Accent fill, dark text. */
+.gd-action-primary {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: #0b0d10 !important;
+}
+.gd-action-primary:hover {
+  background: #6fd0fa;
+  border-color: #6fd0fa;
+  text-decoration: none !important;
+}
+/* Secondary — Series Page. Muted surface, lighter border. */
+.gd-action-secondary {
+  background: var(--surface-raised);
+  color: var(--text) !important;
+  border: 1px solid var(--border);
+}
+.gd-action-secondary:hover {
+  background: rgba(79, 195, 247, 0.12);
+  border-color: var(--accent);
+  text-decoration: none !important;
+}
+
+/* ---- Mobile / narrow layouts ---- */
 @media (max-width: 720px) {
   #game-sheet {
     width: calc(100vw - 16px);
     max-height: calc(100vh - 24px);
   }
   #game-body { padding: 12px 14px 16px; }
-  .gd-team img { width: 48px; height: 48px; }
+  /* On narrow widths, lay teams side-by-side with the score stack
+     spanning a row underneath them. Uses named grid areas so the order
+     of children in the DOM (away, score, home) is preserved without the
+     score block sneaking into the middle column. */
+  .gd-matchup {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "away home"
+      "score score";
+    gap: 12px 10px;
+  }
+  .gd-team-away { grid-area: away; }
+  .gd-team-home { grid-area: home; }
+  .gd-score-stack { grid-area: score; }
+  .gd-team-logo { width: 60px; height: 60px; }
   .gd-team-name { font-size: 0.95em; }
-  .gd-team-score { font-size: 1.8em; }
+  .gd-team { gap: 8px; }
+  .gd-team-bar { flex-basis: 4px; width: 4px; }
+  .gd-score { font-size: 2.4em; }
+  .gd-series-row {
+    gap: 8px 12px;
+  }
+  .gd-series-pill {
+    min-width: 20px;
+    height: 20px;
+  }
+  .gd-series-leader {
+    margin-left: 0;
+    width: 100%;
+  }
   #game-body dl {
     grid-template-columns: 1fr;
     gap: 4px 0;
   }
   #game-body dt { padding-top: 8px; }
+  .gd-actions {
+    grid-template-columns: 1fr;
+  }
 }
