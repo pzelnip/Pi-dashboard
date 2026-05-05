@@ -62,6 +62,13 @@ async function fetchJson(url) {
 const TIME_FMT = { hour: "numeric", minute: "2-digit", hour12: true };
 const formatTime = d => new Date(d).toLocaleTimeString("en-US", TIME_FMT);
 
+// NHL game state predicates. Hoisted to module scope so card render
+// (renderNHL) and modal render (renderGameDetails) share one source of truth.
+const isLive = g => g.state === "LIVE" || g.state === "CRIT";
+const isPregame = g => g.state === "PRE";
+const isScheduled = g => g.state === "FUT";
+const isFinal = g => !isLive(g) && !isPregame(g) && !isScheduled(g);
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
@@ -246,12 +253,8 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
     return;
   }
 
-  const isLive = g => g.state === "LIVE" || g.state === "CRIT";
-  const isScheduled = g => g.state === "FUT" || g.state === "PRE";
-  const isFinal = g => !isLive(g) && !isScheduled(g);
-
-  // Sort: live → scheduled → final, with favorites bubbled to the top of each group.
-  const statusRank = g => (isLive(g) ? 0 : isScheduled(g) ? 1 : 2);
+  // Sort: live → pre-game → scheduled → final, with favorites bubbled to the top of each group.
+  const statusRank = g => (isLive(g) ? 0 : isPregame(g) ? 1 : isScheduled(g) ? 2 : 3);
   const sorted = [...games].sort((a, b) => {
     const s = statusRank(a) - statusRank(b);
     if (s !== 0) return s;
@@ -261,6 +264,7 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
 
   const pillFor = g => {
     if (isLive(g)) return `<span class="status-pill live">${escapeHtml(g.statusText || "LIVE")}</span>`;
+    if (isPregame(g)) return `<span class="status-pill pregame">${escapeHtml("Pre-game")}</span> <span class="status-pill scheduled">${escapeHtml(formatTime(g.startTime))}</span>`;
     if (isScheduled(g)) return `<span class="status-pill scheduled">${escapeHtml(formatTime(g.startTime))}</span>`;
     return `<span class="status-pill final">${escapeHtml(g.statusText || "Final")}</span>`;
   };
@@ -403,7 +407,7 @@ function renderGameDetails(g) {
 
   const isLive = g.state === "LIVE" || g.state === "CRIT";
   const isPregame = g.state === "PRE";
-  const isScheduled = g.state === "FUT" || isPregame;
+  const isScheduled = g.state === "FUT";
   const isFinal = g.state === "OFF" || g.state === "FINAL";
   const startLabel = g.startTime ? formatTime(g.startTime) : "";
 
@@ -458,16 +462,21 @@ function renderGameDetails(g) {
     }
 
     // State pill (live / scheduled / final / pregame). Re-uses existing
-    // .status-pill classes from style.css.
-    let pill = null;
+    // .status-pill classes from style.css. Pre-game gets its own amber
+    // pill plus the start time so puck-drop is still visible alongside
+    // the pre-game label.
     if (isLive) {
-      pill = el("span", "status-pill live gd-state-pill", g.statusText || "LIVE");
+      stack.appendChild(el("span", "status-pill live gd-state-pill", g.statusText || "LIVE"));
     } else if (isFinal) {
-      pill = el("span", "status-pill final gd-state-pill", g.statusText || "Final");
+      stack.appendChild(el("span", "status-pill final gd-state-pill", g.statusText || "Final"));
+    } else if (isPregame) {
+      stack.appendChild(el("span", "status-pill pregame gd-state-pill", "Pre-game"));
+      if (startLabel) {
+        stack.appendChild(el("span", "status-pill scheduled gd-state-pill", startLabel));
+      }
     } else if (isScheduled) {
-      pill = el("span", "status-pill scheduled gd-state-pill", startLabel || "Scheduled");
+      stack.appendChild(el("span", "status-pill scheduled gd-state-pill", startLabel || "Scheduled"));
     }
-    if (pill) stack.appendChild(pill);
     return stack;
   };
 
@@ -552,10 +561,10 @@ function renderGameDetails(g) {
   // ---- Other detail rows preserved as <dl> (start, game type, odds) ----
   const rows = [];
 
-  // Only show start time as a dedicated row when not scheduled (the scheduled
-  // pill in the header already shows it). For live/final games it's still
-  // useful context (when did this thing start).
-  if (startLabel && !isScheduled) {
+  // Only show start time as a dedicated row when not scheduled or pre-game
+  // (the scheduled / pre-game pill in the header already shows it). For
+  // live/final games it's still useful context (when did this thing start).
+  if (startLabel && !isScheduled && !isPregame) {
     rows.push(["Start", textNode(startLabel)]);
   }
   if (g.gameTypeLabel) rows.push(["Game type", textNode(g.gameTypeLabel)]);
