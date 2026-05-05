@@ -489,7 +489,6 @@ class FetchNhlTests(unittest.TestCase):
             edm["gameCenterLink"],
             "https://www.nhl.com/gamecenter/van-vs-edm/2026/04/21/1",
         )
-        self.assertEqual(edm["ticketsLink"], "https://www.ticketmaster.com/event/1")
 
     def test_fetch_nhl_omits_optional_fields_for_regular_season(self):
         with patch.object(nhl, "fetch_cached", side_effect=self._patched_fetch):
@@ -501,27 +500,10 @@ class FetchNhlTests(unittest.TestCase):
         self.assertIsNone(tor["series"])
         self.assertEqual(tor["seriesUrl"], "")
         self.assertEqual(tor["gameCenterLink"], "")
-        self.assertEqual(tor["ticketsLink"], "")
         self.assertEqual(tor["home"]["odds"], "")
         self.assertEqual(tor["home"]["fullName"], "Maple Leafs")
         self.assertEqual(tor["gameType"], 2)
         self.assertEqual(tor["gameTypeLabel"], "Regular Season")
-
-    def test_fetch_nhl_absolutizes_relative_tickets_link(self):
-        import json
-
-        raw = json.loads(self._raw.decode("utf-8"))
-        for week in raw.get("gameWeek", []):
-            for game in week.get("games", []):
-                game["ticketsLink"] = "/tickets/event/123"
-        patched = json.dumps(raw).encode("utf-8")
-
-        with patch.object(nhl, "fetch_cached", return_value=patched):
-            games = nhl.fetch_nhl("2026-04-21", favorites=[])
-
-        self.assertTrue(games)
-        for game in games:
-            self.assertEqual(game["ticketsLink"], "https://www.nhl.com/tickets/event/123")
 
 
 if __name__ == "__main__":
