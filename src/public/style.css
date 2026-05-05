@@ -892,9 +892,9 @@ a.wx-link:focus-visible {
   font-size: 1.4em;
   line-height: 1;
   cursor: pointer;
-  width: 32px;
-  height: 32px;
-  padding: 0;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 4px 8px;
   display: flex;
   align-items: center;
   justify-content: center;
