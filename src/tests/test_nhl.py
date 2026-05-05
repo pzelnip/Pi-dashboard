@@ -373,6 +373,7 @@ class SeriesInfoTests(unittest.TestCase):
 
         self.assertEqual(result["round"], 2)
         self.assertEqual(result["title"], "2nd Round")
+        self.assertEqual(result["gameNumber"], 4)
         self.assertEqual(result["topSeedAbbrev"], "EDM")
         self.assertEqual(result["topSeedWins"], 2)
         self.assertEqual(result["bottomSeedAbbrev"], "VAN")
@@ -484,6 +485,7 @@ class FetchNhlTests(unittest.TestCase):
                 "title": "2nd Round",
                 "abbrev": "R2",
                 "letter": "E",
+                "gameNumber": 4,
                 "neededToWin": 4,
                 "topSeedAbbrev": "EDM",
                 "topSeedWins": 2,
