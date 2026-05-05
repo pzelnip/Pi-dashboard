@@ -247,11 +247,12 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
   }
 
   const isLive = g => g.state === "LIVE" || g.state === "CRIT";
-  const isScheduled = g => g.state === "FUT" || g.state === "PRE";
-  const isFinal = g => !isLive(g) && !isScheduled(g);
+  const isPregame = g => g.state === "PRE";
+  const isScheduled = g => g.state === "FUT";
+  const isFinal = g => !isLive(g) && !isPregame(g) && !isScheduled(g);
 
-  // Sort: live → scheduled → final, with favorites bubbled to the top of each group.
-  const statusRank = g => (isLive(g) ? 0 : isScheduled(g) ? 1 : 2);
+  // Sort: live → pre-game → scheduled → final, with favorites bubbled to the top of each group.
+  const statusRank = g => (isLive(g) ? 0 : isPregame(g) ? 1 : isScheduled(g) ? 2 : 3);
   const sorted = [...games].sort((a, b) => {
     const s = statusRank(a) - statusRank(b);
     if (s !== 0) return s;
@@ -261,6 +262,7 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
 
   const pillFor = g => {
     if (isLive(g)) return `<span class="status-pill live">${escapeHtml(g.statusText || "LIVE")}</span>`;
+    if (isPregame(g)) return `<span class="status-pill pregame">${escapeHtml("Pre-game")}</span> <span class="status-pill scheduled">${escapeHtml(formatTime(g.startTime))}</span>`;
     if (isScheduled(g)) return `<span class="status-pill scheduled">${escapeHtml(formatTime(g.startTime))}</span>`;
     return `<span class="status-pill final">${escapeHtml(g.statusText || "Final")}</span>`;
   };
@@ -364,6 +366,7 @@ function renderGameDetails(g) {
   };
 
   const isLive = g.state === "LIVE" || g.state === "CRIT";
+  const isPregame = g.state === "PRE";
   const isFinal = g.state === "OFF" || g.state === "FINAL";
   const startLabel = g.startTime ? formatTime(g.startTime) : "";
   const headlineStatus = g.statusText || (isLive ? "Live" : isFinal ? "Final" : startLabel);
@@ -382,6 +385,9 @@ function renderGameDetails(g) {
   if (headlineStatus) {
     if (isLive) {
       const pill = el("span", "status-pill live", headlineStatus);
+      rows.push(["Status", pill]);
+    } else if (isPregame) {
+      const pill = el("span", "status-pill pregame", "Pre-game");
       rows.push(["Status", pill]);
     } else {
       rows.push(["Status", textNode(headlineStatus)]);

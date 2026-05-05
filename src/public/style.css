@@ -14,6 +14,8 @@
   --live: #ff5b4a;
   --live-bg: rgba(255, 91, 74, 0.14);
   --scheduled: #6fb6ff;
+  --pregame: #ffb547;
+  --pregame-bg: rgba(255, 181, 71, 0.14);
   --accent: #4fc3f7;
 
   /* Typography scale */
@@ -287,6 +289,10 @@ html, body {
 .status-pill.scheduled {
   color: var(--scheduled);
   font-size: 1em;
+}
+.status-pill.pregame {
+  background: var(--pregame-bg);
+  color: var(--pregame);
 }
 .status-pill.final { color: var(--text-muted); }
 
