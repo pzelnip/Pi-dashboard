@@ -140,22 +140,60 @@ html, body {
   isolation: isolate;
 }
 
-/* Playoff round progress fill: 25/50/75/100% horizontal tint behind content.
-   z-index: -1 is scoped inside .game's stacking context (isolation: isolate
-   above), so children render above without needing their own z-index rules. */
-.game::before {
+/* Ambient playoff series-progress watermark.
+   Layered behind content via the .game stacking context (isolation: isolate
+   above) — children render above without needing their own z-index rules.
+   Three layers stacked inside .round-bg:
+     1. Four .round-segment divs lay out a 4-column grid with faint dividers.
+     2. A centered .round-roman numeral acts as a low-opacity watermark.
+     3. The container itself paints a left-to-right gradient where the filled
+        portion = --round-fill (set inline by JS to 25/50/75/100%).
+   TODO: replace var(--accent) with per-team primary color once _TEAM_COLORS
+   lands (PR #43). */
+.round-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  user-select: none;
+  z-index: -1;
+  display: flex;
+  background:
+    linear-gradient(
+      to right,
+      color-mix(in srgb, var(--accent) 12%, transparent) 0%,
+      color-mix(in srgb, var(--accent) 12%, transparent) var(--round-fill, 0%),
+      color-mix(in srgb, var(--accent) 2%, transparent) var(--round-fill, 0%),
+      color-mix(in srgb, var(--accent) 2%, transparent) 100%
+    );
+}
+.round-segment {
+  flex: 1 1 25%;
+  position: relative;
+}
+.round-segment + .round-segment::before {
   content: "";
   position: absolute;
-  inset: 0 auto 0 0;
-  width: 0;
-  background: rgba(255, 255, 255, 0.06);
-  pointer-events: none;
-  z-index: -1;
+  left: 0;
+  top: 10%;
+  bottom: 10%;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.04);
 }
-.game[data-playoff-round="1"]::before { width: 25%; }
-.game[data-playoff-round="2"]::before { width: 50%; }
-.game[data-playoff-round="3"]::before { width: 75%; }
-.game[data-playoff-round="4"]::before { width: 100%; }
+.round-roman {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 140px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.07);
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .round-roman { font-size: 90px; }
+}
 
 .fav-star {
   color: #f5c419;
