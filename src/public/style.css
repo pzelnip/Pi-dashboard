@@ -1055,11 +1055,14 @@ a.wx-link:focus-visible {
 }
 
 /* ---- Series-progress row ---- */
+/* Stacked & centered: round/game/best-of label, numbered pills, and leader
+   text each sit on their own centered line. (Issue #47.) */
 .gd-series-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: center;
-  gap: 10px 16px;
+  text-align: center;
+  gap: 8px;
   margin-bottom: 16px;
   padding: 10px 12px;
   border-radius: 8px;
@@ -1075,6 +1078,8 @@ a.wx-link:focus-visible {
 .gd-series-dots {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
   gap: 6px;
   flex: 0 0 auto;
 }
@@ -1106,11 +1111,38 @@ a.wx-link:focus-visible {
   box-shadow: 0 0 0 3px rgba(79, 195, 247, 0.22);
 }
 .gd-series-leader {
-  margin-left: auto;
   font-size: 0.9em;
   font-weight: 600;
   color: var(--text);
   font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* ---- Meta row (start time + game type, centered single line) ---- */
+.gd-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin-bottom: 14px;
+  font-size: 0.95em;
+  color: var(--text);
+  text-align: center;
+}
+.gd-meta-row .gd-meta-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.gd-meta-row .gd-meta-label {
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-size: 0.72em;
+  letter-spacing: 0.05em;
+}
+.gd-meta-row .gd-meta-value {
+  font-size: 1em;
 }
 
 /* ---- Venue row (with location pin) ---- */
@@ -1236,15 +1268,21 @@ a.wx-link:focus-visible {
   .gd-team-bar { flex-basis: 4px; width: 4px; }
   .gd-score { font-size: 2.4em; }
   .gd-series-row {
-    gap: 8px 12px;
+    gap: 6px;
   }
   .gd-series-pill {
     min-width: 20px;
     height: 20px;
   }
-  .gd-series-leader {
-    margin-left: 0;
-    width: 100%;
+  /* Stack start + game type on narrow widths so they don't crowd each other. */
+  .gd-meta-row {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 4px;
+  }
+  .gd-meta-row .gd-meta-sep {
+    display: none;
   }
   #game-body dl {
     grid-template-columns: 1fr;
