@@ -549,16 +549,33 @@ function renderGameDetails(g) {
     frag.appendChild(seriesWrap);
   }
 
-  // ---- Other detail rows preserved as <dl> (start, game type, odds) ----
-  const rows = [];
-
-  // Only show start time as a dedicated row when not scheduled (the scheduled
-  // pill in the header already shows it). For live/final games it's still
-  // useful context (when did this thing start).
-  if (startLabel && !isScheduled) {
-    rows.push(["Start", textNode(startLabel)]);
+  // ---- Start time + game type, combined on a single centered line ----
+  // On desktop these sit side-by-side separated by a "·"; on narrow widths the
+  // CSS stacks them. Only shows the start time as a dedicated entry when not
+  // scheduled (the scheduled pill in the header already shows it).
+  const showStart = startLabel && !isScheduled;
+  if (showStart || g.gameTypeLabel) {
+    const metaRow = el("div", "gd-meta-row");
+    if (showStart) {
+      const startSpan = el("span", "gd-meta-item");
+      startSpan.appendChild(el("span", "gd-meta-label", "Start"));
+      startSpan.appendChild(textNode(" "));
+      startSpan.appendChild(el("span", "gd-meta-value", startLabel));
+      metaRow.appendChild(startSpan);
+    }
+    if (showStart && g.gameTypeLabel) {
+      metaRow.appendChild(el("span", "gd-meta-sep", "·"));
+    }
+    if (g.gameTypeLabel) {
+      const typeSpan = el("span", "gd-meta-item");
+      typeSpan.appendChild(el("span", "gd-meta-value", g.gameTypeLabel));
+      metaRow.appendChild(typeSpan);
+    }
+    frag.appendChild(metaRow);
   }
-  if (g.gameTypeLabel) rows.push(["Game type", textNode(g.gameTypeLabel)]);
+
+  // ---- Other detail rows preserved as <dl> (odds) ----
+  const rows = [];
 
   if (g.away.odds || g.home.odds) {
     const oddsWrap = el("div", "gd-odds");
