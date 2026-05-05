@@ -379,6 +379,23 @@ class SeriesInfoTests(unittest.TestCase):
         self.assertEqual(result["bottomSeedAbbrev"], "VAN")
         self.assertEqual(result["bottomSeedWins"], 1)
 
+    def test_game_number_falls_back_to_none_when_missing(self):
+        s = {
+            "round": 1,
+            "seriesTitle": "1st Round",
+            "seriesAbbrev": "R1",
+            "seriesLetter": "A",
+            "topSeedTeamAbbrev": "EDM",
+            "topSeedWins": 0,
+            "bottomSeedTeamAbbrev": "VAN",
+            "bottomSeedWins": 0,
+            "neededToWin": 4,
+        }
+
+        result = nhl._series_info(s)
+
+        self.assertIsNone(result["gameNumber"])
+
 
 class AbsoluteUrlTests(unittest.TestCase):
     def test_passes_through_absolute_url(self):
