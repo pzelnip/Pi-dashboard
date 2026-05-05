@@ -160,8 +160,8 @@ html, body {
   background:
     linear-gradient(
       to right,
-      color-mix(in srgb, var(--accent) 12%, transparent) 0%,
-      color-mix(in srgb, var(--accent) 12%, transparent) var(--round-fill, 0%),
+      color-mix(in srgb, var(--accent) 10%, transparent) 0%,
+      color-mix(in srgb, var(--accent) 10%, transparent) var(--round-fill, 0%),
       color-mix(in srgb, var(--accent) 2%, transparent) var(--round-fill, 0%),
       color-mix(in srgb, var(--accent) 2%, transparent) 100%
     );
@@ -177,22 +177,23 @@ html, body {
   top: 10%;
   bottom: 10%;
   width: 1px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.03);
 }
 .round-roman {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-size: 140px;
-  font-weight: 600;
+  font-size: 72px;
+  font-weight: 400;
   line-height: 1;
   letter-spacing: 0.05em;
-  color: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.06);
   white-space: nowrap;
+  filter: blur(0.5px);
 }
 @media (max-width: 720px) {
-  .round-roman { font-size: 90px; }
+  .round-roman { font-size: 56px; }
 }
 
 .fav-star {
