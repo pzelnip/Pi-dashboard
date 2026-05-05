@@ -126,6 +126,7 @@ _BROADCAST_URLS: dict[tuple[str, str], str] = {
     ("MAX", "US"): "https://www.max.com/",
     ("CBC", "CA"): "https://www.cbc.ca/sports/hockey",
     ("SN", "CA"): "https://www.sportsnet.ca/hockey/nhl/",
+    ("SN360", "CA"): "https://www.sportsnet.ca/hockey/nhl/",
     ("TVAS", "CA"): "https://www.tvasports.ca/",
     ("CITY", "CA"): "https://www.citytv.com/",
 }
