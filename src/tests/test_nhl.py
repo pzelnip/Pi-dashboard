@@ -447,6 +447,37 @@ class SeriesInfoTests(unittest.TestCase):
         self.assertIsNone(result["gameNumber"])
 
 
+class VenueUrlTests(unittest.TestCase):
+    def test_known_venue_resolves_to_wikipedia(self):
+        venue = "T-Mobile Arena"
+
+        result = nhl._venue_url(venue)
+
+        self.assertEqual(result, "https://en.wikipedia.org/wiki/T-Mobile_Arena")
+
+    def test_renamed_venue_old_name_resolves_to_same_wikipedia_page(self):
+        new_name_url = nhl._venue_url("Xfinity Mobile Arena")
+        old_name_url = nhl._venue_url("Wells Fargo Center")
+
+        self.assertEqual(new_name_url, old_name_url)
+        self.assertEqual(new_name_url, "https://en.wikipedia.org/wiki/Xfinity_Mobile_Arena")
+
+    def test_unknown_venue_falls_back_to_google_search(self):
+        venue = "Some Obscure Stadium & Arena"
+
+        result = nhl._venue_url(venue)
+
+        # quote_plus encodes spaces as '+' and special chars as percent-escapes.
+        self.assertEqual(
+            result,
+            "https://www.google.com/search?q=Some+Obscure+Stadium+%26+Arena",
+        )
+
+    def test_empty_venue_returns_none(self):
+        self.assertIsNone(nhl._venue_url(""))
+        self.assertIsNone(nhl._venue_url(None))
+
+
 class AbsoluteUrlTests(unittest.TestCase):
     def test_passes_through_absolute_url(self):
         self.assertEqual(
@@ -530,6 +561,7 @@ class FetchNhlTests(unittest.TestCase):
         edm = next(g for g in games if g["home"]["abbrev"] == "EDM")
         self.assertEqual(edm["id"], 1)
         self.assertEqual(edm["venue"], "Rogers Place")
+        self.assertEqual(edm["venueUrl"], "https://en.wikipedia.org/wiki/Rogers_Place")
         self.assertEqual(edm["venueTimezone"], "America/Edmonton")
         self.assertFalse(edm["neutralSite"])
         self.assertEqual(edm["gameType"], 3)
@@ -585,6 +617,7 @@ class FetchNhlTests(unittest.TestCase):
 
         tor = next(g for g in games if g["home"]["abbrev"] == "TOR")
         self.assertEqual(tor["venue"], "")
+        self.assertIsNone(tor["venueUrl"])
         self.assertEqual(tor["broadcasts"], [])
         self.assertIsNone(tor["series"])
         self.assertEqual(tor["seriesUrl"], "")
