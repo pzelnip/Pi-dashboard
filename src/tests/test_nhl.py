@@ -627,6 +627,20 @@ class FetchNhlTests(unittest.TestCase):
         self.assertEqual(tor["gameType"], 2)
         self.assertEqual(tor["gameTypeLabel"], "Regular Season")
 
+    def test_fetch_nhl_falls_back_to_google_search_for_unmapped_venue(self):
+        unmapped_venue = "Some Obscure Stadium & Arena"
+        patched_raw = self._raw.replace(b"Rogers Place", unmapped_venue.encode("utf-8"))
+
+        with patch.object(nhl, "fetch_cached", return_value=patched_raw):
+            games = nhl.fetch_nhl("2026-04-21", favorites=[])
+
+        edm = next(g for g in games if g["home"]["abbrev"] == "EDM")
+        self.assertEqual(edm["venue"], unmapped_venue)
+        self.assertEqual(
+            edm["venueUrl"],
+            "https://www.google.com/search?q=Some+Obscure+Stadium+%26+Arena",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

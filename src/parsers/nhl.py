@@ -243,7 +243,7 @@ _VENUE_URLS: dict[str, str] = {
 }
 
 
-def _venue_url(venue: str) -> str | None:
+def _venue_url(venue: str | None) -> str | None:
     """Resolve a venue name to a clickable URL.
 
     Known NHL arenas resolve to their Wikipedia article. Unknown but non-empty
@@ -251,6 +251,8 @@ def _venue_url(venue: str) -> str | None:
     for neutral-site games or stadium-series venues we haven't catalogued.
     Empty/missing venues yield None so the frontend can render plain text.
     """
+    if isinstance(venue, str):
+        venue = venue.strip()
     if not venue:
         return None
     if (mapped := _VENUE_URLS.get(venue)):
