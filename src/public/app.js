@@ -633,12 +633,13 @@ function wxLabel(code) {
 const fmtNum = (v, suffix = "") =>
   (v == null || Number.isNaN(v)) ? "—" : `${Math.round(v)}${suffix}`;
 
-// Build a Windy.com URL for the given lat/lon. Windy accepts `?<lat>,<lon>,<zoom>`
-// directly with no account/API key, supports any coordinates worldwide, and
-// shows a rich detailed-forecast UI — a good "more weather info" target.
-function windyUrl(lat, lon) {
-  if (typeof lat !== "number" || typeof lon !== "number") return "";
-  return `https://www.windy.com/?${lat},${lon},9`;
+// Build a Google search URL for the configured city's hourly forecast. Google's
+// hourly-forecast card is more glanceable than a lat/lon map view and works for
+// any city name without an API key.
+function forecastSearchUrl(label) {
+  if (typeof label !== "string" || !label.trim()) return "";
+  const q = encodeURIComponent(`${label.trim()} hourly forecast`).replace(/%20/g, "+");
+  return `https://www.google.com/search?q=${q}`;
 }
 
 function renderWeather(data) {
@@ -673,7 +674,7 @@ function renderWeather(data) {
   // innerHTML — the upstream weather payload comes from a third-party API
   // (Open-Meteo) and should be treated as untrusted input. See PR #13 for the
   // same pattern applied to the NHL details modal.
-  const link = safeUrl(windyUrl(data.latitude, data.longitude));
+  const link = safeUrl(forecastSearchUrl(data.label));
   let wrapper;
   if (link) {
     wrapper = document.createElement("a");
@@ -681,7 +682,7 @@ function renderWeather(data) {
     wrapper.href = link;
     wrapper.target = "_blank";
     wrapper.rel = "noopener noreferrer";
-    wrapper.title = "Open detailed forecast on Windy.com";
+    wrapper.title = `Hourly forecast for ${data.label} on Google`;
   } else {
     wrapper = document.createElement("div");
     wrapper.className = "wx-link";
