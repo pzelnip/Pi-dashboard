@@ -305,11 +305,11 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
     // Per-team color bar on the side. Inline style keeps the static team
     // map as the single source of truth (shared with the modal redesign).
     const barColor = _teamColor(t.abbrev);
-    // Winner / leader glyph (▶) sits to the right of the score on the
-    // winning/leading side (matches the mockup). aria-hidden="true" — the
-    // .winner / .leading class on the row already conveys the state to AT.
+    // Winner / leader glyph (◀) sits to the right of the score on the
+    // winning/leading side, pointing back at the team. aria-hidden="true" —
+    // the .winner / .leading class on the row already conveys the state to AT.
     const glyph = showGlyph
-      ? `<span class="game-team-glyph" aria-hidden="true">▶</span>`
+      ? `<span class="game-team-glyph" aria-hidden="true">◀</span>`
       : `<span class="game-team-glyph game-team-glyph-empty" aria-hidden="true"></span>`;
     return `
     <div class="game-team ${outcome} ${venue}" style="--team-color: ${escapeHtml(barColor)}">
