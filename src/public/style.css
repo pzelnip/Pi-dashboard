@@ -209,7 +209,11 @@ html, body {
    on top of --surface-raised so the rest of the card stays visually quiet. */
 .game.is-live {
   background:
-    radial-gradient(120% 120% at 0% 0%, var(--live-bg) 0%, transparent 40%),
+    radial-gradient(
+      circle at 0% 0%,
+      var(--live-bg) 0%,
+      transparent 55%
+    ),
     var(--surface-raised);
   box-shadow: inset 0 0 0 1px rgba(255, 91, 74, 0.22);
 }
@@ -297,10 +301,10 @@ html, body {
 .game-team.home::before { background: var(--team-color, var(--accent)); }
 .game-team.away::before { background: var(--team-color, var(--text-muted)); }
 
-/* Winner / leader glyph next to the team logo. The empty variant occupies
-   the same slot on the loser side so the logo / name / score columns stay
-   aligned across both rows. Color is the global accent so it reads on top
-   of the existing winner / leader background pills. */
+/* Winner / leader glyph sitting just to the right of the score. The empty
+   variant occupies the same slot on the loser side so the logo / name /
+   score columns stay aligned across both rows. Color is the global accent
+   so it reads on top of the existing winner / leader background pills. */
 .game-team-glyph {
   display: inline-flex;
   align-items: center;
@@ -309,6 +313,7 @@ html, body {
   font-size: 0.85em;
   color: var(--accent);
   flex-shrink: 0;
+  margin-left: 4px;
 }
 .game-team-glyph-empty { visibility: hidden; }
 .game-team.winner .game-team-glyph { color: #7fd184; }
@@ -343,7 +348,7 @@ html, body {
 }
 .status-pill.live {
   background: var(--live-bg);
-  color: var(--live);
+  color: white;
 }
 .status-pill.live::before {
   content: "";
