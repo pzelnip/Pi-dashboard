@@ -1,5 +1,6 @@
 """Tests for NHL parser: status text, team shaping, series text, fetch_nhl envelope."""
 
+import json
 import unittest
 from unittest.mock import patch
 
@@ -545,6 +546,27 @@ class OutcomeTests(unittest.TestCase):
 
         self.assertEqual(result, "")
 
+    def test_outcome_block_missing_last_period_type_returns_empty(self):
+        game = {"gameState": "FINAL", "gameOutcome": {}}
+
+        result = nhl._outcome(game)
+
+        self.assertEqual(result, "")
+
+    def test_empty_string_last_period_type_returns_empty(self):
+        game = {"gameState": "FINAL", "gameOutcome": {"lastPeriodType": ""}}
+
+        result = nhl._outcome(game)
+
+        self.assertEqual(result, "")
+
+    def test_unrecognized_last_period_type_passes_through(self):
+        game = {"gameState": "FINAL", "gameOutcome": {"lastPeriodType": "FOO"}}
+
+        result = nhl._outcome(game)
+
+        self.assertEqual(result, "FOO")
+
 
 class WinningGoalTests(unittest.TestCase):
     def test_regulation_winner_with_period_info(self):
@@ -649,6 +671,71 @@ class WinningGoalTests(unittest.TestCase):
         game = {
             "gameState": "FINAL",
             "winningGoalScorer": {"firstName": "", "lastName": "", "teamAbbrev": "ANA"},
+        }
+
+        result = nhl._winning_goal(game)
+
+        self.assertIsNone(result)
+
+    def test_scorer_as_list_returns_none(self):
+        game = {
+            "gameState": "FINAL",
+            "winningGoalScorer": [{"firstName": "Leo", "lastName": "Carlsson"}],
+        }
+
+        result = nhl._winning_goal(game)
+
+        self.assertIsNone(result)
+
+    def test_scorer_as_string_returns_none(self):
+        game = {
+            "gameState": "FINAL",
+            "winningGoalScorer": "Leo Carlsson",
+        }
+
+        result = nhl._winning_goal(game)
+
+        self.assertIsNone(result)
+
+    def test_scorer_with_only_last_name_returns_partial_dict(self):
+        game = {
+            "gameState": "FINAL",
+            "winningGoalScorer": {
+                "lastName": {"default": "Carlsson"},
+                "teamAbbrev": "ANA",
+            },
+        }
+
+        result = nhl._winning_goal(game)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["firstName"], "")
+        self.assertEqual(result["lastName"], "Carlsson")
+        self.assertEqual(result["abbrev"], "ANA")
+
+    def test_scorer_with_only_first_name_returns_partial_dict(self):
+        game = {
+            "gameState": "FINAL",
+            "winningGoalScorer": {
+                "firstName": {"default": "Leo"},
+                "teamAbbrev": "ANA",
+            },
+        }
+
+        result = nhl._winning_goal(game)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["firstName"], "Leo")
+        self.assertEqual(result["lastName"], "")
+        self.assertEqual(result["abbrev"], "ANA")
+
+    def test_winning_goal_block_present_but_scorer_missing_returns_none(self):
+        game = {
+            "gameState": "FINAL",
+            "winningGoal": {
+                "timeInPeriod": "03:12",
+                "periodDescriptor": {"periodType": "OT"},
+            },
         }
 
         result = nhl._winning_goal(game)
@@ -800,6 +887,61 @@ class FetchNhlTests(unittest.TestCase):
         self.assertEqual(tor["home"]["fullName"], "Maple Leafs")
         self.assertEqual(tor["gameType"], 2)
         self.assertEqual(tor["gameTypeLabel"], "Regular Season")
+
+    def test_fetch_nhl_propagates_outcome_and_winning_goal_for_finished_game(self):
+        payload = {
+            "gameWeek": [
+                {
+                    "date": "2026-04-21",
+                    "games": [
+                        {
+                            "id": 99,
+                            "gameType": 2,
+                            "gameState": "FINAL",
+                            "startTimeUTC": "2026-04-21T23:00:00Z",
+                            "homeTeam": {
+                                "abbrev": "EDM",
+                                "commonName": {"default": "Oilers"},
+                                "score": 4,
+                                "logo": "https://example.com/edm.svg",
+                            },
+                            "awayTeam": {
+                                "abbrev": "VAN",
+                                "commonName": {"default": "Canucks"},
+                                "score": 3,
+                                "logo": "https://example.com/van.svg",
+                            },
+                            "periodDescriptor": {"number": 4, "periodType": "OT"},
+                            "gameOutcome": {"lastPeriodType": "OT"},
+                            "winningGoalScorer": {
+                                "firstName": {"default": "Connor"},
+                                "lastName": {"default": "McDavid"},
+                                "teamAbbrev": "EDM",
+                            },
+                            "winningGoal": {
+                                "timeInPeriod": "03:12",
+                                "periodDescriptor": {"periodType": "OT"},
+                            },
+                        }
+                    ],
+                }
+            ]
+        }
+        raw = json.dumps(payload).encode("utf-8")
+
+        with patch.object(nhl, "fetch_cached", return_value=raw):
+            games = nhl.fetch_nhl("2026-04-21", favorites=[])
+
+        self.assertEqual(len(games), 1)
+        game = games[0]
+        self.assertEqual(game["outcome"], "OT")
+        self.assertEqual(game["winningGoal"], {
+            "firstName": "Connor",
+            "lastName": "McDavid",
+            "abbrev": "EDM",
+            "timeInPeriod": "03:12",
+            "periodType": "OT",
+        })
 
     def test_fetch_nhl_falls_back_to_google_search_for_unmapped_venue(self):
         unmapped_venue = "Some Obscure Stadium & Arena"
