@@ -495,6 +495,167 @@ class AbsoluteUrlTests(unittest.TestCase):
         self.assertEqual(nhl._absolute_nhl_url(""), "")
 
 
+class OutcomeTests(unittest.TestCase):
+    def test_regulation_final(self):
+        game = {"gameState": "FINAL", "gameOutcome": {"lastPeriodType": "REG"}}
+
+        result = nhl._outcome(game)
+
+        self.assertEqual(result, "REG")
+
+    def test_overtime_final(self):
+        game = {"gameState": "OFF", "gameOutcome": {"lastPeriodType": "OT"}}
+
+        result = nhl._outcome(game)
+
+        self.assertEqual(result, "OT")
+
+    def test_shootout_final(self):
+        game = {"gameState": "FINAL", "gameOutcome": {"lastPeriodType": "SO"}}
+
+        result = nhl._outcome(game)
+
+        self.assertEqual(result, "SO")
+
+    def test_live_game_returns_empty(self):
+        game = {"gameState": "LIVE", "gameOutcome": {"lastPeriodType": "REG"}}
+
+        result = nhl._outcome(game)
+
+        self.assertEqual(result, "")
+
+    def test_scheduled_game_returns_empty(self):
+        game = {"gameState": "FUT"}
+
+        result = nhl._outcome(game)
+
+        self.assertEqual(result, "")
+
+    def test_final_without_outcome_block_returns_empty(self):
+        game = {"gameState": "FINAL"}
+
+        result = nhl._outcome(game)
+
+        self.assertEqual(result, "")
+
+    def test_non_dict_outcome_returns_empty(self):
+        game = {"gameState": "FINAL", "gameOutcome": "REG"}
+
+        result = nhl._outcome(game)
+
+        self.assertEqual(result, "")
+
+
+class WinningGoalTests(unittest.TestCase):
+    def test_regulation_winner_with_period_info(self):
+        game = {
+            "gameState": "FINAL",
+            "winningGoalScorer": {
+                "firstName": {"default": "Leo"},
+                "lastName": {"default": "Carlsson"},
+                "teamAbbrev": "ANA",
+            },
+            "winningGoal": {
+                "timeInPeriod": "12:34",
+                "periodDescriptor": {"periodType": "REG"},
+            },
+        }
+
+        result = nhl._winning_goal(game)
+
+        self.assertEqual(result, {
+            "firstName": "Leo",
+            "lastName": "Carlsson",
+            "abbrev": "ANA",
+            "timeInPeriod": "12:34",
+            "periodType": "REG",
+        })
+
+    def test_overtime_winner(self):
+        game = {
+            "gameState": "OFF",
+            "winningGoalScorer": {
+                "firstName": {"default": "Connor"},
+                "lastName": {"default": "McDavid"},
+                "teamAbbrev": "EDM",
+            },
+            "winningGoal": {
+                "timeInPeriod": "03:12",
+                "periodDescriptor": {"periodType": "OT"},
+            },
+        }
+
+        result = nhl._winning_goal(game)
+
+        self.assertEqual(result["periodType"], "OT")
+        self.assertEqual(result["timeInPeriod"], "03:12")
+        self.assertEqual(result["lastName"], "McDavid")
+        self.assertEqual(result["abbrev"], "EDM")
+
+    def test_plain_string_name_fields(self):
+        # Some upstream payloads (and minimal fixtures) use plain strings
+        # rather than {default: ...} dicts. Be tolerant.
+        game = {
+            "gameState": "FINAL",
+            "winningGoalScorer": {
+                "firstName": "Leo",
+                "lastName": "Carlsson",
+                "teamAbbrev": "ANA",
+            },
+        }
+
+        result = nhl._winning_goal(game)
+
+        self.assertEqual(result["firstName"], "Leo")
+        self.assertEqual(result["lastName"], "Carlsson")
+        self.assertEqual(result["abbrev"], "ANA")
+        self.assertEqual(result["timeInPeriod"], "")
+        self.assertEqual(result["periodType"], "")
+
+    def test_missing_winning_goal_block_still_returns_scorer(self):
+        game = {
+            "gameState": "FINAL",
+            "winningGoalScorer": {
+                "firstName": {"default": "Leo"},
+                "lastName": {"default": "Carlsson"},
+                "teamAbbrev": "ANA",
+            },
+        }
+
+        result = nhl._winning_goal(game)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["timeInPeriod"], "")
+        self.assertEqual(result["periodType"], "")
+
+    def test_live_game_returns_none(self):
+        game = {
+            "gameState": "LIVE",
+            "winningGoalScorer": {"firstName": "X", "lastName": "Y", "teamAbbrev": "ZZZ"},
+        }
+
+        result = nhl._winning_goal(game)
+
+        self.assertIsNone(result)
+
+    def test_final_without_scorer_returns_none(self):
+        game = {"gameState": "FINAL"}
+
+        result = nhl._winning_goal(game)
+
+        self.assertIsNone(result)
+
+    def test_scorer_with_empty_names_returns_none(self):
+        game = {
+            "gameState": "FINAL",
+            "winningGoalScorer": {"firstName": "", "lastName": "", "teamAbbrev": "ANA"},
+        }
+
+        result = nhl._winning_goal(game)
+
+        self.assertIsNone(result)
+
+
 class FetchNhlTests(unittest.TestCase):
     def setUp(self):
         self._raw = fixture_bytes("nhl_schedule.json")
@@ -542,6 +703,19 @@ class FetchNhlTests(unittest.TestCase):
         self.assertIsNone(regular["playoffRound"])
         for g in games:
             self.assertIn("playoffRound", g)
+
+    def test_fetch_nhl_exposes_outcome_and_winning_goal_keys(self):
+        with patch.object(nhl, "fetch_cached", side_effect=self._patched_fetch):
+            games = nhl.fetch_nhl("2026-04-21", favorites=[])
+
+        for g in games:
+            self.assertIn("outcome", g)
+            self.assertIn("winningGoal", g)
+        # Fixture has no gameOutcome/winningGoalScorer blocks, so all values
+        # should be the documented "no info" defaults.
+        for g in games:
+            self.assertEqual(g["outcome"], "")
+            self.assertIsNone(g["winningGoal"])
 
     def test_fetch_nhl_empty_when_no_matching_date(self):
         with patch.object(nhl, "fetch_cached", side_effect=self._patched_fetch):
