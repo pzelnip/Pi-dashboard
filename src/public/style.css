@@ -204,13 +204,19 @@ html, body {
   font-size: 0.85em;
   vertical-align: middle;
 }
+/* Live cards: a colored radial fade bleeds in from the top-left corner
+   (matches the mockup) plus a clearly red inner border. The radial sits on
+   top of --surface-raised so the rest of the card stays visually quiet. */
 .game.is-live {
-  background: linear-gradient(
-    180deg,
-    rgba(255, 91, 74, 0.10) 0%,
-    var(--surface-raised) 60%
-  );
-  box-shadow: inset 0 0 0 1px rgba(255, 91, 74, 0.22);
+  background:
+    radial-gradient(
+      ellipse at top left,
+      rgba(255, 91, 74, 0.38) 0%,
+      rgba(255, 91, 74, 0.12) 35%,
+      transparent 70%
+    ),
+    var(--surface-raised);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 91, 74, 0.55);
 }
 .game.is-final {
   background: linear-gradient(
@@ -219,6 +225,12 @@ html, body {
     var(--surface-raised) 60%
   );
   box-shadow: inset 0 0 0 1px rgba(76, 175, 80, 0.20);
+}
+/* Tied live game: amber inner-border layered over the red live border. */
+.game.is-live.is-tied {
+  box-shadow:
+    inset 0 0 0 1.5px rgba(255, 91, 74, 0.55),
+    inset 0 0 0 3px rgba(245, 196, 25, 0.28);
 }
 
 .game-team.winner {
@@ -271,6 +283,10 @@ html, body {
   padding-left: 10px;
 }
 
+/* Per-team color bar. The team's primary color is set inline as
+   --team-color (with --accent as the fallback for unmapped abbrevs). The
+   home/away rules below are kept as a safety fallback for older code paths
+   that don't set --team-color. */
 .game-team::before {
   content: "";
   position: absolute;
@@ -280,10 +296,28 @@ html, body {
   width: 3px;
   border-radius: 2px;
   z-index: 1;
+  background: var(--team-color, var(--accent));
 }
 
-.game-team.home::before { background: var(--accent); }
-.game-team.away::before { background: var(--text-muted); }
+.game-team.home::before { background: var(--team-color, var(--accent)); }
+.game-team.away::before { background: var(--team-color, var(--text-muted)); }
+
+/* Winner / leader glyph sitting just to the right of the score. The empty
+   variant occupies the same slot on the loser side so the logo / name /
+   score columns stay aligned across both rows. Color is the global accent
+   so it reads on top of the existing winner / leader background pills. */
+.game-team-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.85em;
+  font-size: 0.85em;
+  color: var(--accent);
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+.game-team-glyph-empty { visibility: hidden; }
+.game-team.winner .game-team-glyph { color: #7fd184; }
 
 .team-logo {
   width: 1.6em;
@@ -315,7 +349,7 @@ html, body {
 }
 .status-pill.live {
   background: var(--live-bg);
-  color: var(--live);
+  color: white;
 }
 .status-pill.live::before {
   content: "";
@@ -346,6 +380,47 @@ html, body {
   color: var(--text);
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* Quieter sibling to the red LIVE pill — period number ("1ST" / "2ND" /
+   "OT") sits next to it and uses muted text so the live state is the
+   visually loudest element on the card. */
+.period-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Tied-game chip — only rendered on live games where scores match. Uses
+   the warm/amber palette already in use for pre-game pills so it reads as
+   "in progress, no leader yet" rather than a hard error. */
+.tied-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--pregame);
+  background: var(--pregame-bg);
+}
+
+/* GWG sub-line under final cards: same muted secondary style as
+   .game-meta (uppercase, small, muted). Only appears when the parser
+   surfaces a winning-goal scorer. */
+.game-gwg {
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 2px;
 }
 @keyframes pulse {
   0%, 100% { opacity: 1; }

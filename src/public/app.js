@@ -262,20 +262,61 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
   });
   if (bucket) _nhlGamesByBucket[bucket] = sorted;
 
+  // Map raw period info to a short uppercase chip label for live games.
+  // Regulation periods come from periodDescriptor.number (1=1ST, 2=2ND,
+  // 3=3RD); OT/SO use the periodType. Returns "" when we can't infer one.
+  const livePeriodLabel = g => {
+    const pd = g.periodDescriptor || {};
+    const pt = (pd.periodType || "").toUpperCase();
+    if (pt === "OT") return "OT";
+    if (pt === "SO") return "SO";
+    const n = Number(pd.number);
+    if (n === 1) return "1ST";
+    if (n === 2) return "2ND";
+    if (n === 3) return "3RD";
+    if (Number.isInteger(n) && n >= 4) return "OT";
+    // Fall back to splitting the legacy statusText ("2nd · 08:32" → "2ND").
+    if (g.statusText) {
+      const m = String(g.statusText).match(/^([^·]+)/);
+      if (m) return m[1].trim().toUpperCase();
+    }
+    return "";
+  };
+
+  // Live games render two pills: a loud red "● LIVE" plus a quieter period
+  // chip ("2ND" / "OT" / etc.). Final pills get an OT/SO suffix when the
+  // upstream outcome warrants it. Pre-game shows the amber pill + start time.
   const pillFor = g => {
-    if (isLive(g)) return `<span class="status-pill live">${escapeHtml(g.statusText || "LIVE")}</span>`;
+    if (isLive(g)) {
+      const period = livePeriodLabel(g);
+      const periodChip = period
+        ? `<span class="period-chip">${escapeHtml(period)}</span>`
+        : "";
+      return `<span class="status-pill live">LIVE</span>${periodChip}`;
+    }
     if (isPregame(g)) return `<span class="status-pill pregame">${escapeHtml("Pre-game")}</span> <span class="status-pill scheduled">${escapeHtml(formatTime(g.startTime))}</span>`;
     if (isScheduled(g)) return `<span class="status-pill scheduled">${escapeHtml(formatTime(g.startTime))}</span>`;
+    // Final: keep the existing Final/OT and Final/SO suffix from statusText.
     return `<span class="status-pill final">${escapeHtml(g.statusText || "Final")}</span>`;
   };
 
-  const row = (t, outcome, isFav, venue) => {
+  const row = (t, outcome, isFav, venue, showGlyph) => {
     const logoUrl = safeUrl(t.logo);
+    // Per-team color bar on the side. Inline style keeps the static team
+    // map as the single source of truth (shared with the modal redesign).
+    const barColor = _teamColor(t.abbrev);
+    // Winner / leader glyph (◀) sits to the right of the score on the
+    // winning/leading side, pointing back at the team. aria-hidden="true" —
+    // the .winner / .leading class on the row already conveys the state to AT.
+    const glyph = showGlyph
+      ? `<span class="game-team-glyph" aria-hidden="true">◀</span>`
+      : `<span class="game-team-glyph game-team-glyph-empty" aria-hidden="true"></span>`;
     return `
-    <div class="game-team ${outcome} ${venue}">
+    <div class="game-team ${outcome} ${venue}" style="--team-color: ${escapeHtml(barColor)}">
       ${logoUrl ? `<img class="team-logo" src="${escapeHtml(logoUrl)}" alt="" onerror="this.remove()">` : ""}
       <span class="team-name">${escapeHtml(t.name || t.abbrev || "")}${isFav ? ' <span class="fav-star" aria-label="Favorite team">★</span>' : ""}</span>
       <span class="team-score">${escapeHtml(String(t.score ?? ""))}</span>
+      ${glyph}
     </div>`;
   };
 
@@ -308,16 +349,41 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
       </div>`;
   };
 
+  // Build the "GWG: ANA Carlsson (OT 3:12)" sub-line shown under final games
+  // when the upstream payload includes the winning-goal scorer. Uses last
+  // name only to keep the line short on the kiosk-narrow card. OT/SO games
+  // get a parenthetical with the period and (if available) time-of-goal.
+  const renderGwg = g => {
+    const wg = g.winningGoal;
+    if (!wg || !wg.lastName) return "";
+    const teamPrefix = wg.abbrev ? `${escapeHtml(wg.abbrev)} ` : "";
+    const name = `${teamPrefix}${escapeHtml(wg.lastName)}`;
+    const pt = (wg.periodType || "").toUpperCase();
+    const isExtra = pt === "OT" || pt === "SO";
+    let qualifier = "";
+    if (isExtra) {
+      qualifier = wg.timeInPeriod
+        ? ` (${escapeHtml(pt)} ${escapeHtml(wg.timeInPeriod)})`
+        : ` (${escapeHtml(pt)})`;
+    }
+    return `<div class="game-gwg">GWG: ${name}${qualifier}</div>`;
+  };
+
   const renderGame = (g, idx) => {
     let awayCls = "", homeCls = "";
+    let awayGlyph = false, homeGlyph = false;
     const bothScores = g.away.score != null && g.home.score != null;
+    const tied = bothScores && g.away.score === g.home.score;
     if (isFinal(g) && bothScores) {
-      if (g.away.score > g.home.score) { awayCls = "winner"; homeCls = "loser"; }
-      else if (g.home.score > g.away.score) { homeCls = "winner"; awayCls = "loser"; }
+      if (g.away.score > g.home.score) { awayCls = "winner"; homeCls = "loser"; awayGlyph = true; }
+      else if (g.home.score > g.away.score) { homeCls = "winner"; awayCls = "loser"; homeGlyph = true; }
     } else if (isLive(g) && bothScores) {
-      if (g.away.score > g.home.score) awayCls = "leading";
-      else if (g.home.score > g.away.score) homeCls = "leading";
+      if (g.away.score > g.home.score) { awayCls = "leading"; awayGlyph = true; }
+      else if (g.home.score > g.away.score) { homeCls = "leading"; homeGlyph = true; }
     }
+    // Tied class only on live games — a final regulation tie isn't a thing
+    // in modern NHL (every final has a winner via OT/SO).
+    const tiedCls = isLive(g) && tied ? " is-tied" : "";
     const stateCls = isLive(g) ? "is-live" : isFinal(g) ? "is-final" : "";
     const r = Number(g.playoffRound);
     const hasRound = Number.isInteger(r) && r >= 1 && r <= 4;
@@ -326,21 +392,27 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
     const watermark = hasRound ? renderRoundWatermark(r) : "";
     const matchupLabel = `${escapeHtml(g.away.fullName || g.away.name || g.away.abbrev || "away")} at ${escapeHtml(g.home.fullName || g.home.name || g.home.abbrev || "home")}`;
     const clickAttrs = bucket
-      ? `class="game game-clickable ${stateCls}" tabindex="0" role="button" aria-label="Show details for ${matchupLabel}${hasRound ? `, ${roundLabel}` : ""}" data-nhl-bucket="${escapeHtml(bucket)}" data-nhl-index="${idx}"${hasRound ? ` title="${roundLabel}"` : ""}${roundAttr}`
-      : `class="game ${stateCls}"${hasRound ? ` title="${roundLabel}"` : ""}${roundAttr}`;
+      ? `class="game game-clickable ${stateCls}${tiedCls}" tabindex="0" role="button" aria-label="Show details for ${matchupLabel}${hasRound ? `, ${roundLabel}` : ""}" data-nhl-bucket="${escapeHtml(bucket)}" data-nhl-index="${idx}"${hasRound ? ` title="${roundLabel}"` : ""}${roundAttr}`
+      : `class="game ${stateCls}${tiedCls}"${hasRound ? ` title="${roundLabel}"` : ""}${roundAttr}`;
+    const tiedChip = isLive(g) && tied
+      ? `<span class="tied-chip" aria-label="Tied game">TIED</span>`
+      : "";
+    const gwgLine = isFinal(g) ? renderGwg(g) : "";
     return `
     <div ${clickAttrs}>
       ${watermark}
       <div class="game-meta">
         ${pillFor(g)}
+        ${tiedChip}
         ${g.seriesText ? `<span class="series-tag">${escapeHtml(g.seriesText)}</span>` : ""}
       </div>
       <div class="game-body">
         <div class="game-teams">
-          ${row(g.away, awayCls, g.away.isFavorite, "away")}
-          ${row(g.home, homeCls, g.home.isFavorite, "home")}
+          ${row(g.away, awayCls, g.away.isFavorite, "away", awayGlyph)}
+          ${row(g.home, homeCls, g.home.isFavorite, "home", homeGlyph)}
         </div>
       </div>
+      ${gwgLine}
     </div>`;
   };
 

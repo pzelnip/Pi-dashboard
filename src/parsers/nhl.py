@@ -283,6 +283,54 @@ def _series_info(s: dict | None) -> dict | None:
     }
 
 
+def _outcome(game: dict) -> str:
+    """Return the last-period type for finished games (e.g. "REG", "OT", "SO").
+
+    Sourced from gameOutcome.lastPeriodType on the upstream schedule payload.
+    Returns an empty string for live/scheduled games or when the field is
+    missing — the frontend treats "" as "no badge needed beyond the default
+    Final pill".
+    """
+    state = game.get("gameState", "")
+    if state not in ("OFF", "FINAL"):
+        return ""
+    if isinstance(outcome := game.get("gameOutcome"), dict):
+        return str(outcome.get("lastPeriodType") or "").strip()
+    return ""
+
+
+def _winning_goal(game: dict) -> dict | None:
+    """Distill winningGoalScorer + winningGoal block into a small frontend shape.
+
+    Returns None when the upstream payload is missing the scorer (no goals,
+    live/scheduled game, etc.). Otherwise emits {firstName, lastName, abbrev,
+    timeInPeriod, periodType} so the frontend can render `GWG: ANA Carlsson
+    (OT 3:12)`. Period/time info is best-effort — when missing the frontend
+    just omits the parenthetical.
+    """
+    state = game.get("gameState", "")
+    if state not in ("OFF", "FINAL"):
+        return None
+    scorer = game.get("winningGoalScorer")
+    if not isinstance(scorer, dict):
+        return None
+    first = (scorer.get("firstName") or {}).get("default", "") if isinstance(scorer.get("firstName"), dict) else (scorer.get("firstName") or "")
+    last = (scorer.get("lastName") or {}).get("default", "") if isinstance(scorer.get("lastName"), dict) else (scorer.get("lastName") or "")
+    if not (first or last):
+        return None
+    # winningGoal block (separate from winningGoalScorer) carries the time/
+    # period for the goal. Be tolerant — older fixtures may not have it.
+    goal = game.get("winningGoal") if isinstance(game.get("winningGoal"), dict) else {}
+    pd = goal.get("periodDescriptor") or {}
+    return {
+        "firstName": str(first).strip(),
+        "lastName": str(last).strip(),
+        "abbrev": str(scorer.get("teamAbbrev", "") or "").strip(),
+        "timeInPeriod": str(goal.get("timeInPeriod", "") or "").strip(),
+        "periodType": str(pd.get("periodType", "") or "").strip(),
+    }
+
+
 def _absolute_nhl_url(path: str) -> str:
     """NHL upstream returns several link fields as site-relative paths
     (e.g. "/gamecenter/...") rather than absolute URLs. Make them clickable
@@ -343,6 +391,8 @@ def fetch_nhl(date: str | None, favorites: list[str]) -> list[dict]:
                     "gameType": game_type,
                     "gameTypeLabel": GAME_TYPE_LABEL.get(game_type, ""),
                     "broadcasts": _broadcasts(game),
+                    "outcome": _outcome(game),
+                    "winningGoal": _winning_goal(game),
                     "series": _series_info(game.get("seriesStatus")),
                     "seriesUrl": _absolute_nhl_url(game.get("seriesUrl", "")),
                     "gameCenterLink": _absolute_nhl_url(game.get("gameCenterLink", "")),

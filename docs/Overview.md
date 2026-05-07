@@ -35,12 +35,25 @@ Source: `src/parsers/nhl.py`, rendering in `src/public/app.js` (`renderNHL`,
 For each game the panel shows a card with:
 
 - **Status pill** — colour-coded by state:
-  - `LIVE` / `CRIT`: red pill with a pulsing dot, period + clock
-    (e.g. "2nd · 7:42", "End of 1st").
+  - `LIVE` / `CRIT`: red pulsing `● LIVE` pill paired with a quieter
+    period chip (`1ST` / `2ND` / `OT` / `SO`).
   - `FUT` / `PRE`: scheduled, shows local start time (en-US, 12-hour).
   - `OFF` / `FINAL`: muted "Final", "Final/OT", or "Final/SO".
+- **Live-card colored fade** — live cards get a subtle red radial fade in
+  the top-left corner so they read as "in progress" at a glance.
+- **Per-team color bars** — the thin vertical bar beside each team row
+  uses the team's primary brand color (shared with the detail modal).
+- **Winner / leader glyph** — finished games show a ▶ next to the
+  winning team; live games show one next to whichever team is currently
+  leading. Suppressed for tied games and scheduled games.
+- **Tied-game cue** — live games where the score is level get a subtle
+  amber `TIED` chip and a warmer card border accent.
 - **Team rows** — logo, common name, score. The leading team (live) or
   winning team (final) is visually emphasised; the losing team is dimmed.
+- **GWG sub-line** — final games whose upstream payload includes a
+  winning-goal scorer render a muted `GWG: ANA Carlsson` line under the
+  team rows. OT/SO winners get an `(OT 3:12)` qualifier when the
+  time-of-goal is available.
 - **Favourite-team star** — see below.
 - **Playoff round badge** — see below.
 - **Series text** — for playoff games: `Game 5 (EDM leads 3-2)`,
