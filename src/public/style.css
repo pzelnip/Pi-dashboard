@@ -400,18 +400,6 @@ html, body {
 /* Tied-game chip — only rendered on live games where scores match. Uses
    the warm/amber palette already in use for pre-game pills so it reads as
    "in progress, no leader yet" rather than a hard error. */
-.tied-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: var(--fs-meta);
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  color: var(--pregame);
-  background: var(--pregame-bg);
-}
-
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
