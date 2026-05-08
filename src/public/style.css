@@ -243,6 +243,7 @@ html, body {
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 16px;
+  position: relative;
 }
 
 .game-teams {

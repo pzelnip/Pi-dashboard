@@ -367,12 +367,12 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
       : `class="game ${stateCls}${tiedCls}"${hasRound ? ` title="${roundLabel}"` : ""}${roundAttr}`;
     return `
     <div ${clickAttrs}>
-      ${watermark}
       <div class="game-meta">
         ${pillFor(g)}
         ${g.seriesText ? `<span class="series-tag">${escapeHtml(g.seriesText)}</span>` : ""}
       </div>
       <div class="game-body">
+        ${watermark}
         <div class="game-teams">
           ${row(g.away, awayCls, g.away.isFavorite, "away", awayGlyph)}
           ${row(g.home, homeCls, g.home.isFavorite, "home", homeGlyph)}
