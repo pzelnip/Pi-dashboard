@@ -576,36 +576,7 @@ function renderGameDetails(g) {
 
     const seriesWrap = el("div", "gd-series-row");
 
-    const labelWrap = el("div", "gd-series-label");
-    const parts = [roundLabel];
-    if (gameNum) parts.push(`Game ${gameNum}`);
-    parts.push(`Best of ${totalDots}`);
-    labelWrap.appendChild(textNode(parts.join(" · ")));
-    seriesWrap.appendChild(labelWrap);
-
-    // Numbered progress pills. "Filled" through the current game (every
-     // pill at index <= gameNumber gets the accent fill); pills after the
-     // current game stay muted/ring-only. The current pill itself gets a
-     // subtle emphasis ring on top of the accent fill so the user can tell
-     // where in the series we are at a glance.
-    const dotsWrap = el("div", "gd-series-dots", null);
-    dotsWrap.setAttribute("role", "img");
-    dotsWrap.setAttribute(
-      "aria-label",
-      gameNum ? `Game ${gameNum} of ${totalDots}` : `Best of ${totalDots}`
-    );
-    for (let i = 1; i <= totalDots; i++) {
-      const isFilled = gameNum > 0 && i <= gameNum;
-      const isCurrent = i === gameNum;
-      const cls = [
-        "gd-series-pill",
-        isFilled ? "is-filled" : "",
-        isCurrent ? "is-current" : "",
-      ].filter(Boolean).join(" ");
-      dotsWrap.appendChild(el("span", cls, String(i)));
-    }
-    seriesWrap.appendChild(dotsWrap);
-
+    // Leader text first (most prominent — who's winning the series)
     let leaderText;
     if (top && bot) {
       if (topW === 0 && botW === 0) {
@@ -626,6 +597,36 @@ function renderGameDetails(g) {
       seriesWrap.appendChild(el("div", "gd-series-leader", leaderText));
     }
 
+    // Context line (round · game · best of)
+    const labelWrap = el("div", "gd-series-label");
+    const parts = [roundLabel];
+    if (gameNum) parts.push(`Game ${gameNum}`);
+    parts.push(`Best of ${totalDots}`);
+    labelWrap.appendChild(textNode(parts.join(" · ")));
+    seriesWrap.appendChild(labelWrap);
+
+    // Numbered progress pills with three states:
+    // - Filled: completed games (index < current game number)
+    // - Current: the current game (outlined highlight)
+    // - Future: games not yet played (faint outline)
+    const dotsWrap = el("div", "gd-series-dots", null);
+    dotsWrap.setAttribute("role", "img");
+    dotsWrap.setAttribute(
+      "aria-label",
+      gameNum ? `Game ${gameNum} of ${totalDots}` : `Best of ${totalDots}`
+    );
+    for (let i = 1; i <= totalDots; i++) {
+      const isFilled = gameNum > 0 && i < gameNum;
+      const isCurrent = i === gameNum;
+      const cls = [
+        "gd-series-pill",
+        isFilled ? "is-filled" : "",
+        isCurrent ? "is-current" : "",
+      ].filter(Boolean).join(" ");
+      dotsWrap.appendChild(el("span", cls, String(i)));
+    }
+    seriesWrap.appendChild(dotsWrap);
+
     frag.appendChild(seriesWrap);
   }
 
@@ -639,7 +640,9 @@ function renderGameDetails(g) {
     const metaRow = el("div", "gd-meta-row");
     if (showStart) {
       const startSpan = el("span", "gd-meta-item");
-      startSpan.appendChild(el("span", "gd-meta-label", "Start"));
+      const clockIcon = el("span", "gd-meta-icon", "⏱");
+      clockIcon.setAttribute("aria-hidden", "true");
+      startSpan.appendChild(clockIcon);
       startSpan.appendChild(textNode(" "));
       startSpan.appendChild(el("span", "gd-meta-value", startLabel));
       metaRow.appendChild(startSpan);
