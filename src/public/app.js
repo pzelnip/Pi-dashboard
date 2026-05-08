@@ -630,34 +630,6 @@ function renderGameDetails(g) {
     frag.appendChild(seriesWrap);
   }
 
-  // ---- Start time + game type, combined on a single centered line ----
-  // On desktop these sit side-by-side separated by a "·"; on narrow widths the
-  // CSS stacks them. Only shows the start time as a dedicated entry when not
-  // scheduled or pre-game (the scheduled / pre-game pill in the header already
-  // shows it).
-  const showStart = startLabel && !isScheduled && !isPregame;
-  if (showStart || g.gameTypeLabel) {
-    const metaRow = el("div", "gd-meta-row");
-    if (showStart) {
-      const startSpan = el("span", "gd-meta-item");
-      const clockIcon = el("span", "gd-meta-icon", "⏱");
-      clockIcon.setAttribute("aria-hidden", "true");
-      startSpan.appendChild(clockIcon);
-      startSpan.appendChild(textNode(" "));
-      startSpan.appendChild(el("span", "gd-meta-value", startLabel));
-      metaRow.appendChild(startSpan);
-    }
-    if (showStart && g.gameTypeLabel) {
-      metaRow.appendChild(el("span", "gd-meta-sep", "·"));
-    }
-    if (g.gameTypeLabel) {
-      const typeSpan = el("span", "gd-meta-item");
-      typeSpan.appendChild(el("span", "gd-meta-value", g.gameTypeLabel));
-      metaRow.appendChild(typeSpan);
-    }
-    frag.appendChild(metaRow);
-  }
-
   // ---- Other detail rows preserved as <dl> (odds) ----
   const rows = [];
 
@@ -687,7 +659,7 @@ function renderGameDetails(g) {
     frag.appendChild(dl);
   }
 
-  // ---- Venue row (with location pin) ----
+  // ---- Venue row (with map marker) ----
   // Venue gets its own muted line. When the server provides a URL
   // (`venueUrl` — Wikipedia for known arenas, Google search fallback
   // otherwise), render as an anchor so kiosk viewers can click through.
@@ -705,7 +677,7 @@ function renderGameDetails(g) {
     } else {
       venueNode = el("span", "gd-venue-link");
     }
-    const pin = el("span", "gd-venue-icon", "📍");
+    const pin = el("span", "gd-venue-icon", "◉");
     pin.setAttribute("aria-hidden", "true");
     venueNode.appendChild(pin);
     venueNode.appendChild(textNode(" "));
@@ -766,6 +738,34 @@ function renderGameDetails(g) {
       broadcastsRow.appendChild(node);
     });
     frag.appendChild(broadcastsRow);
+  }
+
+  // ---- Start time + game type, combined on a single centered line ----
+  // Placed after venue + broadcasts so the flow matches the mockup:
+  // series → venue → broadcasts → start/type → CTAs.
+  // Only shows the start time as a dedicated entry when not scheduled or
+  // pre-game (the scheduled / pre-game pill in the header already shows it).
+  const showStart = startLabel && !isScheduled && !isPregame;
+  if (showStart || g.gameTypeLabel) {
+    const metaRow = el("div", "gd-meta-row");
+    if (showStart) {
+      const startSpan = el("span", "gd-meta-item");
+      const clockIcon = el("span", "gd-meta-icon", "⏱");
+      clockIcon.setAttribute("aria-hidden", "true");
+      startSpan.appendChild(clockIcon);
+      startSpan.appendChild(textNode(" "));
+      startSpan.appendChild(el("span", "gd-meta-value", startLabel));
+      metaRow.appendChild(startSpan);
+    }
+    if (showStart && g.gameTypeLabel) {
+      metaRow.appendChild(el("span", "gd-meta-sep", "·"));
+    }
+    if (g.gameTypeLabel) {
+      const typeSpan = el("span", "gd-meta-item");
+      typeSpan.appendChild(el("span", "gd-meta-value", g.gameTypeLabel));
+      metaRow.appendChild(typeSpan);
+    }
+    frag.appendChild(metaRow);
   }
 
   // ---- Footer action buttons ----

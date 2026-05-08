@@ -345,7 +345,11 @@ html, body {
   background: var(--pregame-bg);
   color: var(--pregame);
 }
-.status-pill.final { color: var(--text-muted); }
+.status-pill.final {
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
 
 .series-tag {
   display: inline-flex;
@@ -1019,14 +1023,18 @@ a.wx-link:focus-visible {
   min-width: 0;
 }
 /* Thin vertical color accent; color set inline from _TEAM_COLORS map.
-   Reduced from 5px to 3px with softer opacity for subtler side accents. */
+   Reduced from 5px to 3px with fading tips (mask-image gradient) for a
+   softer, less distracting accent. The inline `background` is set by JS. */
 .gd-team-bar {
   flex: 0 0 3px;
   width: 3px;
   border-radius: 2px;
   align-self: stretch;
   opacity: 0.55;
-  filter: blur(0.5px);
+  /* Fade the bar at top and bottom using a mask gradient so the tips
+     dissolve instead of ending abruptly. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 20%, black 80%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, black 20%, black 80%, transparent);
   /* Fallback if inline style isn't applied for some reason. */
   background: var(--accent);
 }
@@ -1043,8 +1051,8 @@ a.wx-link:focus-visible {
   order: 1;
 }
 .gd-team-logo {
-  width: 82px;
-  height: 82px;
+  width: 96px;
+  height: 96px;
   object-fit: contain;
 }
 .gd-team-name {
@@ -1269,7 +1277,7 @@ a.wx-link:focus-visible {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 8px;
+  gap: 4px 12px;
   margin: 0 0 16px;
   font-size: 0.88em;
   color: var(--text-dim);
@@ -1358,7 +1366,7 @@ a.wx-link:focus-visible {
   .gd-team-away { grid-area: away; }
   .gd-team-home { grid-area: home; }
   .gd-score-stack { grid-area: score; }
-  .gd-team-logo { width: 56px; height: 56px; }
+  .gd-team-logo { width: 60px; height: 60px; }
   .gd-team-name { font-size: 0.95em; }
   .gd-team { gap: 8px; }
   .gd-team-bar { flex-basis: 3px; width: 3px; }
