@@ -46,8 +46,8 @@ For each game the panel shows a card with:
 - **Winner / leader glyph** — finished games show a ▶ next to the
   winning team; live games show one next to whichever team is currently
   leading. Suppressed for tied games and scheduled games.
-- **Tied-game cue** — live games where the score is level get a subtle
-  amber `TIED` chip and a warmer card border accent.
+- **Tied-game cue** — live games where the score is level get a warmer
+  card border accent.
 - **Team rows** — logo, common name, score. The leading team (live) or
   winning team (final) is visually emphasised; the losing team is dimmed.
 - **Favourite-team star** — see below.

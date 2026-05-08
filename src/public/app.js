@@ -374,15 +374,11 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
     const clickAttrs = bucket
       ? `class="game game-clickable ${stateCls}${tiedCls}" tabindex="0" role="button" aria-label="Show details for ${matchupLabel}${hasRound ? `, ${roundLabel}` : ""}" data-nhl-bucket="${escapeHtml(bucket)}" data-nhl-index="${idx}"${hasRound ? ` title="${roundLabel}"` : ""}${roundAttr}`
       : `class="game ${stateCls}${tiedCls}"${hasRound ? ` title="${roundLabel}"` : ""}${roundAttr}`;
-    const tiedChip = isLive(g) && tied
-      ? `<span class="tied-chip" aria-label="Tied game">TIED</span>`
-      : "";
     return `
     <div ${clickAttrs}>
       ${watermark}
       <div class="game-meta">
         ${pillFor(g)}
-        ${tiedChip}
         ${g.seriesText ? `<span class="series-tag">${escapeHtml(g.seriesText)}</span>` : ""}
       </div>
       <div class="game-body">
