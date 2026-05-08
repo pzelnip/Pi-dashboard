@@ -568,180 +568,6 @@ class OutcomeTests(unittest.TestCase):
         self.assertEqual(result, "FOO")
 
 
-class WinningGoalTests(unittest.TestCase):
-    def test_regulation_winner_with_period_info(self):
-        game = {
-            "gameState": "FINAL",
-            "winningGoalScorer": {
-                "firstName": {"default": "Leo"},
-                "lastName": {"default": "Carlsson"},
-                "teamAbbrev": "ANA",
-            },
-            "winningGoal": {
-                "timeInPeriod": "12:34",
-                "periodDescriptor": {"periodType": "REG"},
-            },
-        }
-
-        result = nhl._winning_goal(game)
-
-        self.assertEqual(result, {
-            "firstName": "Leo",
-            "lastName": "Carlsson",
-            "abbrev": "ANA",
-            "timeInPeriod": "12:34",
-            "periodType": "REG",
-        })
-
-    def test_overtime_winner(self):
-        game = {
-            "gameState": "OFF",
-            "winningGoalScorer": {
-                "firstName": {"default": "Connor"},
-                "lastName": {"default": "McDavid"},
-                "teamAbbrev": "EDM",
-            },
-            "winningGoal": {
-                "timeInPeriod": "03:12",
-                "periodDescriptor": {"periodType": "OT"},
-            },
-        }
-
-        result = nhl._winning_goal(game)
-
-        self.assertEqual(result["periodType"], "OT")
-        self.assertEqual(result["timeInPeriod"], "03:12")
-        self.assertEqual(result["lastName"], "McDavid")
-        self.assertEqual(result["abbrev"], "EDM")
-
-    def test_plain_string_name_fields(self):
-        # Some upstream payloads (and minimal fixtures) use plain strings
-        # rather than {default: ...} dicts. Be tolerant.
-        game = {
-            "gameState": "FINAL",
-            "winningGoalScorer": {
-                "firstName": "Leo",
-                "lastName": "Carlsson",
-                "teamAbbrev": "ANA",
-            },
-        }
-
-        result = nhl._winning_goal(game)
-
-        self.assertEqual(result["firstName"], "Leo")
-        self.assertEqual(result["lastName"], "Carlsson")
-        self.assertEqual(result["abbrev"], "ANA")
-        self.assertEqual(result["timeInPeriod"], "")
-        self.assertEqual(result["periodType"], "")
-
-    def test_missing_winning_goal_block_still_returns_scorer(self):
-        game = {
-            "gameState": "FINAL",
-            "winningGoalScorer": {
-                "firstName": {"default": "Leo"},
-                "lastName": {"default": "Carlsson"},
-                "teamAbbrev": "ANA",
-            },
-        }
-
-        result = nhl._winning_goal(game)
-
-        self.assertIsNotNone(result)
-        self.assertEqual(result["timeInPeriod"], "")
-        self.assertEqual(result["periodType"], "")
-
-    def test_live_game_returns_none(self):
-        game = {
-            "gameState": "LIVE",
-            "winningGoalScorer": {"firstName": "X", "lastName": "Y", "teamAbbrev": "ZZZ"},
-        }
-
-        result = nhl._winning_goal(game)
-
-        self.assertIsNone(result)
-
-    def test_final_without_scorer_returns_none(self):
-        game = {"gameState": "FINAL"}
-
-        result = nhl._winning_goal(game)
-
-        self.assertIsNone(result)
-
-    def test_scorer_with_empty_names_returns_none(self):
-        game = {
-            "gameState": "FINAL",
-            "winningGoalScorer": {"firstName": "", "lastName": "", "teamAbbrev": "ANA"},
-        }
-
-        result = nhl._winning_goal(game)
-
-        self.assertIsNone(result)
-
-    def test_scorer_as_list_returns_none(self):
-        game = {
-            "gameState": "FINAL",
-            "winningGoalScorer": [{"firstName": "Leo", "lastName": "Carlsson"}],
-        }
-
-        result = nhl._winning_goal(game)
-
-        self.assertIsNone(result)
-
-    def test_scorer_as_string_returns_none(self):
-        game = {
-            "gameState": "FINAL",
-            "winningGoalScorer": "Leo Carlsson",
-        }
-
-        result = nhl._winning_goal(game)
-
-        self.assertIsNone(result)
-
-    def test_scorer_with_only_last_name_returns_partial_dict(self):
-        game = {
-            "gameState": "FINAL",
-            "winningGoalScorer": {
-                "lastName": {"default": "Carlsson"},
-                "teamAbbrev": "ANA",
-            },
-        }
-
-        result = nhl._winning_goal(game)
-
-        self.assertIsNotNone(result)
-        self.assertEqual(result["firstName"], "")
-        self.assertEqual(result["lastName"], "Carlsson")
-        self.assertEqual(result["abbrev"], "ANA")
-
-    def test_scorer_with_only_first_name_returns_partial_dict(self):
-        game = {
-            "gameState": "FINAL",
-            "winningGoalScorer": {
-                "firstName": {"default": "Leo"},
-                "teamAbbrev": "ANA",
-            },
-        }
-
-        result = nhl._winning_goal(game)
-
-        self.assertIsNotNone(result)
-        self.assertEqual(result["firstName"], "Leo")
-        self.assertEqual(result["lastName"], "")
-        self.assertEqual(result["abbrev"], "ANA")
-
-    def test_winning_goal_block_present_but_scorer_missing_returns_none(self):
-        game = {
-            "gameState": "FINAL",
-            "winningGoal": {
-                "timeInPeriod": "03:12",
-                "periodDescriptor": {"periodType": "OT"},
-            },
-        }
-
-        result = nhl._winning_goal(game)
-
-        self.assertIsNone(result)
-
 
 class FetchNhlTests(unittest.TestCase):
     def setUp(self):
@@ -791,18 +617,17 @@ class FetchNhlTests(unittest.TestCase):
         for g in games:
             self.assertIn("playoffRound", g)
 
-    def test_fetch_nhl_exposes_outcome_and_winning_goal_keys(self):
+    def test_fetch_nhl_exposes_outcome_key(self):
         with patch.object(nhl, "fetch_cached", side_effect=self._patched_fetch):
             games = nhl.fetch_nhl("2026-04-21", favorites=[])
 
         for g in games:
             self.assertIn("outcome", g)
-            self.assertIn("winningGoal", g)
-        # Fixture has no gameOutcome/winningGoalScorer blocks, so all values
+            self.assertNotIn("winningGoal", g)
+        # Fixture has no gameOutcome blocks, so all values
         # should be the documented "no info" defaults.
         for g in games:
             self.assertEqual(g["outcome"], "")
-            self.assertIsNone(g["winningGoal"])
 
     def test_fetch_nhl_empty_when_no_matching_date(self):
         with patch.object(nhl, "fetch_cached", side_effect=self._patched_fetch):
@@ -888,7 +713,7 @@ class FetchNhlTests(unittest.TestCase):
         self.assertEqual(tor["gameType"], 2)
         self.assertEqual(tor["gameTypeLabel"], "Regular Season")
 
-    def test_fetch_nhl_propagates_outcome_and_winning_goal_for_finished_game(self):
+    def test_fetch_nhl_propagates_outcome_for_finished_game(self):
         payload = {
             "gameWeek": [
                 {
@@ -913,15 +738,6 @@ class FetchNhlTests(unittest.TestCase):
                             },
                             "periodDescriptor": {"number": 4, "periodType": "OT"},
                             "gameOutcome": {"lastPeriodType": "OT"},
-                            "winningGoalScorer": {
-                                "firstName": {"default": "Connor"},
-                                "lastName": {"default": "McDavid"},
-                                "teamAbbrev": "EDM",
-                            },
-                            "winningGoal": {
-                                "timeInPeriod": "03:12",
-                                "periodDescriptor": {"periodType": "OT"},
-                            },
                         }
                     ],
                 }
@@ -935,13 +751,6 @@ class FetchNhlTests(unittest.TestCase):
         self.assertEqual(len(games), 1)
         game = games[0]
         self.assertEqual(game["outcome"], "OT")
-        self.assertEqual(game["winningGoal"], {
-            "firstName": "Connor",
-            "lastName": "McDavid",
-            "abbrev": "EDM",
-            "timeInPeriod": "03:12",
-            "periodType": "OT",
-        })
 
     def test_fetch_nhl_falls_back_to_google_search_for_unmapped_venue(self):
         unmapped_venue = "Some Obscure Stadium & Arena"
