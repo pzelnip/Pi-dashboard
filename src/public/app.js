@@ -328,23 +328,14 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
   };
   const ROMAN_NUMERALS = { 1: "I", 2: "II", 3: "III", 4: "IV" };
 
-  // Ambient series-progress watermark for playoff games. Replaces the old
-  // 25/50/75/100% solid fill. Layout: 4 vertical segments, a centered Roman
-  // numeral for the current round, and a left-to-right gradient whose filled
-  // portion = (round / 4) * 100%. Foreground content sits on top via the
-  // .game's stacking context (isolation: isolate). See style.css for layering.
-  // TODO: source gradient color from per-team primary color once _TEAM_COLORS
-  // (introduced in PR #43, modal redesign) lands on main. For now we use the
-  // global accent color so this PR stays self-contained.
+  // Ambient round-indicator watermark for playoff games: a single large,
+  // low-opacity Roman numeral filling the card behind the foreground content.
+  // Foreground sits on top via the .game's stacking context (isolation:
+  // isolate). See style.css for sizing/typography.
   const renderRoundWatermark = round => {
     const numeral = ROMAN_NUMERALS[round] || "";
-    const fillPct = round * 25;
     return `
-      <div class="round-bg" style="--round-fill: ${fillPct}%" aria-hidden="true">
-        <div class="round-segment"></div>
-        <div class="round-segment"></div>
-        <div class="round-segment"></div>
-        <div class="round-segment"></div>
+      <div class="round-bg" aria-hidden="true">
         <span class="round-roman">${numeral}</span>
       </div>`;
   };
