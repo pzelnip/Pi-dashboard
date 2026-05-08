@@ -253,7 +253,8 @@ html, body {
 .game-meta {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 6px 10px;
   font-size: var(--fs-meta);
   color: var(--text-muted);
   text-transform: uppercase;
@@ -346,6 +347,7 @@ html, body {
   font-size: var(--fs-meta);
   font-weight: 600;
   letter-spacing: 0.05em;
+  white-space: nowrap;
 }
 .status-pill.live {
   background: var(--live-bg);
@@ -377,6 +379,7 @@ html, body {
   font-size: 1.1em;
   font-weight: 600;
   letter-spacing: 0.05em;
+  white-space: nowrap;
   color: var(--text);
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.15);
