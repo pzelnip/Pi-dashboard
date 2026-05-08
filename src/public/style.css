@@ -412,16 +412,6 @@ html, body {
   background: var(--pregame-bg);
 }
 
-/* GWG sub-line under final cards: same muted secondary style as
-   .game-meta (uppercase, small, muted). Only appears when the parser
-   surfaces a winning-goal scorer. */
-.game-gwg {
-  font-size: var(--fs-meta);
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-top: 2px;
-}
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }

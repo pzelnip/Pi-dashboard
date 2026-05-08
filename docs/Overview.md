@@ -50,10 +50,6 @@ For each game the panel shows a card with:
   amber `TIED` chip and a warmer card border accent.
 - **Team rows** — logo, common name, score. The leading team (live) or
   winning team (final) is visually emphasised; the losing team is dimmed.
-- **GWG sub-line** — final games whose upstream payload includes a
-  winning-goal scorer render a muted `GWG: ANA Carlsson` line under the
-  team rows. OT/SO winners get an `(OT 3:12)` qualifier when the
-  time-of-goal is available.
 - **Favourite-team star** — see below.
 - **Playoff round badge** — see below.
 - **Series text** — for playoff games: `Game 5 (EDM leads 3-2)`,

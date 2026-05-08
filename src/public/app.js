@@ -349,26 +349,6 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
       </div>`;
   };
 
-  // Build the "GWG: ANA Carlsson (OT 3:12)" sub-line shown under final games
-  // when the upstream payload includes the winning-goal scorer. Uses last
-  // name only to keep the line short on the kiosk-narrow card. OT/SO games
-  // get a parenthetical with the period and (if available) time-of-goal.
-  const renderGwg = g => {
-    const wg = g.winningGoal;
-    if (!wg || !wg.lastName) return "";
-    const teamPrefix = wg.abbrev ? `${escapeHtml(wg.abbrev)} ` : "";
-    const name = `${teamPrefix}${escapeHtml(wg.lastName)}`;
-    const pt = (wg.periodType || "").toUpperCase();
-    const isExtra = pt === "OT" || pt === "SO";
-    let qualifier = "";
-    if (isExtra) {
-      qualifier = wg.timeInPeriod
-        ? ` (${escapeHtml(pt)} ${escapeHtml(wg.timeInPeriod)})`
-        : ` (${escapeHtml(pt)})`;
-    }
-    return `<div class="game-gwg">GWG: ${name}${qualifier}</div>`;
-  };
-
   const renderGame = (g, idx) => {
     let awayCls = "", homeCls = "";
     let awayGlyph = false, homeGlyph = false;
@@ -397,7 +377,6 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
     const tiedChip = isLive(g) && tied
       ? `<span class="tied-chip" aria-label="Tied game">TIED</span>`
       : "";
-    const gwgLine = isFinal(g) ? renderGwg(g) : "";
     return `
     <div ${clickAttrs}>
       ${watermark}
@@ -412,7 +391,6 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
           ${row(g.home, homeCls, g.home.isFavorite, "home", homeGlyph)}
         </div>
       </div>
-      ${gwgLine}
     </div>`;
   };
 
