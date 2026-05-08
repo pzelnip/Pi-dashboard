@@ -485,12 +485,13 @@ function renderGameDetails(g) {
   // ---- Matchup header (logos + names + hero score + state pill) ----
   const buildTeamBlock = (t, side) => {
     const wrap = el("div", `gd-team gd-team-${side}`);
-    // Thin team-color bar at the side. Pulls from the static _TEAM_COLORS
-    // map; falls back to --accent for unknown abbreviations.
-    const bar = el("span", "gd-team-bar");
-    bar.style.background = _teamColor(t.abbrev);
-    bar.setAttribute("aria-hidden", "true");
-    wrap.appendChild(bar);
+    // Subtle team-color edge accent. Pulls from the static _TEAM_COLORS
+    // map; falls back to --accent for unknown abbreviations. Replaces the
+    // older chunky vertical bar with a thin, blurred accent line.
+    const edge = el("span", "gd-team-edge");
+    edge.style.background = _teamColor(t.abbrev);
+    edge.setAttribute("aria-hidden", "true");
+    wrap.appendChild(edge);
 
     const inner = el("div", "gd-team-inner");
     const logoUrl = safeUrl(t.logo);
@@ -576,36 +577,8 @@ function renderGameDetails(g) {
 
     const seriesWrap = el("div", "gd-series-row");
 
-    const labelWrap = el("div", "gd-series-label");
-    const parts = [roundLabel];
-    if (gameNum) parts.push(`Game ${gameNum}`);
-    parts.push(`Best of ${totalDots}`);
-    labelWrap.appendChild(textNode(parts.join(" · ")));
-    seriesWrap.appendChild(labelWrap);
-
-    // Numbered progress pills. "Filled" through the current game (every
-     // pill at index <= gameNumber gets the accent fill); pills after the
-     // current game stay muted/ring-only. The current pill itself gets a
-     // subtle emphasis ring on top of the accent fill so the user can tell
-     // where in the series we are at a glance.
-    const dotsWrap = el("div", "gd-series-dots", null);
-    dotsWrap.setAttribute("role", "img");
-    dotsWrap.setAttribute(
-      "aria-label",
-      gameNum ? `Game ${gameNum} of ${totalDots}` : `Best of ${totalDots}`
-    );
-    for (let i = 1; i <= totalDots; i++) {
-      const isFilled = gameNum > 0 && i <= gameNum;
-      const isCurrent = i === gameNum;
-      const cls = [
-        "gd-series-pill",
-        isFilled ? "is-filled" : "",
-        isCurrent ? "is-current" : "",
-      ].filter(Boolean).join(" ");
-      dotsWrap.appendChild(el("span", cls, String(i)));
-    }
-    seriesWrap.appendChild(dotsWrap);
-
+    // Compute leader text first so it can sit at the top of the unified
+    // series block (most important state — wins/leads info).
     let leaderText;
     if (top && bot) {
       if (topW === 0 && botW === 0) {
@@ -626,6 +599,32 @@ function renderGameDetails(g) {
       seriesWrap.appendChild(el("div", "gd-series-leader", leaderText));
     }
 
+    const labelWrap = el("div", "gd-series-label");
+    const parts = [roundLabel];
+    if (gameNum) parts.push(`Game ${gameNum}`);
+    parts.push(`Best of ${totalDots}`);
+    labelWrap.appendChild(textNode(parts.join(" · ")));
+    seriesWrap.appendChild(labelWrap);
+
+    // Numbered progress pills with three explicit states:
+    //   - Completed games (i < gameNumber): accent-filled.
+    //   - Current game (i === gameNumber): outlined with accent (not filled),
+    //     so the "where we are now" pill is visually distinct from the wins.
+    //   - Future games (i > gameNumber): faint outline only.
+    const dotsWrap = el("div", "gd-series-dots", null);
+    dotsWrap.setAttribute("role", "img");
+    dotsWrap.setAttribute(
+      "aria-label",
+      gameNum ? `Game ${gameNum} of ${totalDots}` : `Best of ${totalDots}`
+    );
+    for (let i = 1; i <= totalDots; i++) {
+      let stateCls = "is-future";
+      if (gameNum > 0 && i < gameNum) stateCls = "is-completed";
+      else if (gameNum > 0 && i === gameNum) stateCls = "is-current";
+      dotsWrap.appendChild(el("span", `gd-series-pill ${stateCls}`, String(i)));
+    }
+    seriesWrap.appendChild(dotsWrap);
+
     frag.appendChild(seriesWrap);
   }
 
@@ -639,6 +638,9 @@ function renderGameDetails(g) {
     const metaRow = el("div", "gd-meta-row");
     if (showStart) {
       const startSpan = el("span", "gd-meta-item");
+      const startIcon = el("span", "gd-meta-icon", "⏱");
+      startIcon.setAttribute("aria-hidden", "true");
+      startSpan.appendChild(startIcon);
       startSpan.appendChild(el("span", "gd-meta-label", "Start"));
       startSpan.appendChild(textNode(" "));
       startSpan.appendChild(el("span", "gd-meta-value", startLabel));

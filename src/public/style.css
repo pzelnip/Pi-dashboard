@@ -995,21 +995,23 @@ a.wx-link:focus-visible {
   gap: 16px;
   /* Negative side margin + matching side padding lets the fade bleed to the
      modal edges while leaving the team-block layout unchanged. */
-  margin: 0 -18px 18px;
-  padding: 0 18px 18px;
+  margin: 0 -18px 28px;
+  padding: 0 18px 22px;
   border-bottom: 1px solid var(--border);
   /* Soft team-color fade: each team's primary color emanates from its side
      of the header and falls off toward the center. Colors are set inline as
-     --gd-team-color-{away,home} CSS vars from _TEAM_COLORS. */
+     --gd-team-color-{away,home} CSS vars from _TEAM_COLORS. Toned down (~30%
+     reduction in opacity) so the wash reads as ambient hint, not a fill that
+     competes with the score and logos. */
   background:
     radial-gradient(
       ellipse 70% 90% at 0% 50%,
-      color-mix(in srgb, var(--gd-team-color-away, transparent) 22%, transparent) 0%,
+      color-mix(in srgb, var(--gd-team-color-away, transparent) 15%, transparent) 0%,
       transparent 75%
     ),
     radial-gradient(
       ellipse 70% 90% at 100% 50%,
-      color-mix(in srgb, var(--gd-team-color-home, transparent) 22%, transparent) 0%,
+      color-mix(in srgb, var(--gd-team-color-home, transparent) 15%, transparent) 0%,
       transparent 75%
     );
 }
@@ -1018,18 +1020,24 @@ a.wx-link:focus-visible {
   align-items: stretch;
   gap: 10px;
   min-width: 0;
+  position: relative;
 }
-/* Thin vertical color bar; color set inline from _TEAM_COLORS map. */
-.gd-team-bar {
-  flex: 0 0 var(--team-bar-width, 5px);
-  width: var(--team-bar-width, 5px);
-  border-radius: 3px;
-  align-self: stretch;
-  /* Fallback if inline style isn't applied for some reason. */
+/* Thin, blurred edge accent (replaces the older chunky vertical bar).
+   Sits at the outer edge of each team block as a soft team-color hint
+   rather than a hard chunk of color. */
+.gd-team-edge {
+  position: absolute;
+  top: 8%;
+  bottom: 8%;
+  width: 3px;
+  border-radius: 2px;
+  opacity: 0.5;
+  filter: blur(1px);
   background: var(--accent);
+  pointer-events: none;
 }
-.gd-team-away .gd-team-bar { order: 0; }
-.gd-team-home .gd-team-bar { order: 2; }
+.gd-team-away .gd-team-edge { left: 0; }
+.gd-team-home .gd-team-edge { right: 0; }
 .gd-team-inner {
   display: flex;
   flex-direction: column;
@@ -1041,8 +1049,9 @@ a.wx-link:focus-visible {
   order: 1;
 }
 .gd-team-logo {
-  width: 96px;
-  height: 96px;
+  /* Reduced ~13% from 96px so the score reads as the dominant element. */
+  width: 84px;
+  height: 84px;
   object-fit: contain;
 }
 .gd-team-name {
@@ -1063,7 +1072,9 @@ a.wx-link:focus-visible {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  /* Tighter gap so the state pill ("FINAL", "LIVE", etc.) sits closer to
+     the score — they should read as one cohesive unit. */
+  gap: 4px;
   min-width: 0;
 }
 .gd-score {
@@ -1071,7 +1082,9 @@ a.wx-link:focus-visible {
   align-items: baseline;
   gap: 14px;
   font-size: var(--fs-hero);
-  font-weight: 300;
+  /* Bumped from 300 to 400 for more visual weight; combined with the
+     smaller logos, the score is now clearly the focal point. */
+  font-weight: 400;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   color: var(--text);
@@ -1132,19 +1145,26 @@ a.wx-link:focus-visible {
   font-size: 0.85em;
 }
 
-/* ---- Series-progress row ---- */
-/* Stacked & centered: round/game/best-of label, numbered pills, and leader
-   text each sit on their own centered line. (Issue #47.) */
+/* ---- Series-progress block ---- */
+/* Unified, centered block. DOM order is: leader text, metadata label,
+   numbered dots — most-important state first. */
 .gd-series-row {
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 8px;
-  margin-bottom: 16px;
-  padding: 10px 12px;
+  gap: 6px;
+  margin-bottom: 18px;
+  padding: 12px 14px;
   border-radius: 8px;
   background: var(--surface-raised);
+}
+.gd-series-leader {
+  font-size: 1em;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 .gd-series-label {
   font-size: 0.82em;
@@ -1160,10 +1180,12 @@ a.wx-link:focus-visible {
   flex-wrap: wrap;
   gap: 6px;
   flex: 0 0 auto;
+  margin-top: 2px;
 }
-/* Numbered progress pills (replace old solid dots). Filled-up-through-current
-   pattern: pills <= current game get the accent fill; later pills stay muted
-   ring-only. The current game's pill gets a subtle outer ring on top. */
+/* Numbered progress pills with three explicit states.
+   - is-completed: accent fill (a win up to but not including the current game)
+   - is-current:   outlined accent ring (no fill) — clearly distinct from wins
+   - is-future:    faint outline only */
 .gd-series-pill {
   display: inline-flex;
   align-items: center;
@@ -1180,20 +1202,18 @@ a.wx-link:focus-visible {
   color: var(--text-muted);
   line-height: 1;
 }
-.gd-series-pill.is-filled {
+.gd-series-pill.is-completed {
   background: var(--accent);
   border-color: var(--accent);
   color: #0b0d10;
 }
 .gd-series-pill.is-current {
-  box-shadow: 0 0 0 3px rgba(79, 195, 247, 0.22);
+  background: transparent;
+  border: 2px solid var(--accent);
+  color: var(--accent);
 }
-.gd-series-leader {
-  font-size: 0.9em;
-  font-weight: 600;
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-  text-align: center;
+.gd-series-pill.is-future {
+  opacity: 0.3;
 }
 
 /* ---- Meta row (start time + game type, centered single line) ---- */
@@ -1203,7 +1223,7 @@ a.wx-link:focus-visible {
   justify-content: center;
   align-items: baseline;
   gap: 4px 10px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   font-size: 0.95em;
   color: var(--text);
   text-align: center;
@@ -1212,6 +1232,12 @@ a.wx-link:focus-visible {
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
+}
+.gd-meta-row .gd-meta-icon {
+  font-size: 0.9em;
+  line-height: 1;
+  color: var(--text-dim);
+  margin-right: 2px;
 }
 .gd-meta-row .gd-meta-label {
   color: var(--text-dim);
@@ -1224,12 +1250,15 @@ a.wx-link:focus-visible {
 }
 
 /* ---- Venue row (with location pin) ---- */
+/* Venue / broadcasts rows form the "metadata" cluster. They share consistent
+   vertical spacing so each line breathes; the cluster ends with a medium
+   gap above the CTA. */
 .gd-venue-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 8px;
-  margin: 14px 0 8px;
+  margin: 0 0 10px;
   font-size: 0.88em;
   color: var(--text-dim);
 }
@@ -1252,7 +1281,7 @@ a.wx-link:focus-visible {
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 8px;
-  margin: 0 0 14px;
+  margin: 0 0 18px;
   font-size: 0.88em;
   color: var(--text-dim);
 }
@@ -1290,32 +1319,41 @@ a.wx-link:focus-visible {
   font-weight: 600;
   font-size: 0.95em;
   text-decoration: none;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
 }
 .gd-action-icon {
   font-size: 0.95em;
   line-height: 1;
 }
-/* Primary CTA — Game Center. Accent fill, dark text. */
+/* Primary CTA — Game Center. Accent fill, dark text, heavier weight, and a
+   subtle accent glow so the difference vs. the secondary button is obvious
+   even at a glance. */
 .gd-action-primary {
   background: var(--accent);
   border: 1px solid var(--accent);
   color: #0b0d10 !important;
+  font-weight: 700;
+  box-shadow: 0 2px 10px rgba(79, 195, 247, 0.28);
 }
 .gd-action-primary:hover {
   background: #6fd0fa;
   border-color: #6fd0fa;
+  box-shadow: 0 2px 14px rgba(79, 195, 247, 0.4);
   text-decoration: none !important;
 }
-/* Secondary — Series Page. Muted surface, lighter border. */
+/* Secondary — Series Page. True outline / ghost style: transparent
+   background, dim text, low-contrast border. Visibly subordinate to the
+   primary button. */
 .gd-action-secondary {
-  background: var(--surface-raised);
-  color: var(--text) !important;
+  background: transparent;
+  color: var(--text-dim) !important;
   border: 1px solid var(--border);
+  font-weight: 500;
 }
 .gd-action-secondary:hover {
-  background: rgba(79, 195, 247, 0.12);
-  border-color: var(--accent);
+  background: rgba(79, 195, 247, 0.08);
+  color: var(--text) !important;
+  border-color: rgba(79, 195, 247, 0.4);
   text-decoration: none !important;
 }
 
@@ -1340,10 +1378,11 @@ a.wx-link:focus-visible {
   .gd-team-away { grid-area: away; }
   .gd-team-home { grid-area: home; }
   .gd-score-stack { grid-area: score; }
-  .gd-team-logo { width: 60px; height: 60px; }
+  /* Mirror the desktop ~13% reduction (was 60px). */
+  .gd-team-logo { width: 52px; height: 52px; }
   .gd-team-name { font-size: 0.95em; }
   .gd-team { gap: 8px; }
-  .gd-team-bar { flex-basis: 4px; width: 4px; }
+  .gd-team-edge { width: 2px; }
   .gd-score { font-size: 2.4em; }
   .gd-series-row {
     gap: 6px;
