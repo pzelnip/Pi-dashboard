@@ -606,9 +606,10 @@ function renderGameDetails(g) {
     labelWrap.appendChild(textNode(parts.join(" · ")));
     seriesWrap.appendChild(labelWrap);
 
-    // Numbered progress pills with three states:
+    // Numbered progress pills with four states:
     // - Filled: completed games (index < current game number)
     // - Current: the current game (outlined highlight)
+    // - Current (live): current game while in progress (pulsing glow)
     // - Future: games not yet played (faint outline)
     const dotsWrap = el("div", "gd-series-dots", null);
     dotsWrap.setAttribute("role", "img");
@@ -623,6 +624,7 @@ function renderGameDetails(g) {
         "gd-series-pill",
         isFilled ? "is-filled" : "",
         isCurrent ? "is-current" : "",
+        isCurrent && isLive ? "is-live" : "",
       ].filter(Boolean).join(" ");
       dotsWrap.appendChild(el("span", cls, String(i)));
     }

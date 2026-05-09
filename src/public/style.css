@@ -388,6 +388,10 @@ html, body {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
 }
+@keyframes series-pill-glow {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(79, 195, 247, 0.22); }
+  50%       { box-shadow: 0 0 0 6px rgba(79, 195, 247, 0.55); }
+}
 
 /* ---------- Weather ---------- */
 
@@ -1217,6 +1221,9 @@ a.wx-link:focus-visible {
   color: var(--accent);
   opacity: 1;
   box-shadow: 0 0 0 3px rgba(79, 195, 247, 0.22);
+}
+.gd-series-pill.is-current.is-live {
+  animation: series-pill-glow 1.6s ease-in-out infinite;
 }
 
 /* ---- Meta row (start time + game type, centered single line) ---- */
