@@ -502,13 +502,14 @@ function renderGameDetails(g) {
       img.onerror = function () { this.remove(); };
       inner.appendChild(img);
     }
-    const name = el("span", "gd-team-name", t.fullName || t.name || t.abbrev || "");
+    const name = el("span", "gd-team-name");
     if (t.isFavorite) {
-      name.appendChild(textNode(" "));
       const star = el("span", "fav-star", "★");
       star.setAttribute("aria-label", "Favorite team");
       name.appendChild(star);
+      name.appendChild(textNode(" "));
     }
+    name.appendChild(textNode(t.fullName || t.name || t.abbrev || ""));
     inner.appendChild(name);
     inner.appendChild(el("span", "gd-team-abbrev", t.abbrev || ""));
     wrap.appendChild(inner);

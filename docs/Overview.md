@@ -60,7 +60,7 @@ For each game the panel shows a card with:
 Configured via `nhl.favorites` in `config.json` (array of three-letter team
 abbreviations, e.g. `["EDM", "VAN", "MTL"]`).
 
-- Each favourited team gets a **★ star** beside its name.
+- Each favourited team gets a **★ star** before its name.
 - Within each status group (live / scheduled / final), favourites bubble to
   the top so the games you care about appear first.
 
