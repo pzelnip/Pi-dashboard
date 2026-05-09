@@ -1222,13 +1222,13 @@ a.wx-link:focus-visible {
 .gd-meta-row {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: baseline;
   gap: 4px 10px;
   margin-bottom: 16px;
   font-size: 0.95em;
   color: var(--text);
-  text-align: center;
+  text-align: left;
 }
 .gd-meta-row .gd-meta-item {
   display: inline-flex;

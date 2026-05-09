@@ -677,7 +677,7 @@ function renderGameDetails(g) {
     } else {
       venueNode = el("span", "gd-venue-link");
     }
-    const pin = el("span", "gd-venue-icon", "◉");
+    const pin = el("span", "gd-venue-icon", "📍");
     pin.setAttribute("aria-hidden", "true");
     venueNode.appendChild(pin);
     venueNode.appendChild(textNode(" "));
