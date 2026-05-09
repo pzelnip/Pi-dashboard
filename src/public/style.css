@@ -346,7 +346,11 @@ html, body {
   background: var(--pregame-bg);
   color: var(--pregame);
 }
-.status-pill.final { color: var(--text-muted); }
+.status-pill.final {
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
 
 .series-tag {
   display: inline-flex;
@@ -995,21 +999,21 @@ a.wx-link:focus-visible {
   gap: 16px;
   /* Negative side margin + matching side padding lets the fade bleed to the
      modal edges while leaving the team-block layout unchanged. */
-  margin: 0 -18px 18px;
-  padding: 0 18px 18px;
+  margin: 0 -18px 24px;
+  padding: 0 18px 20px;
   border-bottom: 1px solid var(--border);
-  /* Soft team-color fade: each team's primary color emanates from its side
-     of the header and falls off toward the center. Colors are set inline as
+  /* Soft team-color fade: toned down (~14% mix) so it hints at team colors
+     without competing with the score. Colors are set inline as
      --gd-team-color-{away,home} CSS vars from _TEAM_COLORS. */
   background:
     radial-gradient(
       ellipse 70% 90% at 0% 50%,
-      color-mix(in srgb, var(--gd-team-color-away, transparent) 22%, transparent) 0%,
+      color-mix(in srgb, var(--gd-team-color-away, transparent) 14%, transparent) 0%,
       transparent 75%
     ),
     radial-gradient(
       ellipse 70% 90% at 100% 50%,
-      color-mix(in srgb, var(--gd-team-color-home, transparent) 22%, transparent) 0%,
+      color-mix(in srgb, var(--gd-team-color-home, transparent) 14%, transparent) 0%,
       transparent 75%
     );
 }
@@ -1019,12 +1023,19 @@ a.wx-link:focus-visible {
   gap: 10px;
   min-width: 0;
 }
-/* Thin vertical color bar; color set inline from _TEAM_COLORS map. */
+/* Thin vertical color accent; color set inline from _TEAM_COLORS map.
+   Reduced from 5px to 3px with fading tips (mask-image gradient) for a
+   softer, less distracting accent. The inline `background` is set by JS. */
 .gd-team-bar {
-  flex: 0 0 var(--team-bar-width, 5px);
-  width: var(--team-bar-width, 5px);
-  border-radius: 3px;
+  flex: 0 0 3px;
+  width: 3px;
+  border-radius: 2px;
   align-self: stretch;
+  opacity: 0.55;
+  /* Fade the bar at top and bottom using a mask gradient so the tips
+     dissolve instead of ending abruptly. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 20%, black 80%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, black 20%, black 80%, transparent);
   /* Fallback if inline style isn't applied for some reason. */
   background: var(--accent);
 }
@@ -1070,7 +1081,7 @@ a.wx-link:focus-visible {
   display: flex;
   align-items: baseline;
   gap: 14px;
-  font-size: var(--fs-hero);
+  font-size: calc(var(--fs-hero) * 1.15);
   font-weight: 300;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -1086,9 +1097,11 @@ a.wx-link:focus-visible {
   letter-spacing: 0.04em;
 }
 .gd-state-pill {
-  /* Slightly larger than the summary-card pill for the modal context. */
+  /* Slightly larger than the summary-card pill for the modal context.
+     Margin-top pulls it closer to the score for visual grouping. */
   font-size: 0.85em;
   padding: 4px 12px;
+  margin-top: 2px;
 }
 
 /* ---- Detail rows (start, game type, odds) ---- */
@@ -1133,18 +1146,28 @@ a.wx-link:focus-visible {
 }
 
 /* ---- Series-progress row ---- */
-/* Stacked & centered: round/game/best-of label, numbered pills, and leader
-   text each sit on their own centered line. (Issue #47.) */
+/* Stacked & centered: leader text on top (prominent), round/game/best-of
+   label below, then numbered pills at the bottom. Reordered for better
+   visual hierarchy — series state is the most important info at a glance. */
 .gd-series-row {
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
   gap: 8px;
-  margin-bottom: 16px;
-  padding: 10px 12px;
+  margin-bottom: 20px;
+  padding: 12px 14px;
   border-radius: 8px;
   background: var(--surface-raised);
+}
+.gd-series-leader {
+  font-size: 1.05em;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 .gd-series-label {
   font-size: 0.82em;
@@ -1161,52 +1184,52 @@ a.wx-link:focus-visible {
   gap: 6px;
   flex: 0 0 auto;
 }
-/* Numbered progress pills (replace old solid dots). Filled-up-through-current
-   pattern: pills <= current game get the accent fill; later pills stay muted
-   ring-only. The current game's pill gets a subtle outer ring on top. */
+/* Numbered progress pills. Three states:
+   - is-filled: completed games (solid accent fill)
+   - is-current: current game (outlined with highlight ring)
+   - default (future): faint outline only */
 .gd-series-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
-  height: 22px;
+  min-width: 24px;
+  height: 24px;
   padding: 0 6px;
-  border-radius: 11px;
+  border-radius: 12px;
   font-size: 0.72em;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
   color: var(--text-muted);
+  opacity: 0.45;
   line-height: 1;
 }
 .gd-series-pill.is-filled {
   background: var(--accent);
   border-color: var(--accent);
   color: #0b0d10;
+  opacity: 1;
 }
 .gd-series-pill.is-current {
+  background: transparent;
+  border-color: var(--accent);
+  color: var(--accent);
+  opacity: 1;
   box-shadow: 0 0 0 3px rgba(79, 195, 247, 0.22);
-}
-.gd-series-leader {
-  font-size: 0.9em;
-  font-weight: 600;
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-  text-align: center;
 }
 
 /* ---- Meta row (start time + game type, centered single line) ---- */
 .gd-meta-row {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: baseline;
   gap: 4px 10px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
   font-size: 0.95em;
   color: var(--text);
-  text-align: center;
+  text-align: left;
 }
 .gd-meta-row .gd-meta-item {
   display: inline-flex;
@@ -1219,6 +1242,10 @@ a.wx-link:focus-visible {
   font-size: 0.72em;
   letter-spacing: 0.05em;
 }
+.gd-meta-row .gd-meta-icon {
+  font-size: 0.9em;
+  line-height: 1;
+}
 .gd-meta-row .gd-meta-value {
   font-size: 1em;
 }
@@ -1229,7 +1256,7 @@ a.wx-link:focus-visible {
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 8px;
-  margin: 14px 0 8px;
+  margin: 16px 0 10px;
   font-size: 0.88em;
   color: var(--text-dim);
 }
@@ -1251,8 +1278,8 @@ a.wx-link:focus-visible {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 8px;
-  margin: 0 0 14px;
+  gap: 4px 12px;
+  margin: 0 0 16px;
   font-size: 0.88em;
   color: var(--text-dim);
 }
@@ -1272,9 +1299,9 @@ a.wx-link:focus-visible {
 /* ---- Footer action buttons ---- */
 .gd-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1.4fr 1fr;
   gap: 10px;
-  margin-top: 4px;
+  margin-top: 8px;
 }
 .gd-actions.gd-actions-single {
   grid-template-columns: 1fr;
@@ -1343,7 +1370,7 @@ a.wx-link:focus-visible {
   .gd-team-logo { width: 60px; height: 60px; }
   .gd-team-name { font-size: 0.95em; }
   .gd-team { gap: 8px; }
-  .gd-team-bar { flex-basis: 4px; width: 4px; }
+  .gd-team-bar { flex-basis: 3px; width: 3px; }
   .gd-score { font-size: 2.4em; }
   .gd-series-row {
     gap: 6px;
