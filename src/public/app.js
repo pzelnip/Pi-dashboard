@@ -945,7 +945,8 @@ async function refreshNHL() {
     if (data.yesterday) {
       renderNHL(data.yesterday.games, "#nhl .view-nhl-yesterday", "No games yesterday.", "yesterday");
     }
-    const canRotate = !!(data.yesterday && !data.hasLiveToday);
+    const yesterdayHasGames = Array.isArray(data.yesterday?.games) && data.yesterday.games.length > 0;
+    const canRotate = !data.hasLiveToday && yesterdayHasGames;
     nhlRotator.setViews(canRotate ? ["today", "yesterday"] : ["today"]);
     setUpdated("nhl");
   } catch (e) {

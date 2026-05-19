@@ -23,7 +23,8 @@ Source: `src/parsers/nhl.py`, rendering in `src/public/app.js` (`renderNHL`,
 - The panel has two views: **today's** games and **yesterday's** games.
 - When *no* game is currently live, the panel rotates between today and
   yesterday on the configured cadence (`rotation.nhlPanelSeconds`, default
-  falls back to `rotation.weatherPanelSeconds`).
+  falls back to `rotation.weatherPanelSeconds`), but only when yesterday has
+  at least one game.
 - When a live game is in progress, the panel **pins to today** and the
   rotation collapses to a single view until the game ends.
 - The server anchors on the Pi's local date and hits
