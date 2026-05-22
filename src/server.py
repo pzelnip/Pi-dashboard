@@ -26,7 +26,7 @@ import cache
 from config import HERE, load_config
 from parsers.calendar import fetch_calendar
 from parsers.nhl import fetch_nhl
-from parsers.rss import fetch_rss
+from parsers.rss import fetch_rss, fetch_rss_aggregated
 from parsers.weather import fetch_weather
 
 PUBLIC_DIR = os.path.join(HERE, "public")
@@ -308,24 +308,25 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         if path == "/api/rss":
             feeds = cfg.get("rss", []) or []
-            try:
-                idx = int(query.get("feed", ["0"])[0])
-            except ValueError:
-                idx = 0
             if not feeds:
                 self._send_error_json("no rss feeds configured")
                 return
-            idx %= len(feeds)
-            feed = feeds[idx]
+            items_per_feed = 4
             try:
-                feed_image, items = fetch_rss(feed["url"])
+                page = int(query.get("page", ["0"])[0])
+            except ValueError:
+                page = 0
+            try:
+                all_items = fetch_rss_aggregated(feeds, items_per_feed=items_per_feed)
+                page_size = items_per_feed
+                total_pages = max(1, -(-len(all_items) // page_size))  # ceil division
+                page = page % total_pages if total_pages else 0
+                page_items = all_items[page * page_size:(page + 1) * page_size]
                 self._send_json(
                     {
-                        "index": idx,
-                        "total": len(feeds),
-                        "name": feed.get("name", feed["url"]),
-                        "feedImage": feed_image,
-                        "items": items,
+                        "page": page,
+                        "totalPages": total_pages,
+                        "items": page_items,
                     }
                 )
             except Exception as e:

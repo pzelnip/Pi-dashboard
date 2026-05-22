@@ -1227,8 +1227,8 @@ function onWeatherViewShown(active) {
 
 // ---------- RSS ----------
 
-let rssIndex = 0;
-let rssTotal = 1;
+let rssPage = 0;
+let rssTotalPages = 1;
 let rssRotationMs = 30 * 1000;
 let rssFadeTimer = null;
 let rssRotator = null;
@@ -1243,24 +1243,20 @@ window.DEFAULT_RSS_ICON = `
 </svg>`.trim();
 
 function renderRSS(payload) {
-  rssTotal = payload.total || 1;
-  rssIndex = payload.index;
-  const feedImageUrl = safeUrl(payload.feedImage);
-  const logo = feedImageUrl
-    ? `<img class="feed-logo" src="${escapeHtml(feedImageUrl)}" alt="" onerror="this.outerHTML=window.DEFAULT_RSS_ICON">`
-    : window.DEFAULT_RSS_ICON;
+  rssTotalPages = payload.totalPages || 1;
+  rssPage = payload.page;
 
   const rssPanel = document.getElementById("rss");
   const titleEl = document.getElementById("rss-title");
   const el = bodyEl("rss");
 
-  // RSS uses the rotator with a synthetic "view per feed" set so dots/nav match
-  // the count of feeds. We don't actually flip CSS classes — the body content
-  // is rewritten on each feed swap.
-  rssRotator.setViews(Array.from({length: rssTotal}, (_, i) => String(i)));
+  // RSS uses the rotator with a synthetic "view per page" set so dots/nav match
+  // the count of pages. We don't actually flip CSS classes — the body content
+  // is rewritten on each page swap.
+  rssRotator.setViews(Array.from({length: rssTotalPages}, (_, i) => String(i)));
 
   const writeContent = () => {
-    titleEl.innerHTML = `${logo}<span>${escapeHtml(payload.name)}</span>`;
+    titleEl.innerHTML = `${window.DEFAULT_RSS_ICON}<span>News</span>`;
     el.classList.remove("error");
     if (!payload.items || !payload.items.length) {
       el.innerHTML = '<p style="color: var(--text-muted)">No items.</p>';
@@ -1270,13 +1266,20 @@ function renderRSS(payload) {
       payload.items.map(i => {
         const itemLink = safeUrl(i.link);
         const itemImage = safeUrl(i.image);
+        const feedImageUrl = safeUrl(i.feedImage);
+        const itemLogo = feedImageUrl
+          ? `<img class="rss-item-feed-logo" src="${escapeHtml(feedImageUrl)}" alt="" onerror="this.remove()">`
+          : "";
         return `
         <li class="rss-item">
           <a href="${escapeHtml(itemLink)}" target="_blank" rel="noopener">
             ${itemImage
               ? `<img class="rss-thumb" src="${escapeHtml(itemImage)}" alt="" loading="lazy" onerror="this.remove()">`
               : ""}
-            <span class="rss-title">${escapeHtml(i.title)}</span>
+            <span class="rss-title">
+              <span class="rss-item-source">${itemLogo}<span class="rss-item-feed-name">${escapeHtml(i.feedName || "")}</span></span>
+              ${escapeHtml(i.title)}
+            </span>
           </a>
         </li>
       `;
@@ -1296,7 +1299,7 @@ function renderRSS(payload) {
 
 async function refreshRSS() {
   try {
-    const data = await fetchJson(`/api/rss?feed=${rssIndex}`);
+    const data = await fetchJson(`/api/rss?page=${rssPage}`);
     if (data.error) {
       showError("rss", data.error);
     } else {
@@ -1309,10 +1312,10 @@ async function refreshRSS() {
 }
 
 function onRssViewShown(active) {
-  // active is a stringified feed index; only fetch if it differs from current.
+  // active is a stringified page index; only fetch if it differs from current.
   const target = Number(active);
-  if (target === rssIndex) return;
-  rssIndex = target;
+  if (target === rssPage) return;
+  rssPage = target;
   refreshRSS();
 }
 
@@ -1369,7 +1372,7 @@ async function start() {
   rssRotator = createRotator({
     dotsEl: document.getElementById("rss-dots"),
     navEl: document.getElementById("rss-nav"),
-    views: ["0"],  // renderRSS expands once we know the feed count
+    views: ["0"],  // renderRSS expands once we know the page count
     getRotationMs: () => rssRotationMs,
     onShow: onRssViewShown,
     swipeEl: bodyEl("rss"),

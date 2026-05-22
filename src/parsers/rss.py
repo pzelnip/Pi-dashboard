@@ -2,6 +2,8 @@
 
 import re
 import xml.etree.ElementTree as ET
+from email.utils import parsedate_to_datetime
+import datetime as dt
 
 from cache import fetch_cached
 
@@ -128,6 +130,55 @@ def parse_rss(xml_bytes: bytes, limit: int = 4) -> tuple[str, list[dict]]:
     return feed_image, items[:limit]
 
 
-def fetch_rss(url: str) -> tuple[str, list[dict]]:
+def fetch_rss(url: str, limit: int = 4) -> tuple[str, list[dict]]:
     raw = fetch_cached(url, ttl_seconds=900)
-    return parse_rss(raw)
+    return parse_rss(raw, limit=limit)
+
+
+def _parse_published_date(published: str) -> dt.datetime:
+    """Best-effort parse of RSS/Atom date strings for sorting.
+
+    Returns a datetime (UTC-aware when possible) or datetime.min for
+    unparseable values so items without dates sort last.
+    """
+    if not published:
+        return dt.datetime.min
+    # RFC 2822 (RSS 2.0 pubDate)
+    try:
+        return parsedate_to_datetime(published)
+    except Exception:
+        pass
+    # ISO 8601 / Atom (e.g. 2026-05-01T13:00:00Z)
+    for fmt in ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return dt.datetime.strptime(published, fmt)
+        except ValueError:
+            continue
+    return dt.datetime.min
+
+
+def fetch_rss_aggregated(
+    feeds: list[dict], items_per_feed: int = 4
+) -> list[dict]:
+    """Fetch all *feeds*, aggregate items sorted newest-first.
+
+    Each feed entry is ``{"name": ..., "url": ...}``.
+    Returns a flat list of item dicts, each augmented with ``feedName``
+    and ``feedImage`` keys so the frontend can display per-item source info.
+    Total items returned: ``len(feeds) * items_per_feed``.
+    """
+    all_items: list[dict] = []
+    for feed_cfg in feeds:
+        try:
+            feed_image, items = fetch_rss(feed_cfg["url"], limit=items_per_feed)
+        except Exception:
+            continue
+        name = feed_cfg.get("name", feed_cfg["url"])
+        for item in items:
+            item["feedName"] = name
+            item["feedImage"] = feed_image
+            all_items.append(item)
+
+    # Sort by published date descending (newest first).
+    all_items.sort(key=lambda i: _parse_published_date(i.get("published", "")), reverse=True)
+    return all_items
