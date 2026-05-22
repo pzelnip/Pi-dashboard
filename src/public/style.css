@@ -606,7 +606,9 @@ a.wx-link:focus-visible {
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
+  max-height: 2.9em; /* fallback for non-WebKit: ~2 lines at default line-height */
 }
 .rss-item-source {
   display: inline;
@@ -623,10 +625,12 @@ a.wx-link:focus-visible {
   margin-right: 4px;
 }
 .rss-item-feed-name {
+  display: inline-block;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 200px;
+  max-width: 10ch;
+  vertical-align: bottom;
 }
 
 .rot-dot {
