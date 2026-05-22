@@ -1277,8 +1277,7 @@ function renderRSS(payload) {
               ? `<img class="rss-thumb" src="${escapeHtml(itemImage)}" alt="" loading="lazy" onerror="this.remove()">`
               : ""}
             <span class="rss-title">
-              <span class="rss-item-source">${itemLogo}<span class="rss-item-feed-name">${escapeHtml(i.feedName || "")}</span></span>
-              ${escapeHtml(i.title)}
+              <span class="rss-item-source">${itemLogo}<span class="rss-item-feed-name">${escapeHtml(i.feedName || "")}</span> &mdash;</span>${escapeHtml(i.title)}
             </span>
           </a>
         </li>
