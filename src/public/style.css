@@ -604,26 +604,33 @@ a.wx-link:focus-visible {
 .rss-title {
   flex: 1;
   overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  max-height: 2.9em; /* fallback for non-WebKit: ~2 lines at default line-height */
 }
 .rss-item-source {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  display: inline;
   font-size: 0.7em;
   color: var(--text-dim);
-  margin-bottom: 2px;
+  margin-right: 6px;
 }
 .rss-item-feed-logo {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   object-fit: contain;
   border-radius: 2px;
+  vertical-align: middle;
+  margin-right: 4px;
 }
 .rss-item-feed-name {
+  display: inline-block;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 200px;
+  max-width: 10ch;
+  vertical-align: bottom;
 }
 
 .rot-dot {
