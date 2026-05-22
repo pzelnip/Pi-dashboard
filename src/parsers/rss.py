@@ -138,20 +138,27 @@ def fetch_rss(url: str, limit: int = 4) -> tuple[str, list[dict]]:
 def _parse_published_date(published: str) -> dt.datetime:
     """Best-effort parse of RSS/Atom date strings for sorting.
 
-    Returns a datetime (UTC-aware when possible) or datetime.min for
-    unparseable values so items without dates sort last.
+    Always returns a naive UTC datetime so all values are comparable.
+    Returns datetime.min for unparseable values so items without dates sort last.
     """
     if not published:
         return dt.datetime.min
     # RFC 2822 (RSS 2.0 pubDate)
     try:
-        return parsedate_to_datetime(published)
+        d = parsedate_to_datetime(published)
+        # Normalize to naive UTC
+        if d.tzinfo is not None:
+            d = d.astimezone(dt.timezone.utc).replace(tzinfo=None)
+        return d
     except Exception:
         pass
     # ISO 8601 / Atom (e.g. 2026-05-01T13:00:00Z)
     for fmt in ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%d %H:%M:%S"):
         try:
-            return dt.datetime.strptime(published, fmt)
+            d = dt.datetime.strptime(published, fmt)
+            if d.tzinfo is not None:
+                d = d.astimezone(dt.timezone.utc).replace(tzinfo=None)
+            return d
         except ValueError:
             continue
     return dt.datetime.min
@@ -175,9 +182,8 @@ def fetch_rss_aggregated(
             continue
         name = feed_cfg.get("name", feed_cfg["url"])
         for item in items:
-            item["feedName"] = name
-            item["feedImage"] = feed_image
-            all_items.append(item)
+            augmented = {**item, "feedName": name, "feedImage": feed_image}
+            all_items.append(augmented)
 
     # Sort by published date descending (newest first).
     all_items.sort(key=lambda i: _parse_published_date(i.get("published", "")), reverse=True)
