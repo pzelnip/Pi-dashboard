@@ -4,7 +4,7 @@ import time
 import unittest
 from unittest.mock import patch
 
-from tests import _helpers  # noqa: F401  -- ensures repo root is on sys.path
+from tests import helpers  # ensures repo root is on sys.path
 
 import cache
 

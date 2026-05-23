@@ -2,7 +2,7 @@
 
 import unittest
 
-from tests._helpers import fixture_bytes
+from tests.helpers import fixture_bytes
 
 from parsers import rss
 

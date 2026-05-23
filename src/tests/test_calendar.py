@@ -5,7 +5,7 @@ import io
 import unittest
 from contextlib import redirect_stderr
 
-from tests._helpers import fixture_text
+from tests.helpers import fixture_text
 
 from parsers import calendar as calendar_parser
 
