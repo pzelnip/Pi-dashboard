@@ -1460,6 +1460,7 @@ function renderDebugFields(data) {
     <dt>RSS feeds</dt><dd>${data.rssFeedCount}</dd>
     <dt>Calendar URLs</dt><dd>${data.calendarUrlCount}</dd>
     <dt>Cache (${data.cache.length})</dt><dd>${cache}</dd>
+    <dt>Countdowns</dt><dd><button class="debug-action" data-debug-action="countdowns">manage ›</button></dd>
     <dt>Service log</dt><dd><button class="debug-action" data-debug-action="log-service">view ›</button></dd>
     <dt>Update log</dt><dd><button class="debug-action" data-debug-action="log-update">view ›</button></dd>
     <dt>Force update</dt><dd><button class="debug-action danger" data-debug-action="update">run</button></dd>
@@ -1584,6 +1585,79 @@ function setupDebugOverlay() {
     }
   }
 
+  async function showCountdowns() {
+    mode = "countdowns";
+    body.innerHTML = `<p style="color:var(--text-muted)">Loading countdowns…</p>`;
+    if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
+    try {
+      const data = await fetchJson("/api/countdowns");
+      if (data.error) throw new Error(data.error);
+      const items = (data.countdowns || []).map(c => {
+        const safeDate = escapeHtml(c.date);
+        const safeTitle = escapeHtml(c.title);
+        return `<div class="debug-countdown-item">
+          <span>${safeDate} — ${safeTitle}</span>
+          <button class="debug-action danger" data-debug-action="delete-countdown" data-cd-date="${safeDate}" data-cd-title="${safeTitle}">✕</button>
+        </div>`;
+      }).join("");
+      body.innerHTML = `
+        <div class="debug-log-header">
+          <button class="debug-back" data-debug-action="back">‹ Back</button>
+          <span class="debug-log-title">Countdowns</span>
+        </div>
+        <div class="debug-countdown-list">${items || '<p style="color:var(--text-muted)">(none)</p>'}</div>
+        <form class="debug-countdown-form" data-debug-action="add-countdown-form">
+          <input type="date" name="date" required>
+          <input type="text" name="title" placeholder="Event title" required maxlength="100">
+          <button type="submit" class="debug-action">Add</button>
+        </form>
+      `;
+    } catch (e) {
+      body.innerHTML = `
+        <div class="debug-log-header">
+          <button class="debug-back" data-debug-action="back">‹ Back</button>
+          <span class="debug-log-title">Countdowns</span>
+        </div>
+        <p style="color: var(--live)">Failed to load: ${escapeHtml(e.message)}</p>
+      `;
+    }
+  }
+
+  async function addCountdown(date, title) {
+    try {
+      const resp = await fetch("/api/countdowns", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({date, title})
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error);
+      // Refresh the countdown list and re-render the countdown widget
+      countdowns = data.countdowns;
+      renderCountdown();
+      await showCountdowns();
+    } catch (e) {
+      alert(`Failed to add countdown: ${e.message}`);
+    }
+  }
+
+  async function deleteCountdown(date, title) {
+    try {
+      const resp = await fetch("/api/countdowns", {
+        method: "DELETE",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({date, title})
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error);
+      countdowns = data.countdowns;
+      renderCountdown();
+      await showCountdowns();
+    } catch (e) {
+      alert(`Failed to delete countdown: ${e.message}`);
+    }
+  }
+
   function startUpdateCountdown() {
     if (!banner || cancelTimer) return;
     let remaining = 3;
@@ -1699,6 +1773,22 @@ function setupDebugOverlay() {
     else if (action === "log-service") showLog("service");
     else if (action === "log-update") showLog("update");
     else if (action === "update") startUpdateCountdown();
+    else if (action === "countdowns") showCountdowns();
+    else if (action === "delete-countdown") {
+      const d = target.dataset.cdDate;
+      const t = target.dataset.cdTitle;
+      if (d && t) deleteCountdown(d, t);
+    }
+  });
+
+  // Handle the countdown add form submission
+  body.addEventListener("submit", (e) => {
+    if (!e.target.matches("[data-debug-action='add-countdown-form']")) return;
+    e.preventDefault();
+    const form = e.target;
+    const date = form.elements.date.value;
+    const title = form.elements.title.value.trim();
+    if (date && title) addCountdown(date, title);
   });
 
   if (banner) banner.addEventListener("click", cancelUpdateCountdown);
@@ -1710,9 +1800,9 @@ function setupDebugOverlay() {
       e.preventDefault();
       open ? closeDebug() : openDebug();
     } else if (e.key === "Escape" && open) {
-      // Escape from a log view returns to the field list; Escape from
+      // Escape from a log/countdowns view returns to the field list; Escape from
       // the field list closes the panel entirely.
-      if (mode === "log") showFields();
+      if (mode === "log" || mode === "countdowns") showFields();
       else closeDebug();
     } else if (open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
       e.preventDefault();

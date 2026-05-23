@@ -167,6 +167,10 @@ Source: `countdowns` in `config.json` (array of `{date, title}` entries).
 - View is suppressed entirely when no countdowns are configured.
 - Re-renders hourly so the day count rolls over at midnight without a page
   reload.
+- **Manage via debug panel**: open the debug overlay (press `d` or tap the
+  dot) → "Countdowns → manage ›" to add or remove entries. Changes are
+  persisted to `config.local.json` (gitignored) so no git operations are
+  needed on the Pi.
 
 ---
 
