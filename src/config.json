@@ -19,6 +19,46 @@
     {
       "date": "2026-05-22",
       "title": "Sue's Birthday"
+    },
+    {
+      "date": "2026-06-21",
+      "title": "Father's Day"
+    },
+    {
+      "date": "2026-07-01",
+      "title": "Canada Day"
+    },
+    {
+      "date": "2026-08-03",
+      "title": "BC Day"
+    },
+    {
+      "date": "2026-09-07",
+      "title": "Labour Day"
+    },
+    {
+      "date": "2026-10-12",
+      "title": "Thanksgiving"
+    },
+    {
+      "date": "2026-10-31",
+      "title": "Halloween"
+    },
+    {
+      "date": "2026-11-11",
+      "title": "Remembrance Day"
+    },
+    {
+      "date": "2026-11-27",
+      "title": "Black Friday"
+    },
+    {
+      "date": "2026-12-25",
+      "title": "Christmas"
+    },
+    {
+      "date": "2027-01-01",
+      "title": "New Year's Day"
     }
   ],
   "rss": [
