@@ -23,7 +23,7 @@ import datetime as dt
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import cache
-from config import HERE, load_config
+from config import HERE, load_config, load_local_config, save_local_config
 from parsers.calendar import fetch_calendar
 from parsers.nhl import fetch_nhl
 from parsers.rss import fetch_rss, fetch_rss_aggregated
@@ -357,6 +357,23 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self._send_error_json(str(e))
             return
 
+        if path == "/api/countdowns":
+            # Return merged countdowns with source info for the debug UI.
+            import config as _cfg_mod
+            with open(_cfg_mod.CONFIG_PATH) as f:
+                base_cfg = json.load(f)
+            base_countdowns = base_cfg.get("countdowns", []) or []
+            local_cfg = load_local_config()
+            local_countdowns = local_cfg.get("countdowns", []) or []
+            # If local overrides exist, those replace base entirely (merge
+            # semantics: lists replace). Show the effective list.
+            if local_countdowns:
+                effective = local_countdowns
+            else:
+                effective = base_countdowns
+            self._send_json({"countdowns": effective})
+            return
+
         # static
         self._serve_static(path)
 
@@ -364,6 +381,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
         # No CSRF token / auth: dashboard runs LAN-only with no users beyond
         # its own kiosk tab. Adding a token would be theatre.
         parsed = urllib.parse.urlparse(self.path)
+
+        if parsed.path == "/api/countdowns":
+            self._handle_add_countdown()
+            return
+
         if parsed.path != "/api/update":
             self.send_error(404, "Not Found")
             return
@@ -397,6 +419,137 @@ class DashboardHandler(BaseHTTPRequestHandler):
             # and update-dashboard.sh is idempotent (it no-ops when
             # already at HEAD).
             _update_lock.release()
+
+    def do_DELETE(self):
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/api/countdowns":
+            self._handle_delete_countdown()
+            return
+        self.send_error(404, "Not Found")
+
+    def do_PUT(self):
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/api/countdowns":
+            self._handle_edit_countdown()
+            return
+        self.send_error(404, "Not Found")
+
+    def _read_body_json(self):
+        """Read and parse the request body as JSON."""
+        length = int(self.headers.get("Content-Length", 0))
+        if length == 0:
+            return None
+        raw = self.rfile.read(length)
+        return json.loads(raw)
+
+    def _handle_add_countdown(self):
+        try:
+            data = self._read_body_json()
+        except (json.JSONDecodeError, ValueError):
+            self._send_error_json("invalid JSON body")
+            return
+        if not data or not isinstance(data, dict):
+            self._send_error_json("request body must be a JSON object")
+            return
+        date_str = (data.get("date") or "").strip()
+        title = (data.get("title") or "").strip()
+        if not date_str or not title:
+            self._send_error_json("both 'date' (YYYY-MM-DD) and 'title' are required")
+            return
+        # Validate date format
+        try:
+            dt.date.fromisoformat(date_str)
+        except ValueError:
+            self._send_error_json("date must be in YYYY-MM-DD format")
+            return
+        if len(title) > 100:
+            self._send_error_json("title must be 100 characters or fewer")
+            return
+
+        # Read effective countdowns from merged config, add entry, save to local.
+        cfg = load_config()
+        countdowns = list(cfg.get("countdowns", []) or [])
+        new_entry = {"date": date_str, "title": title}
+        # Avoid exact duplicates
+        if any(c.get("date") == date_str and c.get("title") == title for c in countdowns):
+            self._send_error_json("countdown already exists")
+            return
+        countdowns.append(new_entry)
+        countdowns.sort(key=lambda c: c.get("date", ""))
+        # Persist full list to config.local.json (replaces any base list)
+        local_cfg = load_local_config()
+        local_cfg["countdowns"] = countdowns
+        save_local_config(local_cfg)
+        self._send_json({"ok": True, "countdowns": countdowns})
+
+    def _handle_delete_countdown(self):
+        try:
+            data = self._read_body_json()
+        except (json.JSONDecodeError, ValueError):
+            self._send_error_json("invalid JSON body")
+            return
+        if not data or not isinstance(data, dict):
+            self._send_error_json("request body must be a JSON object")
+            return
+        date_str = (data.get("date") or "").strip()
+        title = (data.get("title") or "").strip()
+        if not date_str or not title:
+            self._send_error_json("both 'date' and 'title' are required")
+            return
+
+        cfg = load_config()
+        countdowns = list(cfg.get("countdowns", []) or [])
+        new_list = [c for c in countdowns
+                    if not (c.get("date") == date_str and c.get("title") == title)]
+        if len(new_list) == len(countdowns):
+            self._send_error_json("countdown not found")
+            return
+        local_cfg = load_local_config()
+        local_cfg["countdowns"] = new_list
+        save_local_config(local_cfg)
+        self._send_json({"ok": True, "countdowns": new_list})
+
+    def _handle_edit_countdown(self):
+        try:
+            data = self._read_body_json()
+        except (json.JSONDecodeError, ValueError):
+            self._send_error_json("invalid JSON body")
+            return
+        if not data or not isinstance(data, dict):
+            self._send_error_json("request body must be a JSON object")
+            return
+        old_date = (data.get("oldDate") or "").strip()
+        old_title = (data.get("oldTitle") or "").strip()
+        new_date = (data.get("newDate") or "").strip()
+        new_title = (data.get("newTitle") or "").strip()
+        if not old_date or not old_title or not new_date or not new_title:
+            self._send_error_json("oldDate, oldTitle, newDate, and newTitle are all required")
+            return
+        try:
+            dt.date.fromisoformat(new_date)
+        except ValueError:
+            self._send_error_json("newDate must be in YYYY-MM-DD format")
+            return
+        if len(new_title) > 100:
+            self._send_error_json("title must be 100 characters or fewer")
+            return
+
+        cfg = load_config()
+        countdowns = list(cfg.get("countdowns", []) or [])
+        found = False
+        for i, c in enumerate(countdowns):
+            if c.get("date") == old_date and c.get("title") == old_title:
+                countdowns[i] = {"date": new_date, "title": new_title}
+                found = True
+                break
+        if not found:
+            self._send_error_json("original countdown not found")
+            return
+        countdowns.sort(key=lambda c: c.get("date", ""))
+        local_cfg = load_local_config()
+        local_cfg["countdowns"] = countdowns
+        save_local_config(local_cfg)
+        self._send_json({"ok": True, "countdowns": countdowns})
 
 
 def main():

@@ -3,7 +3,7 @@
 import unittest
 from unittest.mock import patch
 
-from tests._helpers import fixture_bytes
+from tests.helpers import fixture_bytes
 
 from parsers import weather
 

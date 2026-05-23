@@ -158,7 +158,8 @@ Source: one or more public iCalendar (`.ics`) URLs (`src/parsers/calendar.py`).
 
 ### Countdown view
 
-Source: `countdowns` in `config.json` (array of `{date, title}` entries).
+Source: `countdowns` in `config.local.json` (array of `{date, title}` entries,
+managed via the debug panel UI).
 
 - Picks the **nearest upcoming** date. If all are past, shows the
   most-recent past one as "X is past, what's next?".
@@ -167,6 +168,10 @@ Source: `countdowns` in `config.json` (array of `{date, title}` entries).
 - View is suppressed entirely when no countdowns are configured.
 - Re-renders hourly so the day count rolls over at midnight without a page
   reload.
+- **Manage via debug panel**: open the debug overlay (press `d` or tap the
+  dot) → "Countdowns → manage ›" to add, edit, or remove entries. Changes
+  are persisted to `config.local.json` (gitignored) so no git operations are
+  needed on the Pi. Clicking an entry's text also opens it for editing.
 
 ---
 
@@ -282,7 +287,7 @@ in) merged with `src/config.local.json` (gitignored personal overrides; see
 | `weather.latitude` / `weather.longitude` | Open-Meteo coordinates and Windy.com link target. |
 | `weather.label` | Display string next to the weather panel header. |
 | `nhl.favorites` | Array of team abbreviations; star + sort-to-top. |
-| `countdowns` | Array of `{date, title}` for the countdown view. |
+| `countdowns` | Array of `{date, title}` for the countdown view. Defined in `config.local.json` and managed via the debug panel UI. |
 | `calendar.urls` | Array of public `.ics` URLs (typically only in `config.local.json`). |
 | `rss` | Array of `{name, url}`; all rotate. |
 | `rotation.rssSeconds` | RSS feed cadence (seconds). |

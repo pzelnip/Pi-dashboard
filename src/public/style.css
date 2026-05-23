@@ -916,6 +916,42 @@ a.wx-link:focus-visible {
   margin: 0;
 }
 
+.debug-countdown-list {
+  max-height: 30vh;
+  overflow: auto;
+  margin-bottom: 12px;
+}
+.debug-countdown-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.85em;
+}
+.debug-countdown-item span {
+  cursor: pointer;
+}
+.debug-countdown-item:last-child { border-bottom: none; }
+.debug-countdown-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.debug-countdown-form input {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.85em;
+}
+.debug-countdown-form input[type="date"] { width: 160px; padding-right: 4px; }
+.debug-countdown-form input[type="text"] { flex: 1; min-width: 120px; }
+
 .update-banner {
   display: none;
   padding: 10px 20px;
