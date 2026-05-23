@@ -427,6 +427,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         self.send_error(404, "Not Found")
 
+    def do_PUT(self):
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/api/countdowns":
+            self._handle_edit_countdown()
+            return
+        self.send_error(404, "Not Found")
+
     def _read_body_json(self):
         """Read and parse the request body as JSON."""
         length = int(self.headers.get("Content-Length", 0))
@@ -501,6 +508,48 @@ class DashboardHandler(BaseHTTPRequestHandler):
         local_cfg["countdowns"] = new_list
         save_local_config(local_cfg)
         self._send_json({"ok": True, "countdowns": new_list})
+
+    def _handle_edit_countdown(self):
+        try:
+            data = self._read_body_json()
+        except (json.JSONDecodeError, ValueError):
+            self._send_error_json("invalid JSON body")
+            return
+        if not data or not isinstance(data, dict):
+            self._send_error_json("request body must be a JSON object")
+            return
+        old_date = (data.get("oldDate") or "").strip()
+        old_title = (data.get("oldTitle") or "").strip()
+        new_date = (data.get("newDate") or "").strip()
+        new_title = (data.get("newTitle") or "").strip()
+        if not old_date or not old_title or not new_date or not new_title:
+            self._send_error_json("oldDate, oldTitle, newDate, and newTitle are all required")
+            return
+        try:
+            dt.date.fromisoformat(new_date)
+        except ValueError:
+            self._send_error_json("newDate must be in YYYY-MM-DD format")
+            return
+        if len(new_title) > 100:
+            self._send_error_json("title must be 100 characters or fewer")
+            return
+
+        cfg = load_config()
+        countdowns = list(cfg.get("countdowns", []) or [])
+        found = False
+        for i, c in enumerate(countdowns):
+            if c.get("date") == old_date and c.get("title") == old_title:
+                countdowns[i] = {"date": new_date, "title": new_title}
+                found = True
+                break
+        if not found:
+            self._send_error_json("original countdown not found")
+            return
+        countdowns.sort(key=lambda c: c.get("date", ""))
+        local_cfg = load_local_config()
+        local_cfg["countdowns"] = countdowns
+        save_local_config(local_cfg)
+        self._send_json({"ok": True, "countdowns": countdowns})
 
 
 def main():

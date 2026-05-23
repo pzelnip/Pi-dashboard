@@ -1597,7 +1597,8 @@ function setupDebugOverlay() {
         const safeTitle = escapeHtml(c.title);
         return `<div class="debug-countdown-item">
           <span>${safeDate} — ${safeTitle}</span>
-          <button class="debug-action danger" data-debug-action="delete-countdown" data-cd-date="${safeDate}" data-cd-title="${safeTitle}">✕</button>
+          <button class="debug-action" data-debug-action="edit-countdown" data-cd-date="${safeDate}" data-cd-title="${safeTitle}" title="Edit">✎</button>
+          <button class="debug-action danger" data-debug-action="delete-countdown" data-cd-date="${safeDate}" data-cd-title="${safeTitle}" title="Delete">✕</button>
         </div>`;
       }).join("");
       body.innerHTML = `
@@ -1623,6 +1624,21 @@ function setupDebugOverlay() {
     }
   }
 
+  function showEditCountdown(oldDate, oldTitle) {
+    mode = "countdowns";
+    body.innerHTML = `
+      <div class="debug-log-header">
+        <button class="debug-back" data-debug-action="countdowns">‹ Back</button>
+        <span class="debug-log-title">Edit Countdown</span>
+      </div>
+      <form class="debug-countdown-form" data-debug-action="save-edit-form" data-old-date="${escapeHtml(oldDate)}" data-old-title="${escapeHtml(oldTitle)}">
+        <input type="date" name="date" value="${escapeHtml(oldDate)}" required>
+        <input type="text" name="title" value="${escapeHtml(oldTitle)}" required maxlength="100">
+        <button type="submit" class="debug-action">Save</button>
+      </form>
+    `;
+  }
+
   async function addCountdown(date, title) {
     try {
       const resp = await fetch("/api/countdowns", {
@@ -1641,7 +1657,25 @@ function setupDebugOverlay() {
     }
   }
 
+  async function editCountdown(oldDate, oldTitle, newDate, newTitle) {
+    try {
+      const resp = await fetch("/api/countdowns", {
+        method: "PUT",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({oldDate, oldTitle, newDate, newTitle})
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error);
+      countdowns = data.countdowns;
+      renderCountdown();
+      await showCountdowns();
+    } catch (e) {
+      alert(`Failed to edit countdown: ${e.message}`);
+    }
+  }
+
   async function deleteCountdown(date, title) {
+    if (!confirm(`Remove "${title}" (${date})?`)) return;
     try {
       const resp = await fetch("/api/countdowns", {
         method: "DELETE",
@@ -1774,6 +1808,11 @@ function setupDebugOverlay() {
     else if (action === "log-update") showLog("update");
     else if (action === "update") startUpdateCountdown();
     else if (action === "countdowns") showCountdowns();
+    else if (action === "edit-countdown") {
+      const d = target.dataset.cdDate;
+      const t = target.dataset.cdTitle;
+      if (d && t) showEditCountdown(d, t);
+    }
     else if (action === "delete-countdown") {
       const d = target.dataset.cdDate;
       const t = target.dataset.cdTitle;
@@ -1781,14 +1820,24 @@ function setupDebugOverlay() {
     }
   });
 
-  // Handle the countdown add form submission
+  // Handle the countdown add/edit form submission
   body.addEventListener("submit", (e) => {
-    if (!e.target.matches("[data-debug-action='add-countdown-form']")) return;
-    e.preventDefault();
     const form = e.target;
-    const date = form.elements.date.value;
-    const title = form.elements.title.value.trim();
-    if (date && title) addCountdown(date, title);
+    if (form.matches("[data-debug-action='add-countdown-form']")) {
+      e.preventDefault();
+      const date = form.elements.date.value;
+      const title = form.elements.title.value.trim();
+      if (date && title) addCountdown(date, title);
+    } else if (form.matches("[data-debug-action='save-edit-form']")) {
+      e.preventDefault();
+      const oldDate = form.dataset.oldDate;
+      const oldTitle = form.dataset.oldTitle;
+      const newDate = form.elements.date.value;
+      const newTitle = form.elements.title.value.trim();
+      if (oldDate && oldTitle && newDate && newTitle) {
+        editCountdown(oldDate, oldTitle, newDate, newTitle);
+      }
+    }
   });
 
   if (banner) banner.addEventListener("click", cancelUpdateCountdown);
