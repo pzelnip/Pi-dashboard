@@ -14,6 +14,7 @@ import json
 import mimetypes
 import os
 import platform
+import re
 import subprocess
 import sys
 import threading
@@ -74,6 +75,30 @@ SERVER_STARTED_AT = time.time()
 _update_lock = threading.Lock()
 UPDATE_LOG_PATH = os.path.join(REPO_ROOT, "update.log")
 UPDATE_SCRIPT_PATH = os.path.join(REPO_ROOT, "update-dashboard.sh")
+
+
+# ---------- Countdown date validation ----------
+
+
+_ANNUAL_DATE_RE = re.compile(r"^\d{2}-\d{2}$")
+
+
+def _valid_countdown_date(date_str: str) -> bool:
+    """Validate a countdown date: YYYY-MM-DD or MM-DD (annual)."""
+    # Annual format: MM-DD
+    if _ANNUAL_DATE_RE.match(date_str):
+        m, d = int(date_str[:2]), int(date_str[3:5])
+        # Validate month/day (use a non-leap year for strictness, allow Feb 29)
+        if not (1 <= m <= 12):
+            return False
+        max_days = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+        return 1 <= d <= max_days[m - 1]
+    # Standard format: YYYY-MM-DD
+    try:
+        dt.date.fromisoformat(date_str)
+        return True
+    except ValueError:
+        return False
 
 
 # ---------- HTTP handler ----------
@@ -454,13 +479,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
         date_str = (data.get("date") or "").strip()
         title = (data.get("title") or "").strip()
         if not date_str or not title:
-            self._send_error_json("both 'date' (YYYY-MM-DD) and 'title' are required")
+            self._send_error_json("both 'date' (YYYY-MM-DD or MM-DD) and 'title' are required")
             return
-        # Validate date format
-        try:
-            dt.date.fromisoformat(date_str)
-        except ValueError:
-            self._send_error_json("date must be in YYYY-MM-DD format")
+        # Validate date format: YYYY-MM-DD or MM-DD (annual)
+        if not _valid_countdown_date(date_str):
+            self._send_error_json(
+                "date must be in YYYY-MM-DD or MM-DD (annual) format"
+            )
             return
         if len(title) > 100:
             self._send_error_json("title must be 100 characters or fewer")
@@ -525,10 +550,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not old_date or not old_title or not new_date or not new_title:
             self._send_error_json("oldDate, oldTitle, newDate, and newTitle are all required")
             return
-        try:
-            dt.date.fromisoformat(new_date)
-        except ValueError:
-            self._send_error_json("newDate must be in YYYY-MM-DD format")
+        if not _valid_countdown_date(new_date):
+            self._send_error_json(
+                "newDate must be in YYYY-MM-DD or MM-DD (annual) format"
+            )
             return
         if len(new_title) > 100:
             self._send_error_json("title must be 100 characters or fewer")
