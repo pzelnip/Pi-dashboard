@@ -1596,9 +1596,9 @@ function setupDebugOverlay() {
         const safeDate = escapeHtml(c.date);
         const safeTitle = escapeHtml(c.title);
         return `<div class="debug-countdown-item">
-          <span>${safeDate} — ${safeTitle}</span>
           <button class="debug-action" data-debug-action="edit-countdown" data-cd-date="${safeDate}" data-cd-title="${safeTitle}" title="Edit">✎</button>
           <button class="debug-action danger" data-debug-action="delete-countdown" data-cd-date="${safeDate}" data-cd-title="${safeTitle}" title="Delete">✕</button>
+          <span data-debug-action="edit-countdown" data-cd-date="${safeDate}" data-cd-title="${safeTitle}">${safeDate} — ${safeTitle}</span>
         </div>`;
       }).join("");
       body.innerHTML = `
@@ -1634,6 +1634,7 @@ function setupDebugOverlay() {
       <form class="debug-countdown-form" data-debug-action="save-edit-form" data-old-date="${escapeHtml(oldDate)}" data-old-title="${escapeHtml(oldTitle)}">
         <input type="date" name="date" value="${escapeHtml(oldDate)}" required>
         <input type="text" name="title" value="${escapeHtml(oldTitle)}" required maxlength="100">
+        <button type="button" class="debug-action" data-debug-action="countdowns">Cancel</button>
         <button type="submit" class="debug-action">Save</button>
       </form>
     `;

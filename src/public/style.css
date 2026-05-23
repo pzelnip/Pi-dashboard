@@ -924,12 +924,14 @@ a.wx-link:focus-visible {
 .debug-countdown-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   padding: 6px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   font-size: 0.85em;
 }
-.debug-countdown-item span { flex: 1; }
+.debug-countdown-item span {
+  cursor: pointer;
+}
 .debug-countdown-item:last-child { border-bottom: none; }
 .debug-countdown-form {
   display: flex;
