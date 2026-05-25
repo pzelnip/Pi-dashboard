@@ -87,12 +87,13 @@ def _valid_countdown_date(date_str: str) -> bool:
     """Validate a countdown date: YYYY-MM-DD or MM-DD (annual)."""
     # Annual format: MM-DD
     if _ANNUAL_DATE_RE.match(date_str):
-        m, d = int(date_str[:2]), int(date_str[3:5])
-        # Validate month/day (use a non-leap year for strictness, allow Feb 29)
-        if not (1 <= m <= 12):
+        month, day = int(date_str[:2]), int(date_str[3:5])
+        if not (1 <= month <= 12):
             return False
+        # Allow Feb 29 for leap-day annual events; the frontend resolves to
+        # the next year where the date is valid.
         max_days = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-        return 1 <= d <= max_days[m - 1]
+        return 1 <= day <= max_days[month - 1]
     # Standard format: YYYY-MM-DD
     try:
         dt.date.fromisoformat(date_str)
