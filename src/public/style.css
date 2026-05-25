@@ -951,6 +951,14 @@ a.wx-link:focus-visible {
 }
 .debug-countdown-form input[type="date"] { width: 160px; padding-right: 4px; }
 .debug-countdown-form input[type="text"] { flex: 1; min-width: 120px; }
+.debug-countdown-form input[type="text"][name="date"] { flex: none; width: 100px; min-width: auto; }
+.debug-toggle-annual {
+  font-size: 0.75em;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.debug-toggle-annual:hover { text-decoration: underline; }
 
 .update-banner {
   display: none;
