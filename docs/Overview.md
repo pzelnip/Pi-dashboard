@@ -161,6 +161,10 @@ Source: one or more public iCalendar (`.ics`) URLs (`src/parsers/calendar.py`).
 Source: `countdowns` in `config.local.json` (array of `{date, title}` entries,
 managed via the debug panel UI).
 
+- Dates can be `YYYY-MM-DD` (one-time) or `MM-DD` (annual/recurring every
+  year). Annual events automatically resolve to the next occurrence — if the
+  date hasn't passed yet this year it counts down to this year, otherwise next
+  year. Annual events are never shown as "past".
 - Picks the **nearest upcoming** date. If all are past, shows the
   most-recent past one as "X is past, what's next?".
 - Same-day entries render as `Today is <title>`; future entries as

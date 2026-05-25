@@ -1181,8 +1181,20 @@ function pickCountdown() {
   const todayUtc = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
   // Compare midnight-anchored dates to avoid DST / hour-of-day drift.
   const annotated = countdowns.map(c => {
-    const [y, m, d] = c.date.split("-").map(Number);
-    const days = Math.round((Date.UTC(y, m - 1, d) - todayUtc) / 86400000);
+    const parts = c.date.split("-").map(Number);
+    let targetUtc;
+    if (parts.length === 2) {
+      // Annual event (MM-DD): resolve to next occurrence
+      const [m, d] = parts;
+      const thisYear = Date.UTC(now.getFullYear(), m - 1, d);
+      targetUtc = thisYear >= todayUtc
+        ? thisYear
+        : Date.UTC(now.getFullYear() + 1, m - 1, d);
+    } else {
+      const [y, m, d] = parts;
+      targetUtc = Date.UTC(y, m - 1, d);
+    }
+    const days = Math.round((targetUtc - todayUtc) / 86400000);
     return { ...c, days };
   });
   const upcoming = annotated.filter(c => c.days >= 0).sort((a, b) => a.days - b.days);
@@ -1611,6 +1623,7 @@ function setupDebugOverlay() {
           <input type="date" name="date" required>
           <input type="text" name="title" placeholder="Event title" required maxlength="100">
           <button type="submit" class="debug-action">Add</button>
+          <a href="#" class="debug-toggle-annual" data-debug-action="toggle-annual">Annual (MM-DD)</a>
         </form>
       `;
     } catch (e) {
@@ -1626,16 +1639,22 @@ function setupDebugOverlay() {
 
   function showEditCountdown(oldDate, oldTitle) {
     mode = "countdowns";
+    const isAnnual = /^\d{2}-\d{2}$/.test(oldDate);
+    const dateInput = isAnnual
+      ? `<input type="text" name="date" value="${escapeHtml(oldDate)}" required placeholder="MM-DD" pattern="\\d{2}-\\d{2}">`
+      : `<input type="date" name="date" value="${escapeHtml(oldDate)}" required>`;
+    const toggleLabel = isAnnual ? "Full date (YYYY-MM-DD)" : "Annual (MM-DD)";
     body.innerHTML = `
       <div class="debug-log-header">
         <button class="debug-back" data-debug-action="countdowns">‹ Back</button>
         <span class="debug-log-title">Edit Countdown</span>
       </div>
       <form class="debug-countdown-form" data-debug-action="save-edit-form" data-old-date="${escapeHtml(oldDate)}" data-old-title="${escapeHtml(oldTitle)}">
-        <input type="date" name="date" value="${escapeHtml(oldDate)}" required>
+        ${dateInput}
         <input type="text" name="title" value="${escapeHtml(oldTitle)}" required maxlength="100">
         <button type="button" class="debug-action" data-debug-action="countdowns">Cancel</button>
         <button type="submit" class="debug-action">Save</button>
+        <a href="#" class="debug-toggle-annual" data-debug-action="toggle-annual">${toggleLabel}</a>
       </form>
     `;
   }
@@ -1818,6 +1837,28 @@ function setupDebugOverlay() {
       const d = target.dataset.cdDate;
       const t = target.dataset.cdTitle;
       if (d && t) deleteCountdown(d, t);
+    }
+    else if (action === "toggle-annual") {
+      e.preventDefault();
+      const form = target.closest("form");
+      if (!form) return;
+      const dateField = form.elements.date;
+      if (dateField.type === "date") {
+        // Switch to annual MM-DD text input
+        dateField.type = "text";
+        dateField.removeAttribute("value");
+        dateField.value = "";
+        dateField.placeholder = "MM-DD";
+        dateField.pattern = "\\d{2}-\\d{2}";
+        target.textContent = "Full date (YYYY-MM-DD)";
+      } else {
+        // Switch to full date picker
+        dateField.type = "date";
+        dateField.value = "";
+        dateField.removeAttribute("placeholder");
+        dateField.removeAttribute("pattern");
+        target.textContent = "Annual (MM-DD)";
+      }
     }
   });
 
