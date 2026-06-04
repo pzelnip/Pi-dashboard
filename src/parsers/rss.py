@@ -127,7 +127,7 @@ def parse_rss(xml_bytes: bytes, limit: int = 4) -> tuple[str, list[dict]]:
             )
         ]
 
-    return feed_image, items[:limit]
+    return feed_image, items[:limit] if limit else items
 
 
 def fetch_rss(url: str, limit: int = 4) -> tuple[str, list[dict]]:
@@ -167,41 +167,63 @@ def _parse_published_date(published: str) -> dt.datetime:
 def fetch_rss_aggregated(
     feeds: list[dict], items_per_feed: int = 4, max_items: int = 32
 ) -> list[dict]:
-    """Fetch all *feeds*, aggregate items grouped by feed, capped to *max_items*.
+    """Fetch all *feeds*, select items by global recency, grouped by feed.
+
+    Algorithm:
+    1. Fetch all available articles from every feed.
+    2. Sort all articles globally by published date (newest first).
+    3. Walk the sorted list, selecting each article only if fewer than
+       *items_per_feed* articles from that feed have already been selected.
+       Stop once *max_items* articles have been selected.
+    4. Group selected articles by feed for presentation: feed groups are
+       ordered by their most recent selected article, articles within each
+       group are sorted newest-first.
 
     Each feed entry is ``{"name": ..., "url": ...}``.
     Returns a flat list of item dicts, each augmented with ``feedName``
     and ``feedImage`` keys so the frontend can display per-item source info.
-
-    Items are grouped by feed with articles within each feed sorted
-    newest-first.  Feed groups are ordered by their most recent article
-    (newest feed group first).  The total number of items is capped at
-    *max_items* (default 32).
     """
-    # Collect items per feed, each feed capped to items_per_feed.
-    feed_groups: list[list[dict]] = []
+    # 1. Fetch all available articles from every feed.
+    all_articles: list[dict] = []
     for feed_cfg in feeds:
         try:
-            feed_image, items = fetch_rss(feed_cfg["url"], limit=items_per_feed)
+            feed_image, items = fetch_rss(feed_cfg["url"], limit=0)
         except Exception:
             continue
         name = feed_cfg.get("name", feed_cfg["url"])
-        group = []
         for item in items:
             augmented = {**item, "feedName": name, "feedImage": feed_image}
-            group.append(augmented)
-        # Sort articles within this feed newest-first.
-        group.sort(key=lambda i: _parse_published_date(i.get("published", "")), reverse=True)
-        if group:
-            feed_groups.append(group)
+            all_articles.append(augmented)
 
-    # Order feed groups by their most recent article (newest first).
-    feed_groups.sort(
-        key=lambda g: _parse_published_date(g[0].get("published", "")), reverse=True
+    # 2. Sort globally by published date, newest first.
+    all_articles.sort(
+        key=lambda i: _parse_published_date(i.get("published", "")), reverse=True
     )
 
-    # Flatten groups and cap to max_items.
-    all_items: list[dict] = []
-    for group in feed_groups:
-        all_items.extend(group)
-    return all_items[:max_items]
+    # 3. Walk sorted list, picking at most items_per_feed per feed, max_items total.
+    selected: list[dict] = []
+    feed_counts: dict[str, int] = {}
+    for article in all_articles:
+        feed_name = article["feedName"]
+        if feed_counts.get(feed_name, 0) >= items_per_feed:
+            continue
+        selected.append(article)
+        feed_counts[feed_name] = feed_counts.get(feed_name, 0) + 1
+        if len(selected) >= max_items:
+            break
+
+    # 4. Group by feed for presentation.
+    from collections import OrderedDict
+    groups: dict[str, list[dict]] = OrderedDict()
+    for article in selected:
+        feed_name = article["feedName"]
+        if feed_name not in groups:
+            groups[feed_name] = []
+        groups[feed_name].append(article)
+
+    # Flatten: feed groups ordered by their most recent article (already in
+    # insertion order since we walked the globally-sorted list).
+    result: list[dict] = []
+    for group in groups.values():
+        result.extend(group)
+    return result
