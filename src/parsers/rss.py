@@ -213,8 +213,7 @@ def fetch_rss_aggregated(
             break
 
     # 4. Group by feed for presentation.
-    from collections import OrderedDict
-    groups: dict[str, list[dict]] = OrderedDict()
+    groups: dict[str, list[dict]] = {}
     for article in selected:
         feed_name = article["feedName"]
         if feed_name not in groups:
