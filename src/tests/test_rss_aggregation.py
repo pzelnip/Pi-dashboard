@@ -50,8 +50,9 @@ class ParsePublishedDateTests(unittest.TestCase):
 
 class FetchRssAggregatedTests(unittest.TestCase):
     @patch("parsers.rss.fetch_rss")
-    def test_aggregates_and_sorts_by_date(self, mock_fetch):
+    def test_aggregates_grouped_by_feed(self, mock_fetch):
         # Two feeds with items at known dates.
+        # Feed1 has the newest article overall so its group comes first.
         mock_fetch.side_effect = [
             ("img1.png", [
                 {"title": "Old", "link": "", "published": "2020-01-01T00:00:00Z", "image": ""},
@@ -66,12 +67,15 @@ class FetchRssAggregatedTests(unittest.TestCase):
         result = fetch_rss_aggregated(feeds, items_per_feed=4)
 
         self.assertEqual(len(result), 3)
+        # Feed1 group first (newest article is 2020-12-01), sorted newest-first within
         self.assertEqual(result[0]["title"], "New")
         self.assertEqual(result[0]["feedName"], "Feed1")
         self.assertEqual(result[0]["feedImage"], "img1.png")
-        self.assertEqual(result[1]["title"], "Mid")
-        self.assertEqual(result[1]["feedName"], "Feed2")
-        self.assertEqual(result[2]["title"], "Old")
+        self.assertEqual(result[1]["title"], "Old")
+        self.assertEqual(result[1]["feedName"], "Feed1")
+        # Feed2 group second
+        self.assertEqual(result[2]["title"], "Mid")
+        self.assertEqual(result[2]["feedName"], "Feed2")
 
     @patch("parsers.rss.fetch_rss")
     def test_skips_failed_feeds(self, mock_fetch):
@@ -111,6 +115,38 @@ class FetchRssAggregatedTests(unittest.TestCase):
         # Items with empty/garbage published should be at the end
         self.assertIn(result[1]["title"], ("No date", "Garbage date"))
         self.assertIn(result[2]["title"], ("No date", "Garbage date"))
+
+    @patch("parsers.rss.fetch_rss")
+    def test_caps_at_max_items(self, mock_fetch):
+        # 10 feeds each returning 4 items = 40 total, should be capped to 32.
+        def make_items(feed_idx):
+            return [
+                {"title": f"F{feed_idx}-{i}", "link": "", "published": f"2020-{feed_idx+1:02d}-{i+1:02d}T00:00:00Z", "image": ""}
+                for i in range(4)
+            ]
+        mock_fetch.side_effect = [
+            (f"img{i}.png", make_items(i)) for i in range(10)
+        ]
+        feeds = [{"name": f"Feed{i}", "url": f"http://f{i}"} for i in range(10)]
+        result = fetch_rss_aggregated(feeds, items_per_feed=4)
+        self.assertEqual(len(result), 32)
+
+    @patch("parsers.rss.fetch_rss")
+    def test_fewer_than_max_items_not_padded(self, mock_fetch):
+        # 2 feeds with 4 items each = 8 total, fewer than 32, no padding.
+        mock_fetch.side_effect = [
+            ("img1.png", [
+                {"title": f"A{i}", "link": "", "published": f"2020-01-{i+1:02d}T00:00:00Z", "image": ""}
+                for i in range(4)
+            ]),
+            ("img2.png", [
+                {"title": f"B{i}", "link": "", "published": f"2020-02-{i+1:02d}T00:00:00Z", "image": ""}
+                for i in range(4)
+            ]),
+        ]
+        feeds = [{"name": "Feed1", "url": "http://f1"}, {"name": "Feed2", "url": "http://f2"}]
+        result = fetch_rss_aggregated(feeds, items_per_feed=4)
+        self.assertEqual(len(result), 8)
 
     @patch("parsers.rss.fetch_rss")
     def test_does_not_mutate_original_items(self, mock_fetch):

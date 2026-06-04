@@ -165,26 +165,43 @@ def _parse_published_date(published: str) -> dt.datetime:
 
 
 def fetch_rss_aggregated(
-    feeds: list[dict], items_per_feed: int = 4
+    feeds: list[dict], items_per_feed: int = 4, max_items: int = 32
 ) -> list[dict]:
-    """Fetch all *feeds*, aggregate items sorted newest-first.
+    """Fetch all *feeds*, aggregate items grouped by feed, capped to *max_items*.
 
     Each feed entry is ``{"name": ..., "url": ...}``.
     Returns a flat list of item dicts, each augmented with ``feedName``
     and ``feedImage`` keys so the frontend can display per-item source info.
-    Total items returned: ``len(feeds) * items_per_feed``.
+
+    Items are grouped by feed with articles within each feed sorted
+    newest-first.  Feed groups are ordered by their most recent article
+    (newest feed group first).  The total number of items is capped at
+    *max_items* (default 32).
     """
-    all_items: list[dict] = []
+    # Collect items per feed, each feed capped to items_per_feed.
+    feed_groups: list[list[dict]] = []
     for feed_cfg in feeds:
         try:
             feed_image, items = fetch_rss(feed_cfg["url"], limit=items_per_feed)
         except Exception:
             continue
         name = feed_cfg.get("name", feed_cfg["url"])
+        group = []
         for item in items:
             augmented = {**item, "feedName": name, "feedImage": feed_image}
-            all_items.append(augmented)
+            group.append(augmented)
+        # Sort articles within this feed newest-first.
+        group.sort(key=lambda i: _parse_published_date(i.get("published", "")), reverse=True)
+        if group:
+            feed_groups.append(group)
 
-    # Sort by published date descending (newest first).
-    all_items.sort(key=lambda i: _parse_published_date(i.get("published", "")), reverse=True)
-    return all_items
+    # Order feed groups by their most recent article (newest first).
+    feed_groups.sort(
+        key=lambda g: _parse_published_date(g[0].get("published", "")), reverse=True
+    )
+
+    # Flatten groups and cap to max_items.
+    all_items: list[dict] = []
+    for group in feed_groups:
+        all_items.extend(group)
+    return all_items[:max_items]
