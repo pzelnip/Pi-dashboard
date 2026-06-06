@@ -26,7 +26,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import cache
 from config import HERE, load_config, load_local_config, save_local_config
 from parsers.calendar import fetch_calendar
-from parsers.nhl import fetch_nhl
+from parsers.nhl import fetch_nhl, find_off_season_games
 from parsers.rss import fetch_rss, fetch_rss_aggregated
 from parsers.weather import fetch_weather
 
@@ -300,6 +300,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     today_games = fetch_nhl(today_iso, favorites)
                     yesterday_games = fetch_nhl(yesterday_iso, favorites)
                     has_live = any(g["state"] in ("LIVE", "CRIT") for g in today_games)
+
+                    # Off-season detection: if both today and yesterday have
+                    # no games, look back up to 7 days for the last game played.
+                    off_season = find_off_season_games(
+                        today_games, yesterday_games, favorites
+                    )
+
                     self._send_json(
                         {
                             "today": {"date": today_iso, "games": today_games},
@@ -308,6 +315,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                                 "games": yesterday_games,
                             },
                             "hasLiveToday": has_live,
+                            "offSeason": off_season,
                         }
                     )
             except Exception as e:

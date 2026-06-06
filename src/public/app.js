@@ -930,7 +930,7 @@ function setupGameDetails() {
   });
 }
 
-const NHL_TITLES = { today: "NHL Scores", yesterday: "Yesterday" };
+const NHL_TITLES = { today: "NHL Scores", yesterday: "Yesterday", offseason: "Off-Season" };
 let nhlRotationMs = 10000;
 let nhlRotator = null;
 
@@ -945,6 +945,21 @@ async function refreshNHL() {
     if (data.yesterday) {
       renderNHL(data.yesterday.games, "#nhl .view-nhl-yesterday", "No games yesterday.", "yesterday");
     }
+
+    // Off-season: when the server found recent games within the past 7 days
+    // but today and yesterday are empty, alternate between the last game
+    // scores and a "See you next season!" message.
+    if (data.offSeason) {
+      const offEl = document.querySelector("#nhl .view-nhl-offseason");
+      if (offEl) {
+        offEl.innerHTML = `<p style="color: var(--text-muted); text-align: center; margin-top: 2em; font-size: 1.3em;">🏒 See you next season!</p>`;
+      }
+      renderNHL(data.offSeason.games, "#nhl .view-nhl-today", "No games today.", "today");
+      nhlRotator.setViews(["today", "offseason"]);
+      setUpdated("nhl");
+      return;
+    }
+
     const yesterdayHasGames = Array.isArray(data.yesterday?.games) && data.yesterday.games.length > 0;
     const canRotate = !data.hasLiveToday && yesterdayHasGames;
     nhlRotator.setViews(canRotate ? ["today", "yesterday"] : ["today"]);

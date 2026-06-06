@@ -367,3 +367,26 @@ def fetch_nhl(date: str | None, favorites: list[str]) -> list[dict]:
                 }
             )
     return games_out
+
+
+def find_off_season_games(
+    today_games: list[dict],
+    yesterday_games: list[dict],
+    favorites: list[str],
+    today: dt.date | None = None,
+) -> dict | None:
+    """If both today and yesterday have no games, search back up to 7 days.
+
+    Returns {"date": "<ISO date>", "games": [...]} for the most recent day
+    with games, or None if the season is still active or no recent games exist.
+    """
+    if today_games or yesterday_games:
+        return None
+    if today is None:
+        today = dt.date.today()
+    for days_back in range(2, 8):
+        past_iso = (today - dt.timedelta(days=days_back)).isoformat()
+        past_games = fetch_nhl(past_iso, favorites)
+        if past_games:
+            return {"date": past_iso, "games": past_games}
+    return None

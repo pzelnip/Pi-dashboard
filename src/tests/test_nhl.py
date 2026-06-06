@@ -1,5 +1,6 @@
 """Tests for NHL parser: status text, team shaping, series text, fetch_nhl envelope."""
 
+import datetime as dt
 import json
 import unittest
 from unittest.mock import patch
@@ -765,6 +766,56 @@ class FetchNhlTests(unittest.TestCase):
             edm["venueUrl"],
             "https://www.google.com/search?q=Some+Obscure+Stadium+%26+Arena",
         )
+
+
+class OffSeasonTests(unittest.TestCase):
+    """Tests for find_off_season_games off-season detection."""
+
+    def test_returns_none_when_today_has_games(self):
+        today_games = [{"state": "FINAL", "home": {"abbrev": "EDM"}}]
+        result = nhl.find_off_season_games(today_games, [], [])
+        self.assertIsNone(result)
+
+    def test_returns_none_when_yesterday_has_games(self):
+        yesterday_games = [{"state": "FINAL", "home": {"abbrev": "EDM"}}]
+        result = nhl.find_off_season_games([], yesterday_games, [])
+        self.assertIsNone(result)
+
+    @patch("parsers.nhl.fetch_nhl")
+    def test_finds_games_3_days_back(self, mock_fetch):
+        fake_games = [{"state": "FINAL", "home": {"abbrev": "TOR"}}]
+        # days_back=2 returns nothing, days_back=3 returns games
+        mock_fetch.side_effect = [[], fake_games]
+        today = dt.date(2026, 7, 10)
+
+        result = nhl.find_off_season_games([], [], [], today=today)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["date"], "2026-07-07")
+        self.assertEqual(result["games"], fake_games)
+
+    @patch("parsers.nhl.fetch_nhl")
+    def test_returns_none_when_no_games_within_7_days(self, mock_fetch):
+        mock_fetch.return_value = []
+        today = dt.date(2026, 7, 10)
+
+        result = nhl.find_off_season_games([], [], [], today=today)
+
+        self.assertIsNone(result)
+        # Should have checked days 2-7 (6 calls)
+        self.assertEqual(mock_fetch.call_count, 6)
+
+    @patch("parsers.nhl.fetch_nhl")
+    def test_stops_at_first_day_with_games(self, mock_fetch):
+        fake_games = [{"state": "FINAL", "home": {"abbrev": "VAN"}}]
+        mock_fetch.side_effect = [[], [], fake_games]
+        today = dt.date(2026, 7, 10)
+
+        result = nhl.find_off_season_games([], [], [], today=today)
+
+        self.assertEqual(result["date"], "2026-07-06")
+        # Only 3 calls: days_back 2, 3, 4
+        self.assertEqual(mock_fetch.call_count, 3)
 
 
 if __name__ == "__main__":
