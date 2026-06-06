@@ -80,13 +80,13 @@ UPDATE_SCRIPT_PATH = os.path.join(REPO_ROOT, "update-dashboard.sh")
 # ---------- Countdown date validation ----------
 
 
-_ANNUAL_DATE_RE = re.compile(r"^\d{2}-\d{2}$")
+_ANNUAL_DATE_RE = re.compile(r"\d{2}-\d{2}")
 
 
 def _valid_countdown_date(date_str: str) -> bool:
     """Validate a countdown date: YYYY-MM-DD or MM-DD (annual)."""
     # Annual format: MM-DD
-    if _ANNUAL_DATE_RE.match(date_str):
+    if _ANNUAL_DATE_RE.fullmatch(date_str):
         month, day = int(date_str[:2]), int(date_str[3:5])
         if not (1 <= month <= 12):
             return False
@@ -100,6 +100,21 @@ def _valid_countdown_date(date_str: str) -> bool:
         return True
     except ValueError:
         return False
+
+
+def _countdown_sort_key(c: dict[str, str]) -> tuple[int, str]:
+    """Sort key: annual (MM-DD) events first in ascending order, then full
+    dates (YYYY-MM-DD) in ascending order.
+
+    Entries with missing or invalid ``date`` values are placed in the
+    full-date group and sorted lexicographically among them (effectively
+    last, since valid YYYY-MM-DD strings sort before empty/malformed ones
+    only if shorter).
+    """
+    date = c.get("date", "")
+    if _ANNUAL_DATE_RE.fullmatch(date):
+        return (0, date)
+    return (1, date)
 
 
 # ---------- HTTP handler ----------
@@ -397,6 +412,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 effective = local_countdowns
             else:
                 effective = base_countdowns
+            effective = sorted(effective, key=_countdown_sort_key)
             self._send_json({"countdowns": effective})
             return
 
@@ -501,7 +517,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_error_json("countdown already exists")
             return
         countdowns.append(new_entry)
-        countdowns.sort(key=lambda c: c.get("date", ""))
+        countdowns.sort(key=_countdown_sort_key)
         # Persist full list to config.local.json (replaces any base list)
         local_cfg = load_local_config()
         local_cfg["countdowns"] = countdowns
@@ -571,7 +587,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not found:
             self._send_error_json("original countdown not found")
             return
-        countdowns.sort(key=lambda c: c.get("date", ""))
+        countdowns.sort(key=_countdown_sort_key)
         local_cfg = load_local_config()
         local_cfg["countdowns"] = countdowns
         save_local_config(local_cfg)
