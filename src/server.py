@@ -102,6 +102,15 @@ def _valid_countdown_date(date_str: str) -> bool:
         return False
 
 
+def _countdown_sort_key(c: dict) -> tuple:
+    """Sort key: annual (MM-DD) events first in ascending order, then full
+    dates (YYYY-MM-DD) in ascending order."""
+    date = c.get("date", "")
+    if _ANNUAL_DATE_RE.match(date):
+        return (0, date)
+    return (1, date)
+
+
 # ---------- HTTP handler ----------
 
 
@@ -501,7 +510,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_error_json("countdown already exists")
             return
         countdowns.append(new_entry)
-        countdowns.sort(key=lambda c: c.get("date", ""))
+        countdowns.sort(key=_countdown_sort_key)
         # Persist full list to config.local.json (replaces any base list)
         local_cfg = load_local_config()
         local_cfg["countdowns"] = countdowns
@@ -571,7 +580,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not found:
             self._send_error_json("original countdown not found")
             return
-        countdowns.sort(key=lambda c: c.get("date", ""))
+        countdowns.sort(key=_countdown_sort_key)
         local_cfg = load_local_config()
         local_cfg["countdowns"] = countdowns
         save_local_config(local_cfg)
