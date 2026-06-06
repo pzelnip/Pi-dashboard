@@ -952,7 +952,7 @@ async function refreshNHL() {
     if (data.offSeason) {
       const offEl = document.querySelector("#nhl .view-nhl-offseason");
       if (offEl) {
-        offEl.innerHTML = `<p style="color: var(--text-muted); text-align: center; margin-top: 2em; font-size: 1.3em;">🏒 See you next season!</p>`;
+        offEl.innerHTML = `<p class="nhl-offseason-msg">🏒 See you next season!</p>`;
       }
       renderNHL(data.offSeason.games, "#nhl .view-nhl-today", "No games today.", "today");
       nhlRotator.setViews(["today", "offseason"]);
