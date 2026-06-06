@@ -406,6 +406,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 effective = local_countdowns
             else:
                 effective = base_countdowns
+            effective = sorted(effective, key=_countdown_sort_key)
             self._send_json({"countdowns": effective})
             return
 
