@@ -930,9 +930,10 @@ function setupGameDetails() {
   });
 }
 
-const NHL_TITLES = { today: "NHL Scores", yesterday: "Yesterday", offseason: "Off-Season" };
+const NHL_TITLES = { today: "NHL Scores", yesterday: "Yesterday", offseason: "Off-Season", weather: "Weather", clock: "", countdown: "" };
 let nhlRotationMs = 10000;
 let nhlRotator = null;
+let nhlDeepOffSeason = false;
 
 async function refreshNHL() {
   try {
@@ -946,13 +947,33 @@ async function refreshNHL() {
       renderNHL(data.yesterday.games, "#nhl .view-nhl-yesterday", "No games yesterday.", "yesterday");
     }
 
+    // Deep off-season: >7 days with no games — cycle weather/clock/countdown
+    // in the NHL panel to keep the display useful.
+    if (data.deepOffSeason) {
+      nhlDeepOffSeason = true;
+      const deepViews = ["weather"];
+      deepViews.push("clock");
+      if (countdowns.length) deepViews.push("countdown");
+      nhlRotator.setViews(deepViews);
+      renderNhlWeather();
+      renderNhlClock();
+      renderNhlCountdown();
+      setUpdated("nhl");
+      return;
+    }
+    nhlDeepOffSeason = false;
+
     // Off-season: when the server found recent games within the past 7 days
     // but today and yesterday are empty, alternate between the last game
-    // scores and a "See you next season!" message.
+    // scores and a Stanley Cup winner message (or generic off-season note).
     if (data.offSeason) {
       const offEl = document.querySelector("#nhl .view-nhl-offseason");
       if (offEl) {
-        offEl.innerHTML = `<p class="nhl-offseason-msg">🏒 See you next season!</p>`;
+        const cw = data.offSeason.cupWinner;
+        const msg = cw
+          ? `🏆 ${escapeHtml(cw.team)} win the Stanley Cup!`
+          : "🏒 See you next season!";
+        offEl.innerHTML = `<p class="nhl-offseason-msg">${msg}</p>`;
       }
       renderNHL(data.offSeason.games, "#nhl .view-nhl-today", "No games today.", "today");
       nhlRotator.setViews(["today", "offseason"]);
@@ -967,6 +988,47 @@ async function refreshNHL() {
   } catch (e) {
     showError("nhl", e.message, ".view-nhl-today");
   }
+}
+
+// ---------- NHL deep off-season helpers ----------
+// When the NHL has been idle for >7 days, the NHL panel cycles through
+// weather / clock / countdown views using data from the same sources.
+
+let _lastWeatherData = null; // cached by refreshWeather for NHL reuse
+
+function renderNhlWeather() {
+  const el = document.querySelector("#nhl .view-nhl-weather");
+  if (!el || !_lastWeatherData) {
+    if (el) el.innerHTML = '<p style="color:var(--text-muted)">Weather loading…</p>';
+    return;
+  }
+  // Render the same weather widget into the NHL panel.
+  const target = document.querySelector("#weather .view-weather");
+  if (target) el.innerHTML = target.innerHTML;
+}
+
+function renderNhlClock() {
+  const timeEl = document.querySelector("#nhl .view-nhl-clock .clock-time");
+  const dateEl = document.querySelector("#nhl .view-nhl-clock .clock-date");
+  if (!timeEl || !dateEl) return;
+  const now = new Date();
+  const weekday = now.toLocaleDateString("en-US", { weekday: "long" });
+  const month = now.toLocaleDateString("en-US", { month: "long" });
+  const day = now.getDate();
+  const year = now.getFullYear();
+  timeEl.textContent = formatTime(now);
+  dateEl.textContent = `${weekday}, ${month} ${day}${ordinalSuffix(day)}, ${year}`;
+}
+
+function renderNhlCountdown() {
+  const numEl = document.querySelector("#nhl .view-nhl-countdown .countdown-number");
+  const labelEl = document.querySelector("#nhl .view-nhl-countdown .countdown-label");
+  if (!numEl || !labelEl) return;
+  const c = pickCountdown();
+  if (!c) { numEl.textContent = ""; labelEl.textContent = "No countdowns configured"; return; }
+  if (c.days === 0) { numEl.textContent = "Today"; labelEl.textContent = `is ${c.title}`; }
+  else if (c.days > 0) { numEl.textContent = `${c.days} ${c.days === 1 ? "day" : "days"}`; labelEl.textContent = `until ${c.title}`; }
+  else { numEl.textContent = c.title; labelEl.textContent = "is past, what's next?"; }
 }
 
 // ---------- Weather ----------
@@ -1116,7 +1178,9 @@ async function refreshWeather() {
     if (data.error) {
       showError("weather", data.error, ".view-weather");
     } else {
+      _lastWeatherData = data;
       renderWeather(data);
+      if (nhlDeepOffSeason) renderNhlWeather();
     }
     setUpdated("weather");
   } catch (e) {
@@ -1184,6 +1248,7 @@ function renderClock() {
   const dateEl = document.querySelector("#weather .clock-date");
   if (timeEl) timeEl.textContent = formatTime(now);
   if (dateEl) dateEl.textContent = date;
+  if (nhlDeepOffSeason) renderNhlClock();
 }
 
 // ---------- Countdown ----------
@@ -1239,6 +1304,7 @@ function renderCountdown() {
     numEl.textContent = c.title;
     labelEl.textContent = "is past, what's next?";
   }
+  if (nhlDeepOffSeason) renderNhlCountdown();
 }
 
 // ---------- Weather panel rotation ----------

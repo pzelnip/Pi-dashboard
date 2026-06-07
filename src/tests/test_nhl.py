@@ -768,6 +768,48 @@ class FetchNhlTests(unittest.TestCase):
         )
 
 
+class ExtractCupWinnerTests(unittest.TestCase):
+    """Tests for extract_cup_winner."""
+
+    def test_returns_none_for_regular_season_games(self):
+        games = [{"series": None, "home": {"abbrev": "TOR", "fullName": "Toronto Maple Leafs"},
+                  "away": {"abbrev": "MTL", "fullName": "Montreal Canadiens"}}]
+        self.assertIsNone(nhl.extract_cup_winner(games))
+
+    def test_returns_none_for_incomplete_cup_final(self):
+        games = [{"series": {"round": 4, "neededToWin": 4, "topSeedAbbrev": "FLA",
+                             "topSeedWins": 2, "bottomSeedAbbrev": "EDM", "bottomSeedWins": 1},
+                  "home": {"abbrev": "FLA", "fullName": "Florida Panthers"},
+                  "away": {"abbrev": "EDM", "fullName": "Edmonton Oilers"}}]
+        self.assertIsNone(nhl.extract_cup_winner(games))
+
+    def test_returns_top_seed_winner(self):
+        games = [{"series": {"round": 4, "neededToWin": 4, "topSeedAbbrev": "FLA",
+                             "topSeedWins": 4, "bottomSeedAbbrev": "EDM", "bottomSeedWins": 3},
+                  "home": {"abbrev": "FLA", "fullName": "Florida Panthers"},
+                  "away": {"abbrev": "EDM", "fullName": "Edmonton Oilers"}}]
+        result = nhl.extract_cup_winner(games)
+        self.assertEqual(result, {"team": "Florida Panthers", "abbrev": "FLA"})
+
+    def test_returns_bottom_seed_winner(self):
+        games = [{"series": {"round": 4, "neededToWin": 4, "topSeedAbbrev": "FLA",
+                             "topSeedWins": 3, "bottomSeedAbbrev": "EDM", "bottomSeedWins": 4},
+                  "home": {"abbrev": "FLA", "fullName": "Florida Panthers"},
+                  "away": {"abbrev": "EDM", "fullName": "Edmonton Oilers"}}]
+        result = nhl.extract_cup_winner(games)
+        self.assertEqual(result, {"team": "Edmonton Oilers", "abbrev": "EDM"})
+
+    def test_returns_none_for_empty_games(self):
+        self.assertIsNone(nhl.extract_cup_winner([]))
+
+    def test_ignores_earlier_rounds(self):
+        games = [{"series": {"round": 2, "neededToWin": 4, "topSeedAbbrev": "TOR",
+                             "topSeedWins": 4, "bottomSeedAbbrev": "BOS", "bottomSeedWins": 3},
+                  "home": {"abbrev": "TOR", "fullName": "Toronto Maple Leafs"},
+                  "away": {"abbrev": "BOS", "fullName": "Boston Bruins"}}]
+        self.assertIsNone(nhl.extract_cup_winner(games))
+
+
 class OffSeasonTests(unittest.TestCase):
     """Tests for find_off_season_games off-season detection."""
 
@@ -793,6 +835,7 @@ class OffSeasonTests(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result["date"], "2026-07-07")
         self.assertEqual(result["games"], fake_games)
+        self.assertIn("cupWinner", result)
 
     @patch("parsers.nhl.fetch_nhl")
     def test_returns_none_when_no_games_within_7_days(self, mock_fetch):
@@ -816,6 +859,25 @@ class OffSeasonTests(unittest.TestCase):
         self.assertEqual(result["date"], "2026-07-06")
         # Only 3 calls: days_back 2, 3, 4
         self.assertEqual(mock_fetch.call_count, 3)
+
+    @patch("parsers.nhl.fetch_nhl")
+    def test_includes_cup_winner_from_final_games(self, mock_fetch):
+        cup_final_games = [{
+            "state": "FINAL",
+            "home": {"abbrev": "FLA", "fullName": "Florida Panthers"},
+            "away": {"abbrev": "EDM", "fullName": "Edmonton Oilers"},
+            "series": {"round": 4, "neededToWin": 4,
+                       "topSeedAbbrev": "FLA", "topSeedWins": 4,
+                       "bottomSeedAbbrev": "EDM", "bottomSeedWins": 3},
+        }]
+        mock_fetch.side_effect = [cup_final_games]
+        today = dt.date(2026, 7, 10)
+
+        result = nhl.find_off_season_games([], [], [], today=today)
+
+        self.assertIsNotNone(result["cupWinner"])
+        self.assertEqual(result["cupWinner"]["abbrev"], "FLA")
+        self.assertEqual(result["cupWinner"]["team"], "Florida Panthers")
 
 
 if __name__ == "__main__":

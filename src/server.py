@@ -26,7 +26,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import cache
 from config import HERE, load_config, load_local_config, save_local_config
 from parsers.calendar import fetch_calendar
-from parsers.nhl import fetch_nhl, find_off_season_games
+from parsers.nhl import fetch_nhl, find_off_season_games, extract_cup_winner
 from parsers.rss import fetch_rss, fetch_rss_aggregated
 from parsers.weather import fetch_weather
 
@@ -307,6 +307,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
                         today_games, yesterday_games, favorites
                     )
 
+                    # Deep off-season: more than 7 days with no games at all.
+                    # The frontend repurposes the NHL panel for weather/clock/
+                    # countdown cycling.
+                    deep_off = (
+                        not today_games
+                        and not yesterday_games
+                        and off_season is None
+                    )
+
                     self._send_json(
                         {
                             "today": {"date": today_iso, "games": today_games},
@@ -316,6 +325,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                             },
                             "hasLiveToday": has_live,
                             "offSeason": off_season,
+                            "deepOffSeason": deep_off,
                         }
                     )
             except Exception as e:
