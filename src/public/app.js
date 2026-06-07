@@ -979,8 +979,12 @@ const fmtNum = (v, suffix = "") =>
 // any city name without an API key.
 function forecastSearchUrl(label) {
   if (typeof label !== "string" || !label.trim()) return "";
-  const q = encodeURIComponent(`${label.trim()} hourly forecast`).replace(/%20/g, "+");
-  return `https://www.google.com/search?q=${q}`;
+
+  const params = new URLSearchParams({
+    q: `${label.trim()} hourly forecast`,
+  });
+
+  return `https://www.google.com/search?${params.toString()}`;
 }
 
 function renderWeather(data) {
