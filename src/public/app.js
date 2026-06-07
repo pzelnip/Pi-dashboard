@@ -1363,9 +1363,10 @@ function renderRSS(payload) {
         const itemLogo = feedImageUrl
           ? `<img class="rss-item-feed-logo" src="${escapeHtml(feedImageUrl)}" alt="" onerror="this.remove()">`
           : "";
+        const tooltip = i.published ? `Published: ${escapeHtml(i.published)}` : "";
         return `
         <li class="rss-item">
-          <a href="${escapeHtml(itemLink)}" target="_blank" rel="noopener">
+          <a href="${escapeHtml(itemLink)}" target="_blank" rel="noopener"${tooltip ? ` title="${tooltip}"` : ""}>
             ${itemImage
               ? `<img class="rss-thumb" src="${escapeHtml(itemImage)}" alt="" loading="lazy" onerror="this.remove()">`
               : ""}
