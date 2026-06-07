@@ -1686,21 +1686,14 @@ function setupDebugOverlay() {
     try {
       const data = await fetchJson("/api/countdowns");
       if (data.error) throw new Error(data.error);
-      const items = (data.countdowns || []).map(c => {
-        const safeDate = escapeHtml(c.date);
-        const safeTitle = escapeHtml(c.title);
-        return `<div class="debug-countdown-item">
-          <button class="debug-action" data-debug-action="edit-countdown" data-cd-date="${safeDate}" data-cd-title="${safeTitle}" title="Edit">✎</button>
-          <button class="debug-action danger" data-debug-action="delete-countdown" data-cd-date="${safeDate}" data-cd-title="${safeTitle}" title="Delete">✕</button>
-          <span data-debug-action="edit-countdown" data-cd-date="${safeDate}" data-cd-title="${safeTitle}">${safeDate} — ${safeTitle}</span>
-        </div>`;
-      }).join("");
+
+      // Static shell via innerHTML — no user data
       body.innerHTML = `
         <div class="debug-log-header">
           <button class="debug-back" data-debug-action="back">‹ Back</button>
           <span class="debug-log-title">Countdowns</span>
         </div>
-        <div class="debug-countdown-list">${items || '<p style="color:var(--text-muted)">(none)</p>'}</div>
+        <div class="debug-countdown-list"></div>
         <form class="debug-countdown-form" data-debug-action="add-countdown-form">
           <input type="date" name="date" required>
           <input type="text" name="title" placeholder="Event title" required maxlength="100">
@@ -1708,37 +1701,117 @@ function setupDebugOverlay() {
           <a href="#" class="debug-toggle-annual" data-debug-action="toggle-annual">Annual (MM-DD)</a>
         </form>
       `;
+
+      // Build countdown items with DOM APIs — user data via textContent/dataset
+      const listEl = body.querySelector(".debug-countdown-list");
+      const cdList = data.countdowns || [];
+      if (cdList.length === 0) {
+        const empty = document.createElement("p");
+        empty.style.color = "var(--text-muted)";
+        empty.textContent = "(none)";
+        listEl.appendChild(empty);
+      } else {
+        cdList.forEach(c => {
+          const item = document.createElement("div");
+          item.className = "debug-countdown-item";
+
+          const editBtn = document.createElement("button");
+          editBtn.className = "debug-action";
+          editBtn.dataset.debugAction = "edit-countdown";
+          editBtn.dataset.cdDate = c.date;
+          editBtn.dataset.cdTitle = c.title;
+          editBtn.title = "Edit";
+          editBtn.textContent = "✎";
+
+          const deleteBtn = document.createElement("button");
+          deleteBtn.className = "debug-action danger";
+          deleteBtn.dataset.debugAction = "delete-countdown";
+          deleteBtn.dataset.cdDate = c.date;
+          deleteBtn.dataset.cdTitle = c.title;
+          deleteBtn.title = "Delete";
+          deleteBtn.textContent = "✕";
+
+          const label = document.createElement("span");
+          label.dataset.debugAction = "edit-countdown";
+          label.dataset.cdDate = c.date;
+          label.dataset.cdTitle = c.title;
+          label.textContent = `${c.date} — ${c.title}`;
+
+          item.append(editBtn, deleteBtn, label);
+          listEl.appendChild(item);
+        });
+      }
     } catch (e) {
+      // Static shell via innerHTML; error message via textContent
       body.innerHTML = `
         <div class="debug-log-header">
           <button class="debug-back" data-debug-action="back">‹ Back</button>
           <span class="debug-log-title">Countdowns</span>
         </div>
-        <p style="color: var(--live)">Failed to load: ${escapeHtml(e.message)}</p>
+        <p class="debug-countdown-error" style="color: var(--live)"></p>
       `;
+      body.querySelector(".debug-countdown-error").textContent = `Failed to load: ${e.message}`;
     }
   }
 
   function showEditCountdown(oldDate, oldTitle) {
     mode = "countdowns";
     const isAnnual = /^\d{2}-\d{2}$/.test(oldDate);
-    const dateInput = isAnnual
-      ? `<input type="text" name="date" value="${escapeHtml(oldDate)}" required placeholder="MM-DD" pattern="\\d{2}-\\d{2}">`
-      : `<input type="date" name="date" value="${escapeHtml(oldDate)}" required>`;
     const toggleLabel = isAnnual ? "Full date (YYYY-MM-DD)" : "Annual (MM-DD)";
+
+    // Static shell via innerHTML — no user data
     body.innerHTML = `
       <div class="debug-log-header">
         <button class="debug-back" data-debug-action="countdowns">‹ Back</button>
         <span class="debug-log-title">Edit Countdown</span>
       </div>
-      <form class="debug-countdown-form" data-debug-action="save-edit-form" data-old-date="${escapeHtml(oldDate)}" data-old-title="${escapeHtml(oldTitle)}">
-        ${dateInput}
-        <input type="text" name="title" value="${escapeHtml(oldTitle)}" required maxlength="100">
-        <button type="button" class="debug-action" data-debug-action="countdowns">Cancel</button>
-        <button type="submit" class="debug-action">Save</button>
-        <a href="#" class="debug-toggle-annual" data-debug-action="toggle-annual">${toggleLabel}</a>
-      </form>
     `;
+
+    // Build form with DOM APIs — user data via value/dataset
+    const form = document.createElement("form");
+    form.className = "debug-countdown-form";
+    form.dataset.debugAction = "save-edit-form";
+    form.dataset.oldDate = oldDate;
+    form.dataset.oldTitle = oldTitle;
+
+    const dateInput = document.createElement("input");
+    dateInput.name = "date";
+    dateInput.required = true;
+    dateInput.value = oldDate;
+    if (isAnnual) {
+      dateInput.type = "text";
+      dateInput.placeholder = "MM-DD";
+      dateInput.pattern = "\\d{2}-\\d{2}";
+    } else {
+      dateInput.type = "date";
+    }
+
+    const titleInput = document.createElement("input");
+    titleInput.type = "text";
+    titleInput.name = "title";
+    titleInput.required = true;
+    titleInput.maxLength = 100;
+    titleInput.value = oldTitle;
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "debug-action";
+    cancelBtn.dataset.debugAction = "countdowns";
+    cancelBtn.textContent = "Cancel";
+
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "submit";
+    saveBtn.className = "debug-action";
+    saveBtn.textContent = "Save";
+
+    const toggleLink = document.createElement("a");
+    toggleLink.href = "#";
+    toggleLink.className = "debug-toggle-annual";
+    toggleLink.dataset.debugAction = "toggle-annual";
+    toggleLink.textContent = toggleLabel;
+
+    form.append(dateInput, titleInput, cancelBtn, saveBtn, toggleLink);
+    body.appendChild(form);
   }
 
   async function addCountdown(date, title) {
