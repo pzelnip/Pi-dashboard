@@ -951,9 +951,7 @@ async function refreshNHL() {
     // in the NHL panel to keep the display useful.
     if (data.deepOffSeason) {
       nhlDeepOffSeason = true;
-      const deepViews = ["weather"];
-      deepViews.push("clock");
-      if (countdowns.length) deepViews.push("countdown");
+      const deepViews = ["weather", "clock", ...(countdowns.length ? ["countdown"] : [])];
       nhlRotator.setViews(deepViews);
       renderNhlWeather();
       renderNhlClock();
@@ -971,7 +969,7 @@ async function refreshNHL() {
       if (offEl) {
         const cw = data.offSeason.cupWinner;
         const msg = cw
-          ? `🏆 ${escapeHtml(cw.team)} win the Stanley Cup!`
+          ? `🏆 ${escapeHtml(cw.team)} wins the Stanley Cup!`
           : "🏒 See you next season!";
         offEl.innerHTML = `<p class="nhl-offseason-msg">${msg}</p>`;
       }
