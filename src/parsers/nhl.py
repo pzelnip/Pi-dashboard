@@ -9,6 +9,7 @@ will reintroduce a real bug.
 
 import datetime as dt
 import json
+import os
 from urllib.parse import quote_plus
 
 from cache import fetch_cached
@@ -367,3 +368,79 @@ def fetch_nhl(date: str | None, favorites: list[str]) -> list[dict]:
                 }
             )
     return games_out
+
+
+def extract_cup_winner(games: list[dict]) -> dict | None:
+    """Find the Stanley Cup winner from a list of parsed game dicts.
+
+    Checks each game for a Cup Final series (round 4) where one team has won
+    the required number of games.  Returns {"team": "<full name>",
+    "abbrev": "<abbrev>"} or None if no champion is found.
+    """
+    for g in games:
+        s = g.get("series")
+        if not s or s.get("round") != 4:
+            continue
+        needed = s.get("neededToWin", 4)
+        top_wins = s.get("topSeedWins", 0)
+        bot_wins = s.get("bottomSeedWins", 0)
+        if top_wins >= needed:
+            winner_abbrev = s.get("topSeedAbbrev", "")
+        elif bot_wins >= needed:
+            winner_abbrev = s.get("bottomSeedAbbrev", "")
+        else:
+            continue
+        # Resolve full team name from the game's home/away data.
+        for side in ("home", "away"):
+            team = g.get(side, {})
+            if team.get("abbrev") == winner_abbrev:
+                return {"team": team.get("fullName", winner_abbrev),
+                        "abbrev": winner_abbrev}
+        # Fallback: abbreviation only (shouldn't happen with well-formed data).
+        return {"team": winner_abbrev, "abbrev": winner_abbrev}
+    return None
+
+
+# Maximum number of days to look back when detecting off-season.
+OFF_SEASON_LOOKBACK_DAYS = int(os.getenv("NHL_OFF_SEASON_LOOKBACK_DAYS", "7"))
+
+# Small cache to avoid refetching the same historical days across requests.
+# Keyed by (iso_date, tuple(sorted(favorites))).
+_off_season_cache: dict[tuple[str, tuple[str, ...]], list[dict]] = {}
+
+
+def find_off_season_games(
+    today_games: list[dict],
+    yesterday_games: list[dict],
+    favorites: list[str],
+    today: dt.date | None = None,
+) -> dict | None:
+    """If both today and yesterday have no games, search back up to 7 days.
+
+    Returns {"date": "<ISO date>", "games": [...], "cupWinner": ... | None}
+    for the most recent day with games, or None if the season is still active
+    or no recent games exist.
+    """
+    if today_games or yesterday_games:
+        return None
+    if today is None:
+        today = dt.date.today()
+    max_lookback = max(2, OFF_SEASON_LOOKBACK_DAYS)
+    for days_back in range(2, max_lookback + 1):
+        past_iso = (today - dt.timedelta(days=days_back)).isoformat()
+        cache_key = (past_iso, tuple(sorted(favorites)))
+        if cache_key in _off_season_cache:
+            past_games = _off_season_cache[cache_key]
+        else:
+            past_games = fetch_nhl(past_iso, favorites)
+            if past_games:
+                if len(_off_season_cache) >= 32:
+                    _off_season_cache.clear()
+                _off_season_cache[cache_key] = past_games
+        if past_games:
+            return {
+                "date": past_iso,
+                "games": past_games,
+                "cupWinner": extract_cup_winner(past_games),
+            }
+    return None
