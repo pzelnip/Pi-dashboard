@@ -969,9 +969,13 @@ async function refreshNHL() {
       if (offEl) {
         const cw = data.offSeason.cupWinner;
         const msg = cw
-          ? `🏆 ${escapeHtml(cw.team)} wins the Stanley Cup!`
+          ? `🏆 ${cw.team} win the Stanley Cup!`
           : "🏒 See you next season!";
-        offEl.innerHTML = `<p class="nhl-offseason-msg">${msg}</p>`;
+        offEl.textContent = "";
+        const p = document.createElement("p");
+        p.className = "nhl-offseason-msg";
+        p.textContent = msg;
+        offEl.appendChild(p);
       }
       renderNHL(data.offSeason.games, "#nhl .view-nhl-today", "No games today.", "today");
       nhlRotator.setViews(["today", "offseason"]);
@@ -997,12 +1001,15 @@ let _lastWeatherData = null; // cached by refreshWeather for NHL reuse
 function renderNhlWeather() {
   const el = document.querySelector("#nhl .view-nhl-weather");
   if (!el || !_lastWeatherData) {
-    if (el) el.innerHTML = '<p style="color:var(--text-muted)">Weather loading…</p>';
+    if (el) el.textContent = "Weather loading…";
     return;
   }
   // Render the same weather widget into the NHL panel.
   const target = document.querySelector("#weather .view-weather");
-  if (target) el.innerHTML = target.innerHTML;
+  if (target) {
+    el.textContent = "";
+    Array.from(target.cloneNode(true).childNodes).forEach(n => el.appendChild(n));
+  }
 }
 
 function renderNhlClock() {
@@ -1018,15 +1025,20 @@ function renderNhlClock() {
   dateEl.textContent = `${weekday}, ${month} ${day}${ordinalSuffix(day)}, ${year}`;
 }
 
+function formatCountdown(c) {
+  if (!c) return { numberText: "", labelText: "No countdowns configured" };
+  if (c.days === 0) return { numberText: "Today", labelText: `is ${c.title}` };
+  if (c.days > 0) return { numberText: `${c.days} ${c.days === 1 ? "day" : "days"}`, labelText: `until ${c.title}` };
+  return { numberText: c.title, labelText: "is past, what's next?" };
+}
+
 function renderNhlCountdown() {
   const numEl = document.querySelector("#nhl .view-nhl-countdown .countdown-number");
   const labelEl = document.querySelector("#nhl .view-nhl-countdown .countdown-label");
   if (!numEl || !labelEl) return;
-  const c = pickCountdown();
-  if (!c) { numEl.textContent = ""; labelEl.textContent = "No countdowns configured"; return; }
-  if (c.days === 0) { numEl.textContent = "Today"; labelEl.textContent = `is ${c.title}`; }
-  else if (c.days > 0) { numEl.textContent = `${c.days} ${c.days === 1 ? "day" : "days"}`; labelEl.textContent = `until ${c.title}`; }
-  else { numEl.textContent = c.title; labelEl.textContent = "is past, what's next?"; }
+  const { numberText, labelText } = formatCountdown(pickCountdown());
+  numEl.textContent = numberText;
+  labelEl.textContent = labelText;
 }
 
 // ---------- Weather ----------
@@ -1285,23 +1297,9 @@ function renderCountdown() {
   const labelEl = document.querySelector("#weather .countdown-label");
   if (!numEl || !labelEl) return;
 
-  const c = pickCountdown();
-  if (!c) {
-    numEl.textContent = "";
-    labelEl.textContent = "No countdowns configured";
-    return;
-  }
-
-  if (c.days === 0) {
-    numEl.textContent = "Today";
-    labelEl.textContent = `is ${c.title}`;
-  } else if (c.days > 0) {
-    numEl.textContent = `${c.days} ${c.days === 1 ? "day" : "days"}`;
-    labelEl.textContent = `until ${c.title}`;
-  } else {
-    numEl.textContent = c.title;
-    labelEl.textContent = "is past, what's next?";
-  }
+  const { numberText, labelText } = formatCountdown(pickCountdown());
+  numEl.textContent = numberText;
+  labelEl.textContent = labelText;
   if (nhlDeepOffSeason) renderNhlCountdown();
 }
 

@@ -36,7 +36,7 @@ Source: `src/parsers/nhl.py`, rendering in `src/public/app.js` (`renderNHL`,
 - When both today and yesterday have no games, the server searches backwards
   up to 7 days for the most recent day with games.
 - If found, the panel alternates between the scores from that final game day
-  and a Stanley Cup winner banner (e.g. "🏆 Florida Panthers wins the Stanley
+  and a Stanley Cup winner banner (e.g. "🏆 Florida Panthers win the Stanley
   Cup!"). When the last games weren't Cup Final clinchers, it falls back to
   a generic "🏒 See you next season!" message.
 - After 7 days with no games at all (deep off-season), the NHL panel

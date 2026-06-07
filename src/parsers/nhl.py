@@ -9,6 +9,7 @@ will reintroduce a real bug.
 
 import datetime as dt
 import json
+import os
 from urllib.parse import quote_plus
 
 from cache import fetch_cached
@@ -400,6 +401,14 @@ def extract_cup_winner(games: list[dict]) -> dict | None:
     return None
 
 
+# Maximum number of days to look back when detecting off-season.
+OFF_SEASON_LOOKBACK_DAYS = int(os.getenv("NHL_OFF_SEASON_LOOKBACK_DAYS", "7"))
+
+# Small cache to avoid refetching the same historical days across requests.
+# Keyed by (iso_date, tuple(sorted(favorites))).
+_off_season_cache: dict[tuple[str, tuple[str, ...]], list[dict]] = {}
+
+
 def find_off_season_games(
     today_games: list[dict],
     yesterday_games: list[dict],
@@ -416,9 +425,18 @@ def find_off_season_games(
         return None
     if today is None:
         today = dt.date.today()
-    for days_back in range(2, 8):
+    max_lookback = max(2, OFF_SEASON_LOOKBACK_DAYS)
+    for days_back in range(2, max_lookback + 1):
         past_iso = (today - dt.timedelta(days=days_back)).isoformat()
-        past_games = fetch_nhl(past_iso, favorites)
+        cache_key = (past_iso, tuple(sorted(favorites)))
+        if cache_key in _off_season_cache:
+            past_games = _off_season_cache[cache_key]
+        else:
+            past_games = fetch_nhl(past_iso, favorites)
+            if past_games:
+                if len(_off_season_cache) >= 32:
+                    _off_season_cache.clear()
+                _off_season_cache[cache_key] = past_games
         if past_games:
             return {
                 "date": past_iso,

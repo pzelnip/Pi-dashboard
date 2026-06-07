@@ -813,6 +813,9 @@ class ExtractCupWinnerTests(unittest.TestCase):
 class OffSeasonTests(unittest.TestCase):
     """Tests for find_off_season_games off-season detection."""
 
+    def setUp(self):
+        nhl._off_season_cache.clear()
+
     def test_returns_none_when_today_has_games(self):
         today_games = [{"state": "FINAL", "home": {"abbrev": "EDM"}}]
         result = nhl.find_off_season_games(today_games, [], [])
