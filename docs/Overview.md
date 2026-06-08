@@ -43,9 +43,12 @@ Source: `src/parsers/nhl.py`, rendering in `src/public/app.js` (`renderNHL`,
   and a Stanley Cup winner banner (e.g. "🏆 Florida Panthers win the Stanley
   Cup!"). When the last games weren't Cup Final clinchers, it falls back to
   a generic "🏒 See you next season!" message.
-- After 7 days with no games at all (deep off-season), the NHL panel
-  repurposes itself to cycle through weather, clock, and countdown views —
-  the same content shown in the weather panel.
+- When there are no games today, yesterday, in the coming week, *or* in the
+  prior week (deep off-season), the NHL panel repurposes itself to cycle
+  through weather, clock, and countdown views — the same content shown in the
+  weather panel. The same upcoming-game check guards this, so a short
+  mid-season gap with a game on the horizon keeps the normal panel rather than
+  flipping to weather/clock.
 
 ### Game card
 

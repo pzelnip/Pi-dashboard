@@ -414,6 +414,26 @@ OFF_SEASON_LOOKAHEAD_DAYS = int(os.getenv("NHL_OFF_SEASON_LOOKAHEAD_DAYS", "7"))
 _off_season_cache: dict[tuple[str, tuple[str, ...]], list[dict]] = {}
 
 
+def has_upcoming_games(
+    favorites: list[str],
+    today: dt.date | None = None,
+) -> bool:
+    """True if a game is scheduled within the next ``OFF_SEASON_LOOKAHEAD_DAYS``.
+
+    A scheduled game on the horizon means we are in a mid-season schedule gap
+    (an off day, the All-Star break), not the off-season — even if today and
+    yesterday happen to be empty.
+    """
+    if today is None:
+        today = dt.date.today()
+    max_lookahead = max(1, OFF_SEASON_LOOKAHEAD_DAYS)
+    for days_ahead in range(1, max_lookahead + 1):
+        future_iso = (today + dt.timedelta(days=days_ahead)).isoformat()
+        if fetch_nhl(future_iso, favorites):
+            return True
+    return False
+
+
 def find_off_season_games(
     today_games: list[dict],
     yesterday_games: list[dict],
@@ -437,11 +457,8 @@ def find_off_season_games(
     # The season is only over if there are no upcoming games. Scan forward
     # first so a quiet stretch with a game on the horizon doesn't masquerade
     # as the off-season.
-    max_lookahead = max(1, OFF_SEASON_LOOKAHEAD_DAYS)
-    for days_ahead in range(1, max_lookahead + 1):
-        future_iso = (today + dt.timedelta(days=days_ahead)).isoformat()
-        if fetch_nhl(future_iso, favorites):
-            return None
+    if has_upcoming_games(favorites, today):
+        return None
     max_lookback = max(2, OFF_SEASON_LOOKBACK_DAYS)
     for days_back in range(2, max_lookback + 1):
         past_iso = (today - dt.timedelta(days=days_back)).isoformat()

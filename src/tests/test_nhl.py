@@ -909,5 +909,42 @@ class OffSeasonTests(unittest.TestCase):
         self.assertEqual(result["cupWinner"]["team"], "Florida Panthers")
 
 
+class HasUpcomingGamesTests(unittest.TestCase):
+    """Tests for has_upcoming_games look-ahead used to gate off-season modes."""
+
+    @patch("parsers.nhl.fetch_nhl")
+    def test_true_when_game_tomorrow(self, mock_fetch):
+        tomorrow_games = [{"state": "FUT", "home": {"abbrev": "EDM"}}]
+        mock_fetch.side_effect = [tomorrow_games]
+        today = dt.date(2026, 4, 10)
+
+        result = nhl.has_upcoming_games([], today=today)
+
+        self.assertTrue(result)
+        self.assertEqual(mock_fetch.call_count, 1)
+
+    @patch("parsers.nhl.fetch_nhl")
+    def test_true_when_game_later_this_week(self, mock_fetch):
+        future_games = [{"state": "FUT", "home": {"abbrev": "VAN"}}]
+        mock_fetch.side_effect = [[], [], future_games]
+        today = dt.date(2026, 4, 10)
+
+        result = nhl.has_upcoming_games([], today=today)
+
+        self.assertTrue(result)
+        self.assertEqual(mock_fetch.call_count, 3)
+
+    @patch("parsers.nhl.fetch_nhl")
+    def test_false_when_nothing_scheduled(self, mock_fetch):
+        mock_fetch.return_value = []
+        today = dt.date(2026, 7, 10)
+
+        result = nhl.has_upcoming_games([], today=today)
+
+        self.assertFalse(result)
+        # Scans all 7 look-ahead days.
+        self.assertEqual(mock_fetch.call_count, 7)
+
+
 if __name__ == "__main__":
     unittest.main()
