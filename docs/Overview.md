@@ -33,8 +33,12 @@ Source: `src/parsers/nhl.py`, rendering in `src/public/app.js` (`renderNHL`,
 
 ### Off-season behaviour
 
-- When both today and yesterday have no games, the server searches backwards
-  up to 7 days for the most recent day with games.
+- When both today and yesterday have no games, the server first checks the
+  next 7 days for any upcoming game. If one is scheduled, this is treated as a
+  mid-season schedule gap (e.g. All-Star break) and normal scoring continues —
+  off-season behaviour does not kick in.
+- Only when there are no games today, yesterday, or in the coming week does the
+  server search backwards up to 7 days for the most recent day with games.
 - If found, the panel alternates between the scores from that final game day
   and a Stanley Cup winner banner (e.g. "🏆 Florida Panthers win the Stanley
   Cup!"). When the last games weren't Cup Final clinchers, it falls back to

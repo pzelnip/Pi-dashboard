@@ -404,6 +404,11 @@ def extract_cup_winner(games: list[dict]) -> dict | None:
 # Maximum number of days to look back when detecting off-season.
 OFF_SEASON_LOOKBACK_DAYS = int(os.getenv("NHL_OFF_SEASON_LOOKBACK_DAYS", "7"))
 
+# How many days ahead to scan for upcoming games before declaring the season
+# over. A scheduled game in the near future means we're in a mid-season
+# schedule gap (e.g. All-Star break, a day or two off), not the off-season.
+OFF_SEASON_LOOKAHEAD_DAYS = int(os.getenv("NHL_OFF_SEASON_LOOKAHEAD_DAYS", "7"))
+
 # Small cache to avoid refetching the same historical days across requests.
 # Keyed by (iso_date, tuple(sorted(favorites))).
 _off_season_cache: dict[tuple[str, tuple[str, ...]], list[dict]] = {}
@@ -420,11 +425,23 @@ def find_off_season_games(
     Returns {"date": "<ISO date>", "games": [...], "cupWinner": ... | None}
     for the most recent day with games, or None if the season is still active
     or no recent games exist.
+
+    A backward gap alone is not enough to declare the season over: if a game
+    is scheduled within the next ``OFF_SEASON_LOOKAHEAD_DAYS`` days we are in a
+    mid-season schedule gap, so this returns None.
     """
     if today_games or yesterday_games:
         return None
     if today is None:
         today = dt.date.today()
+    # The season is only over if there are no upcoming games. Scan forward
+    # first so a quiet stretch with a game on the horizon doesn't masquerade
+    # as the off-season.
+    max_lookahead = max(1, OFF_SEASON_LOOKAHEAD_DAYS)
+    for days_ahead in range(1, max_lookahead + 1):
+        future_iso = (today + dt.timedelta(days=days_ahead)).isoformat()
+        if fetch_nhl(future_iso, favorites):
+            return None
     max_lookback = max(2, OFF_SEASON_LOOKBACK_DAYS)
     for days_back in range(2, max_lookback + 1):
         past_iso = (today - dt.timedelta(days=days_back)).isoformat()
