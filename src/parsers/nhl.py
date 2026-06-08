@@ -409,9 +409,26 @@ OFF_SEASON_LOOKBACK_DAYS = int(os.getenv("NHL_OFF_SEASON_LOOKBACK_DAYS", "7"))
 # schedule gap (e.g. All-Star break, a day or two off), not the off-season.
 OFF_SEASON_LOOKAHEAD_DAYS = int(os.getenv("NHL_OFF_SEASON_LOOKAHEAD_DAYS", "7"))
 
-# Small cache to avoid refetching the same historical days across requests.
-# Keyed by (iso_date, tuple(sorted(favorites))).
+# Small cache to avoid refetching the same days across requests, used by both
+# the off-season look-back and the upcoming-games look-ahead. Keyed by
+# (iso_date, tuple(sorted(favorites))). Only days that *have* games are cached:
+# a date with a scheduled game is stable enough to reuse across requests on the
+# same day, while empty days could still gain a game and fall back to
+# fetch_cached's own TTL.
 _off_season_cache: dict[tuple[str, tuple[str, ...]], list[dict]] = {}
+
+
+def _cached_fetch_nhl(iso: str, favorites: list[str]) -> list[dict]:
+    """fetch_nhl wrapper with a small cross-request cache for game days."""
+    cache_key = (iso, tuple(sorted(favorites)))
+    if cache_key in _off_season_cache:
+        return _off_season_cache[cache_key]
+    games = fetch_nhl(iso, favorites)
+    if games:
+        if len(_off_season_cache) >= 32:
+            _off_season_cache.clear()
+        _off_season_cache[cache_key] = games
+    return games
 
 
 def has_upcoming_games(
@@ -422,14 +439,14 @@ def has_upcoming_games(
 
     A scheduled game on the horizon means we are in a mid-season schedule gap
     (an off day, the All-Star break), not the off-season — even if today and
-    yesterday happen to be empty.
+    yesterday happen to be empty. Setting ``NHL_OFF_SEASON_LOOKAHEAD_DAYS`` to 0
+    (or less) disables the look-ahead entirely.
     """
     if today is None:
         today = dt.date.today()
-    max_lookahead = max(1, OFF_SEASON_LOOKAHEAD_DAYS)
-    for days_ahead in range(1, max_lookahead + 1):
+    for days_ahead in range(1, OFF_SEASON_LOOKAHEAD_DAYS + 1):
         future_iso = (today + dt.timedelta(days=days_ahead)).isoformat()
-        if fetch_nhl(future_iso, favorites):
+        if _cached_fetch_nhl(future_iso, favorites):
             return True
     return False
 
@@ -462,16 +479,7 @@ def find_off_season_games(
     max_lookback = max(2, OFF_SEASON_LOOKBACK_DAYS)
     for days_back in range(2, max_lookback + 1):
         past_iso = (today - dt.timedelta(days=days_back)).isoformat()
-        cache_key = (past_iso, tuple(sorted(favorites)))
-        if cache_key in _off_season_cache:
-            past_games = _off_season_cache[cache_key]
-        else:
-            past_games = fetch_nhl(past_iso, favorites)
-            if past_games:
-                if len(_off_season_cache) >= 32:
-                    _off_season_cache.clear()
-                _off_season_cache[cache_key] = past_games
-        if past_games:
+        if past_games := _cached_fetch_nhl(past_iso, favorites):
             return {
                 "date": past_iso,
                 "games": past_games,
