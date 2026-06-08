@@ -827,10 +827,34 @@ class OffSeasonTests(unittest.TestCase):
         self.assertIsNone(result)
 
     @patch("parsers.nhl.fetch_nhl")
+    def test_returns_none_when_game_scheduled_tomorrow(self, mock_fetch):
+        tomorrow_games = [{"state": "FUT", "home": {"abbrev": "EDM"}}]
+        # First look-ahead day (tomorrow) has a game -> still in-season.
+        mock_fetch.side_effect = [tomorrow_games]
+        today = dt.date(2026, 4, 10)
+
+        result = nhl.find_off_season_games([], [], [], today=today)
+
+        self.assertIsNone(result)
+        self.assertEqual(mock_fetch.call_count, 1)
+
+    @patch("parsers.nhl.fetch_nhl")
+    def test_returns_none_when_game_scheduled_later_this_week(self, mock_fetch):
+        future_games = [{"state": "FUT", "home": {"abbrev": "VAN"}}]
+        # Days 1-2 ahead empty, day 3 ahead has a game -> still in-season.
+        mock_fetch.side_effect = [[], [], future_games]
+        today = dt.date(2026, 4, 10)
+
+        result = nhl.find_off_season_games([], [], [], today=today)
+
+        self.assertIsNone(result)
+        self.assertEqual(mock_fetch.call_count, 3)
+
+    @patch("parsers.nhl.fetch_nhl")
     def test_finds_games_3_days_back(self, mock_fetch):
         fake_games = [{"state": "FINAL", "home": {"abbrev": "TOR"}}]
-        # days_back=2 returns nothing, days_back=3 returns games
-        mock_fetch.side_effect = [[], fake_games]
+        # 7 empty look-ahead days, then days_back=2 empty, days_back=3 has games.
+        mock_fetch.side_effect = [[] for _ in range(7)] + [[], fake_games]
         today = dt.date(2026, 7, 10)
 
         result = nhl.find_off_season_games([], [], [], today=today)
@@ -848,20 +872,21 @@ class OffSeasonTests(unittest.TestCase):
         result = nhl.find_off_season_games([], [], [], today=today)
 
         self.assertIsNone(result)
-        # Should have checked days 2-7 (6 calls)
-        self.assertEqual(mock_fetch.call_count, 6)
+        # 7 look-ahead days (1-7) + 6 look-back days (2-7) = 13 calls.
+        self.assertEqual(mock_fetch.call_count, 13)
 
     @patch("parsers.nhl.fetch_nhl")
     def test_stops_at_first_day_with_games(self, mock_fetch):
         fake_games = [{"state": "FINAL", "home": {"abbrev": "VAN"}}]
-        mock_fetch.side_effect = [[], [], fake_games]
+        # 7 empty look-ahead days, then days_back 2, 3 empty, 4 has games.
+        mock_fetch.side_effect = [[] for _ in range(7)] + [[], [], fake_games]
         today = dt.date(2026, 7, 10)
 
         result = nhl.find_off_season_games([], [], [], today=today)
 
         self.assertEqual(result["date"], "2026-07-06")
-        # Only 3 calls: days_back 2, 3, 4
-        self.assertEqual(mock_fetch.call_count, 3)
+        # 7 look-ahead + 3 look-back (days_back 2, 3, 4) = 10 calls.
+        self.assertEqual(mock_fetch.call_count, 10)
 
     @patch("parsers.nhl.fetch_nhl")
     def test_includes_cup_winner_from_final_games(self, mock_fetch):
@@ -873,7 +898,8 @@ class OffSeasonTests(unittest.TestCase):
                        "topSeedAbbrev": "FLA", "topSeedWins": 4,
                        "bottomSeedAbbrev": "EDM", "bottomSeedWins": 3},
         }]
-        mock_fetch.side_effect = [cup_final_games]
+        # 7 empty look-ahead days, then the cup final on the first look-back day.
+        mock_fetch.side_effect = [[] for _ in range(7)] + [cup_final_games]
         today = dt.date(2026, 7, 10)
 
         result = nhl.find_off_season_games([], [], [], today=today)
@@ -881,6 +907,70 @@ class OffSeasonTests(unittest.TestCase):
         self.assertIsNotNone(result["cupWinner"])
         self.assertEqual(result["cupWinner"]["abbrev"], "FLA")
         self.assertEqual(result["cupWinner"]["team"], "Florida Panthers")
+
+
+class HasUpcomingGamesTests(unittest.TestCase):
+    """Tests for has_upcoming_games look-ahead used to gate off-season modes."""
+
+    def setUp(self):
+        nhl._off_season_cache.clear()
+
+    @patch("parsers.nhl.fetch_nhl")
+    def test_true_when_game_tomorrow(self, mock_fetch):
+        tomorrow_games = [{"state": "FUT", "home": {"abbrev": "EDM"}}]
+        mock_fetch.side_effect = [tomorrow_games]
+        today = dt.date(2026, 4, 10)
+
+        result = nhl.has_upcoming_games([], today=today)
+
+        self.assertTrue(result)
+        self.assertEqual(mock_fetch.call_count, 1)
+
+    @patch("parsers.nhl.fetch_nhl")
+    def test_true_when_game_later_this_week(self, mock_fetch):
+        future_games = [{"state": "FUT", "home": {"abbrev": "VAN"}}]
+        mock_fetch.side_effect = [[], [], future_games]
+        today = dt.date(2026, 4, 10)
+
+        result = nhl.has_upcoming_games([], today=today)
+
+        self.assertTrue(result)
+        self.assertEqual(mock_fetch.call_count, 3)
+
+    @patch("parsers.nhl.fetch_nhl")
+    def test_false_when_nothing_scheduled(self, mock_fetch):
+        mock_fetch.return_value = []
+        today = dt.date(2026, 7, 10)
+
+        result = nhl.has_upcoming_games([], today=today)
+
+        self.assertFalse(result)
+        # Scans all 7 look-ahead days.
+        self.assertEqual(mock_fetch.call_count, 7)
+
+    @patch("parsers.nhl.OFF_SEASON_LOOKAHEAD_DAYS", 0)
+    @patch("parsers.nhl.fetch_nhl")
+    def test_lookahead_disabled_when_set_to_zero(self, mock_fetch):
+        today = dt.date(2026, 7, 10)
+
+        result = nhl.has_upcoming_games([], today=today)
+
+        self.assertFalse(result)
+        self.assertEqual(mock_fetch.call_count, 0)
+
+    @patch("parsers.nhl.fetch_nhl")
+    def test_caches_game_day_across_calls(self, mock_fetch):
+        tomorrow_games = [{"state": "FUT", "home": {"abbrev": "EDM"}}]
+        mock_fetch.side_effect = [tomorrow_games]
+        today = dt.date(2026, 4, 10)
+
+        first = nhl.has_upcoming_games([], today=today)
+        second = nhl.has_upcoming_games([], today=today)
+
+        self.assertTrue(first)
+        self.assertTrue(second)
+        # The second call reuses the cached game day instead of refetching.
+        self.assertEqual(mock_fetch.call_count, 1)
 
 
 if __name__ == "__main__":
