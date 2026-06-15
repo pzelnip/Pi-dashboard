@@ -467,10 +467,23 @@ def find_off_season_games(
     is scheduled within the next ``OFF_SEASON_LOOKAHEAD_DAYS`` days we are in a
     mid-season schedule gap, so this returns None.
     """
-    if today_games or yesterday_games:
-        return None
     if today is None:
         today = dt.date.today()
+
+    # Day after a clinch: today is empty but yesterday holds the Cup-clinching
+    # final. Surface the champion immediately rather than waiting for both days
+    # to go empty (which would delay the banner ~2 days). Subsequent days are
+    # handled by the look-back below as yesterday also empties out.
+    if not today_games and yesterday_games:
+        if (cup := extract_cup_winner(yesterday_games)) is not None:
+            return {
+                "date": (today - dt.timedelta(days=1)).isoformat(),
+                "games": yesterday_games,
+                "cupWinner": cup,
+            }
+
+    if today_games or yesterday_games:
+        return None
     # The season is only over if there are no upcoming games. Scan forward
     # first so a quiet stretch with a game on the horizon doesn't masquerade
     # as the off-season.

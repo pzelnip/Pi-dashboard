@@ -908,6 +908,31 @@ class OffSeasonTests(unittest.TestCase):
         self.assertEqual(result["cupWinner"]["abbrev"], "FLA")
         self.assertEqual(result["cupWinner"]["team"], "Florida Panthers")
 
+    def test_day_after_clinch_surfaces_cup_winner_from_yesterday(self):
+        cup_final_games = [{
+            "state": "FINAL",
+            "home": {"abbrev": "CAR", "fullName": "Carolina Hurricanes"},
+            "away": {"abbrev": "EDM", "fullName": "Edmonton Oilers"},
+            "series": {"round": 4, "neededToWin": 4,
+                       "topSeedAbbrev": "CAR", "topSeedWins": 4,
+                       "bottomSeedAbbrev": "EDM", "bottomSeedWins": 2},
+        }]
+        today = dt.date(2026, 6, 15)
+
+        result = nhl.find_off_season_games([], cup_final_games, [], today=today)
+
+        self.assertEqual(result["date"], "2026-06-14")
+        self.assertEqual(result["games"], cup_final_games)
+        self.assertEqual(result["cupWinner"], {"team": "Carolina Hurricanes", "abbrev": "CAR"})
+
+    def test_day_after_returns_none_when_yesterday_not_cup_final(self):
+        yesterday_games = [{"state": "FINAL", "home": {"abbrev": "EDM"}}]
+        today = dt.date(2026, 1, 15)
+
+        result = nhl.find_off_season_games([], yesterday_games, [], today=today)
+
+        self.assertIsNone(result)
+
 
 class HasUpcomingGamesTests(unittest.TestCase):
     """Tests for has_upcoming_games look-ahead used to gate off-season modes."""
