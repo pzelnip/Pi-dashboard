@@ -150,8 +150,8 @@ class FetchRssAggregatedTests(unittest.TestCase):
         self.assertIn(result[2]["title"], ("No date", "Garbage date"))
 
     @patch("parsers.rss.fetch_rss")
-    def test_caps_at_max_items(self, mock_fetch):
-        # 10 feeds each returning 4 items = 40 eligible, should be capped to 32.
+    def test_explicit_max_items_caps_selection(self, mock_fetch):
+        # 10 feeds each returning 4 items = 40 eligible, explicit cap of 32.
         def make_items(feed_idx):
             return [
                 {"title": f"F{feed_idx}-{i}", "link": "", "published": f"2020-{feed_idx+1:02d}-{i+1:02d}T00:00:00Z", "image": ""}
@@ -161,8 +161,29 @@ class FetchRssAggregatedTests(unittest.TestCase):
             (f"img{i}.png", make_items(i)) for i in range(10)
         ]
         feeds = [{"name": f"Feed{i}", "url": f"http://f{i}"} for i in range(10)]
-        result = fetch_rss_aggregated(feeds, items_per_feed=4)
+
+        result = fetch_rss_aggregated(feeds, items_per_feed=4, max_items=32)
+
         self.assertEqual(len(result), 32)
+
+    @patch("parsers.rss.fetch_rss")
+    def test_default_max_items_scales_with_feed_count(self, mock_fetch):
+        # No explicit cap: every feed gets its full items_per_feed share, so a
+        # low-frequency feed with only older posts is never crowded out.
+        def make_items(feed_idx):
+            return [
+                {"title": f"F{feed_idx}-{i}", "link": "", "published": f"2020-{feed_idx+1:02d}-{i+1:02d}T00:00:00Z", "image": ""}
+                for i in range(4)
+            ]
+        mock_fetch.side_effect = [
+            (f"img{i}.png", make_items(i)) for i in range(10)
+        ]
+        feeds = [{"name": f"Feed{i}", "url": f"http://f{i}"} for i in range(10)]
+
+        result = fetch_rss_aggregated(feeds, items_per_feed=4)
+
+        self.assertEqual(len(result), 40)
+        self.assertTrue(all(any(it["feedName"] == f"Feed{i}" for it in result) for i in range(10)))
 
     @patch("parsers.rss.fetch_rss")
     def test_fewer_than_max_items_not_padded(self, mock_fetch):

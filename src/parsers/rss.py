@@ -165,7 +165,7 @@ def _parse_published_date(published: str) -> dt.datetime:
 
 
 def fetch_rss_aggregated(
-    feeds: list[dict], items_per_feed: int = 4, max_items: int = 32
+    feeds: list[dict], items_per_feed: int = 4, max_items: int | None = None
 ) -> list[dict]:
     """Fetch all *feeds*, select items by global recency, grouped by feed.
 
@@ -179,10 +179,17 @@ def fetch_rss_aggregated(
        ordered by their most recent selected article, articles within each
        group are sorted newest-first.
 
+    *max_items* defaults to ``len(feeds) * items_per_feed`` so every configured
+    feed can contribute its full share. A fixed cap below that total lets
+    high-frequency feeds crowd low-frequency ones (e.g. a weekly blog) off the
+    board entirely, since selection is purely by global recency.
+
     Each feed entry is ``{"name": ..., "url": ...}``.
     Returns a flat list of item dicts, each augmented with ``feedName``
     and ``feedImage`` keys so the frontend can display per-item source info.
     """
+    if max_items is None:
+        max_items = len(feeds) * items_per_feed
     # 1. Fetch all available articles from every feed.
     all_articles: list[dict] = []
     for feed_cfg in feeds:
