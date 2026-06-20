@@ -1,0 +1,31 @@
+{
+  // See https://go.microsoft.com/fwlink/?LinkId=733558
+  // for the documentation about the tasks.json format
+  "version": "2.0.0",
+  "options": {
+    "env": {
+      "SERVER_PORT": "8080"
+    }
+  },
+  "tasks": [
+    {
+      "label": "Run Server",
+      "type": "shell",
+      "command": "make run-local",
+      "presentation": {
+        "group": "groupServerStuff"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Run Unit Tests",
+      "type": "shell",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "command": "make test",
+      "problemMatcher": []
+    }
+  ]
+}

@@ -6,3 +6,4 @@ src/config.local.json
 *.pyc
 .mypy_cache/
 .claude/worktrees/
+.vscode/tasks.json
