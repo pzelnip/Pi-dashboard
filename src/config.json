@@ -18,7 +18,7 @@
     },
     {
       "name": "CBC BC",
-      "url": "http://rss.cbc.ca/lineup/canada-britishcolumbia.xml"
+      "url": "https://www.cbc.ca/webfeed/rss/rss-canada-britishcolumbia"
     },
     {
       "name": "Simon Willison (AI)",
