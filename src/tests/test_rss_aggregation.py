@@ -268,15 +268,16 @@ class MarkStaleFeedsTests(unittest.TestCase):
         self.assertNotIn("stale", out[0])
         self.assertNotIn("aged", out[0])
 
-    def test_warn_feed_gets_warning_entry_plus_items(self):
+    def test_warn_feed_warning_replaces_oldest_story(self):
         items = [
             self._item("Dead", "2026-06-15T00:00:00Z", title="Old A"),
             self._item("Dead", "2026-06-10T00:00:00Z", title="Old B"),
             self._item("Dead", "2026-06-05T00:00:00Z", title="Old C"),
         ]
         out = mark_stale_feeds(items, now=self.NOW)
-        # Warning entry prepended, original items still all present (and aged).
-        self.assertEqual(len(out), 4)
+        # Warning entry prepended, taking the oldest story's slot — total
+        # count for the feed stays at 3, not 4, so pagination is unaffected.
+        self.assertEqual(len(out), 3)
         self.assertTrue(out[0]["stale"])
         self.assertEqual(out[0]["feedName"], "Dead")
         self.assertEqual(out[0]["feedImage"], "img.png")
@@ -284,7 +285,7 @@ class MarkStaleFeedsTests(unittest.TestCase):
         self.assertEqual(out[0]["staleDays"], 33)
         self.assertIn("33 days", out[0]["title"])
         self.assertEqual(out[0]["link"], "")
-        self.assertEqual([o["title"] for o in out[1:]], ["Old A", "Old B", "Old C"])
+        self.assertEqual([o["title"] for o in out[1:]], ["Old A", "Old B"])
         self.assertTrue(all(o["aged"] for o in out[1:]))
 
     def test_boundary_exactly_30_days_is_warned(self):
@@ -314,12 +315,12 @@ class MarkStaleFeedsTests(unittest.TestCase):
         self.assertEqual(out, [])
 
     def test_boundary_44_days_is_warned_not_hidden(self):
+        # Single-item group: the warning takes the only story's slot.
         items = [self._item("Edge", "2026-06-04T12:00:00Z")]
         out = mark_stale_feeds(items, now=self.NOW)
-        self.assertEqual(len(out), 2)
+        self.assertEqual(len(out), 1)
         self.assertTrue(out[0]["stale"])
         self.assertEqual(out[0]["staleDays"], 44)
-        self.assertTrue(out[1]["aged"])
 
     def test_mixed_feeds_preserve_order_and_position(self):
         items = [
@@ -329,14 +330,12 @@ class MarkStaleFeedsTests(unittest.TestCase):
             self._item("Fresh2", "2026-07-16T00:00:00Z", title="F2"),
         ]
         out = mark_stale_feeds(items, now=self.NOW)
-        self.assertEqual(
-            [o["feedName"] for o in out], ["Fresh1", "Warned", "Warned", "Warned", "Fresh2"]
-        )
+        # Warned's D2 (oldest) is dropped, replaced by the warning entry.
+        self.assertEqual([o["feedName"] for o in out], ["Fresh1", "Warned", "Warned", "Fresh2"])
         self.assertEqual(out[0]["title"], "F1")
         self.assertTrue(out[1]["stale"])
         self.assertEqual(out[2]["title"], "D1")
-        self.assertEqual(out[3]["title"], "D2")
-        self.assertEqual(out[4]["title"], "F2")
+        self.assertEqual(out[3]["title"], "F2")
 
     def test_feed_with_no_parseable_dates_left_alone(self):
         # Can't tell if it's stale or merely dateless — don't warn.

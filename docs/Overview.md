@@ -224,8 +224,9 @@ Source: `src/parsers/rss.py`, rendering in `src/public/app.js` (`renderRSS`).
   - **≥ 14 days** (`STALE_AGED_DAYS`) — the feed's items are still shown, each
     with a subtle "aged" background tint.
   - **≥ 30 days** (`STALE_WARN_DAYS`) — a loud red warning entry ("no new
-    stories in N days — feed still active?") is prepended ahead of the feed's
-    (still-shown, aged) items.
+    stories in N days — feed still active?") takes the place of the feed's
+    oldest story (dropped), so the feed's total item count — and pagination —
+    is unaffected; the remaining (still-shown) items are marked aged.
   - **≥ 45 days** (`STALE_HIDE_DAYS`) — the feed's items are dropped from the
     rendered result entirely. The feed is still fetched and parsed every
     request, so a new post immediately un-hides it.

@@ -262,8 +262,9 @@ def mark_stale_feeds(
       so the frontend can apply a subtle "this might be old" style, without
       hiding anything.
     - >= *warn_days*: a synthetic warning item (``{"stale": True, ...}``) is
-      inserted first in that feed's group, followed by its normal (aged)
-      items — so the feed still reads as active but flagged as suspect.
+      inserted first in that feed's group, taking the place of that group's
+      oldest story (dropped) so the feed's total item count — and therefore
+      pagination — is unaffected. Remaining items are marked aged.
     - >= *hide_days*: the feed's items are dropped from the result entirely.
       This only affects rendering; ``fetch_rss_aggregated`` still fetches and
       parses the feed every call, so a new post immediately un-hides it.
@@ -288,20 +289,28 @@ def mark_stale_feeds(
         if d != dt.datetime.min and (prev is None or d > prev):
             newest[name] = d
 
-    result: list[dict] = []
-    warned: set[str] = set()
+    # Items are contiguous per feed (fetch_rss_aggregated groups them), so
+    # collapsing into runs lets each feed's tier decision see its full item
+    # count — needed to drop one story when a warning is inserted.
+    groups: list[tuple[str, list[dict]]] = []
     for it in items:
         name = it["feedName"]
+        if groups and groups[-1][0] == name:
+            groups[-1][1].append(it)
+        else:
+            groups.append((name, [it]))
+
+    result: list[dict] = []
+    for name, group_items in groups:
         feed_newest = newest[name]
         if feed_newest is None:
-            result.append(it)
+            result.extend(group_items)
             continue
 
         age = (now - feed_newest).days
         if age >= hide_days:
             continue
-        if age >= warn_days and name not in warned:
-            warned.add(name)
+        if age >= warn_days:
             result.append(
                 {
                     "title": f"WARNING: no new stories in {age} days — feed still active?",
@@ -309,10 +318,16 @@ def mark_stale_feeds(
                     "published": "",
                     "image": "",
                     "feedName": name,
-                    "feedImage": it.get("feedImage", ""),
+                    "feedImage": group_items[0].get("feedImage", ""),
                     "stale": True,
                     "staleDays": age,
                 }
             )
-        result.append({**it, "aged": True} if age >= aged_days else it)
+            # Oldest story (last, since groups sort newest-first) yields its
+            # slot to the warning above.
+            result.extend({**it, "aged": True} for it in group_items[:-1])
+        elif age >= aged_days:
+            result.extend({**it, "aged": True} for it in group_items)
+        else:
+            result.extend(group_items)
     return result

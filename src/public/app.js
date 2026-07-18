@@ -1362,7 +1362,8 @@ function renderRSS(payload) {
           ? `<img class="rss-item-feed-logo" src="${escapeHtml(feedImageUrl)}" alt="" onerror="this.remove()">`
           : "";
         // Stale feed (30+ days since newest article): a glaring warning
-        // entry is prepended ahead of the feed's own (still-rendered) items.
+        // entry stands in for the feed's oldest story (already dropped
+        // server-side), ahead of its remaining (still-rendered) items.
         if (i.stale) {
           return `
         <li class="rss-item rss-item-stale">
