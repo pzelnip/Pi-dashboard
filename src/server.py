@@ -32,7 +32,7 @@ from parsers.nhl import (
     extract_cup_winner,
     has_upcoming_games,
 )
-from parsers.rss import fetch_rss, fetch_rss_aggregated
+from parsers.rss import fetch_rss, fetch_rss_aggregated, mark_stale_feeds
 from parsers.weather import fetch_weather
 
 PUBLIC_DIR = os.path.join(HERE, "public")
@@ -386,6 +386,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 page = 0
             try:
                 all_items = fetch_rss_aggregated(feeds, items_per_feed=items_per_feed)
+                all_items = mark_stale_feeds(all_items)
                 page_size = items_per_feed
                 total_pages = max(1, -(-len(all_items) // page_size))  # ceil division
                 page = page % total_pages if total_pages else 0

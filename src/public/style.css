@@ -640,6 +640,18 @@ a.wx-link:focus-visible {
   vertical-align: bottom;
 }
 
+/* Stale-feed warning: deliberately loud so it prompts investigation. */
+.rss-item-stale {
+  background: #b91c1c;
+  color: #fff;
+  border-radius: 6px;
+  padding: 14px 12px;
+  margin: 6px 0;
+}
+.rss-item-stale + .rss-item { border-top: none; }
+.rss-item-stale .rss-title { color: #fff; font-weight: 600; }
+.rss-item-stale .rss-item-source { color: rgba(255, 255, 255, 0.85); }
+
 .rot-dot {
   display: inline-block;
   width: 11px;

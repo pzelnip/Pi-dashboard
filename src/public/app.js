@@ -1357,12 +1357,23 @@ function renderRSS(payload) {
     }
     el.innerHTML = `<ul class="rss-list">${
       payload.items.map(i => {
-        const itemLink = safeUrl(i.link);
-        const itemImage = safeUrl(i.image);
         const feedImageUrl = safeUrl(i.feedImage);
         const itemLogo = feedImageUrl
           ? `<img class="rss-item-feed-logo" src="${escapeHtml(feedImageUrl)}" alt="" onerror="this.remove()">`
           : "";
+        // Stale feed: a glaring warning entry stands in for the feed's
+        // weeks-old stories so they aren't mistaken for current news.
+        if (i.stale) {
+          return `
+        <li class="rss-item rss-item-stale">
+          <span class="rss-title">
+            <span class="rss-item-source">${itemLogo}<span class="rss-item-feed-name">${escapeHtml(i.feedName || "")}</span> &mdash;</span>${escapeHtml(i.title)}
+          </span>
+        </li>
+      `;
+        }
+        const itemLink = safeUrl(i.link);
+        const itemImage = safeUrl(i.image);
         const tooltip = i.published ? `Published: ${escapeHtml(i.published)}` : "";
         return `
         <li class="rss-item">

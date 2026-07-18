@@ -233,3 +233,71 @@ def fetch_rss_aggregated(
     for group in groups.values():
         result.extend(group)
     return result
+
+
+# A feed whose newest article is older than this is treated as possibly dead:
+# some upstreams (e.g. CBC's legacy rss.cbc.ca lineup feeds) keep returning
+# HTTP 200 with a frozen snapshot long after they stop being updated, which no
+# fetch-failure fallback can detect. We surface a warning instead of silently
+# presenting weeks-old stories as current.
+STALE_FEED_DAYS = 14
+
+
+def mark_stale_feeds(
+    items: list[dict], now: dt.datetime | None = None, stale_days: int = STALE_FEED_DAYS
+) -> list[dict]:
+    """Collapse stale feeds in an aggregated list into a single warning entry.
+
+    *items* is the flat, feed-grouped list produced by
+    ``fetch_rss_aggregated``. For each feed whose newest parseable article is
+    at least *stale_days* old, that feed's entries are replaced by one synthetic
+    warning item (``{"stale": True, ...}``) so the display flags a possibly-dead
+    feed instead of showing weeks-old stories as if they were current.
+
+    A feed's newest *selected* article is its newest article overall (selection
+    is purely by recency), so operating on the aggregated result is sufficient
+    and keeps this concern out of ``fetch_rss_aggregated``.
+
+    A feed with no parseable dates at all is left untouched — we can't tell
+    whether it's stale or merely dateless. *now* is injectable for tests and
+    defaults to the current time (naive UTC, matching ``_parse_published_date``).
+    """
+    if now is None:
+        now = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
+
+    # Newest parseable date per feed.
+    newest: dict[str, dt.datetime | None] = {}
+    for it in items:
+        name = it["feedName"]
+        prev = newest.setdefault(name, None)
+        d = _parse_published_date(it.get("published", ""))
+        if d != dt.datetime.min and (prev is None or d > prev):
+            newest[name] = d
+
+    result: list[dict] = []
+    warned: set[str] = set()
+    for it in items:
+        name = it["feedName"]
+        feed_newest = newest[name]
+        if feed_newest is None or (now - feed_newest).days < stale_days:
+            result.append(it)
+            continue
+        # Emit one warning per stale feed, in that feed's group position; the
+        # feed's items are contiguous, so skipping the rest preserves ordering.
+        if name in warned:
+            continue
+        warned.add(name)
+        age = (now - feed_newest).days
+        result.append(
+            {
+                "title": f"WARNING: no new stories in {age} days — feed still active?",
+                "link": "",
+                "published": "",
+                "image": "",
+                "feedName": name,
+                "feedImage": it.get("feedImage", ""),
+                "stale": True,
+                "staleDays": age,
+            }
+        )
+    return result

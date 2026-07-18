@@ -3,7 +3,9 @@
 import unittest
 from unittest.mock import patch
 
-from parsers.rss import _parse_published_date, fetch_rss_aggregated
+import datetime as dt
+
+from parsers.rss import _parse_published_date, fetch_rss_aggregated, mark_stale_feeds
 
 
 class ParsePublishedDateTests(unittest.TestCase):
@@ -215,6 +217,79 @@ class FetchRssAggregatedTests(unittest.TestCase):
         # Original items should not have feedName/feedImage added
         self.assertNotIn("feedName", original_items[0])
         self.assertNotIn("feedImage", original_items[0])
+
+
+class MarkStaleFeedsTests(unittest.TestCase):
+    NOW = dt.datetime(2026, 7, 18, 12, 0, 0)
+
+    def _item(self, feed, published, title="t", image="img.png"):
+        return {
+            "title": title,
+            "link": "http://x",
+            "published": published,
+            "image": "",
+            "feedName": feed,
+            "feedImage": image,
+        }
+
+    def test_fresh_feed_untouched(self):
+        items = [self._item("Fresh", "2026-07-17T00:00:00Z")]
+        out = mark_stale_feeds(items, now=self.NOW)
+        self.assertEqual(out, items)
+        self.assertNotIn("stale", out[0])
+
+    def test_stale_feed_collapsed_to_single_warning(self):
+        items = [
+            self._item("Dead", "2026-06-01T00:00:00Z", title="Old A"),
+            self._item("Dead", "2026-05-20T00:00:00Z", title="Old B"),
+            self._item("Dead", "2026-05-10T00:00:00Z", title="Old C"),
+        ]
+        out = mark_stale_feeds(items, now=self.NOW)
+        self.assertEqual(len(out), 1)
+        self.assertTrue(out[0]["stale"])
+        self.assertEqual(out[0]["feedName"], "Dead")
+        self.assertEqual(out[0]["feedImage"], "img.png")
+        # Age is measured from the feed's *newest* article (Jun 1 -> 47 days).
+        self.assertEqual(out[0]["staleDays"], 47)
+        self.assertIn("47 days", out[0]["title"])
+        self.assertEqual(out[0]["link"], "")
+
+    def test_boundary_exactly_14_days_is_stale(self):
+        items = [self._item("Edge", "2026-07-04T12:00:00Z")]
+        out = mark_stale_feeds(items, now=self.NOW)
+        self.assertTrue(out[0]["stale"])
+        self.assertEqual(out[0]["staleDays"], 14)
+
+    def test_boundary_13_days_is_fresh(self):
+        items = [self._item("Edge", "2026-07-05T12:00:00Z")]
+        out = mark_stale_feeds(items, now=self.NOW)
+        self.assertNotIn("stale", out[0])
+
+    def test_mixed_feeds_preserve_order_and_position(self):
+        items = [
+            self._item("Fresh1", "2026-07-18T00:00:00Z", title="F1"),
+            self._item("Dead", "2026-01-01T00:00:00Z", title="D1"),
+            self._item("Dead", "2025-12-01T00:00:00Z", title="D2"),
+            self._item("Fresh2", "2026-07-16T00:00:00Z", title="F2"),
+        ]
+        out = mark_stale_feeds(items, now=self.NOW)
+        self.assertEqual([o["feedName"] for o in out], ["Fresh1", "Dead", "Fresh2"])
+        self.assertEqual(out[0]["title"], "F1")
+        self.assertTrue(out[1]["stale"])
+        self.assertEqual(out[3 - 1]["title"], "F2")
+
+    def test_feed_with_no_parseable_dates_left_alone(self):
+        # Can't tell if it's stale or merely dateless — don't warn.
+        items = [
+            self._item("Dateless", "", title="A"),
+            self._item("Dateless", "not a date", title="B"),
+        ]
+        out = mark_stale_feeds(items, now=self.NOW)
+        self.assertEqual(len(out), 2)
+        self.assertFalse(any(o.get("stale") for o in out))
+
+    def test_empty_list(self):
+        self.assertEqual(mark_stale_feeds([], now=self.NOW), [])
 
 
 if __name__ == "__main__":

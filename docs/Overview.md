@@ -218,6 +218,15 @@ Source: `src/parsers/rss.py`, rendering in `src/public/app.js` (`renderRSS`).
   shared item-builder.
 - Top 4 items per feed are shown. Clicking an item opens the article in a
   new tab.
+- **Stale-feed warning:** if a feed's newest article is ≥ 14 days old
+  (`STALE_FEED_DAYS` in `rss.py`), `mark_stale_feeds` replaces that feed's
+  entries with a single loud red warning entry ("no new stories in N days —
+  feed still active?"). This catches feeds that are *dead but still responsive*
+  — e.g. CBC's legacy `rss.cbc.ca/lineup/*` feeds keep returning HTTP 200 with
+  a months-old frozen snapshot after CBC moved to `www.cbc.ca/webfeed/rss/*`.
+  The fetch never errors, so the [stale-data fallback](#stale-data-fallback)
+  can't detect it; the age check can. Use the newer `www.cbc.ca/webfeed/rss/*`
+  hosts for CBC feeds.
 
 ---
 
