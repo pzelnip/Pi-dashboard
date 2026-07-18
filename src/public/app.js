@@ -1361,8 +1361,8 @@ function renderRSS(payload) {
         const itemLogo = feedImageUrl
           ? `<img class="rss-item-feed-logo" src="${escapeHtml(feedImageUrl)}" alt="" onerror="this.remove()">`
           : "";
-        // Stale feed: a glaring warning entry stands in for the feed's
-        // weeks-old stories so they aren't mistaken for current news.
+        // Stale feed (30+ days since newest article): a glaring warning
+        // entry is prepended ahead of the feed's own (still-rendered) items.
         if (i.stale) {
           return `
         <li class="rss-item rss-item-stale">
@@ -1376,7 +1376,7 @@ function renderRSS(payload) {
         const itemImage = safeUrl(i.image);
         const tooltip = i.published ? `Published: ${escapeHtml(i.published)}` : "";
         return `
-        <li class="rss-item">
+        <li class="rss-item${i.aged ? " rss-item-aged" : ""}">
           <a href="${escapeHtml(itemLink)}" target="_blank" rel="noopener"${tooltip ? ` title="${tooltip}"` : ""}>
             ${itemImage
               ? `<img class="rss-thumb" src="${escapeHtml(itemImage)}" alt="" loading="lazy" onerror="this.remove()">`

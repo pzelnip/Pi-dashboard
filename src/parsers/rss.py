@@ -235,24 +235,38 @@ def fetch_rss_aggregated(
     return result
 
 
-# A feed whose newest article is older than this is treated as possibly dead:
-# some upstreams (e.g. CBC's legacy rss.cbc.ca lineup feeds) keep returning
+# Some upstreams (e.g. CBC's legacy rss.cbc.ca lineup feeds) keep returning
 # HTTP 200 with a frozen snapshot long after they stop being updated, which no
-# fetch-failure fallback can detect. We surface a warning instead of silently
-# presenting weeks-old stories as current.
-STALE_FEED_DAYS = 14
+# fetch-failure fallback can detect. Rather than a single dead/alive cutoff,
+# staleness escalates in three tiers as a feed's newest article keeps aging:
+STALE_AGED_DAYS = 14  # items get a subtle "this might be old" treatment
+STALE_WARN_DAYS = 30  # a glaring warning entry is prepended to the feed's items
+STALE_HIDE_DAYS = 45  # the feed is skipped from rendering entirely
 
 
 def mark_stale_feeds(
-    items: list[dict], now: dt.datetime | None = None, stale_days: int = STALE_FEED_DAYS
+    items: list[dict],
+    now: dt.datetime | None = None,
+    aged_days: int = STALE_AGED_DAYS,
+    warn_days: int = STALE_WARN_DAYS,
+    hide_days: int = STALE_HIDE_DAYS,
 ) -> list[dict]:
-    """Collapse stale feeds in an aggregated list into a single warning entry.
+    """Flag or hide feeds whose newest article has gone stale, by tier.
 
     *items* is the flat, feed-grouped list produced by
-    ``fetch_rss_aggregated``. For each feed whose newest parseable article is
-    at least *stale_days* old, that feed's entries are replaced by one synthetic
-    warning item (``{"stale": True, ...}``) so the display flags a possibly-dead
-    feed instead of showing weeks-old stories as if they were current.
+    ``fetch_rss_aggregated``. For each feed, staleness is judged by its newest
+    parseable article's age:
+
+    - < *aged_days*: untouched.
+    - >= *aged_days*: every item from that feed is marked ``{"aged": True}``
+      so the frontend can apply a subtle "this might be old" style, without
+      hiding anything.
+    - >= *warn_days*: a synthetic warning item (``{"stale": True, ...}``) is
+      inserted first in that feed's group, followed by its normal (aged)
+      items — so the feed still reads as active but flagged as suspect.
+    - >= *hide_days*: the feed's items are dropped from the result entirely.
+      This only affects rendering; ``fetch_rss_aggregated`` still fetches and
+      parses the feed every call, so a new post immediately un-hides it.
 
     A feed's newest *selected* article is its newest article overall (selection
     is purely by recency), so operating on the aggregated result is sufficient
@@ -279,25 +293,26 @@ def mark_stale_feeds(
     for it in items:
         name = it["feedName"]
         feed_newest = newest[name]
-        if feed_newest is None or (now - feed_newest).days < stale_days:
+        if feed_newest is None:
             result.append(it)
             continue
-        # Emit one warning per stale feed, in that feed's group position; the
-        # feed's items are contiguous, so skipping the rest preserves ordering.
-        if name in warned:
-            continue
-        warned.add(name)
+
         age = (now - feed_newest).days
-        result.append(
-            {
-                "title": f"WARNING: no new stories in {age} days — feed still active?",
-                "link": "",
-                "published": "",
-                "image": "",
-                "feedName": name,
-                "feedImage": it.get("feedImage", ""),
-                "stale": True,
-                "staleDays": age,
-            }
-        )
+        if age >= hide_days:
+            continue
+        if age >= warn_days and name not in warned:
+            warned.add(name)
+            result.append(
+                {
+                    "title": f"WARNING: no new stories in {age} days — feed still active?",
+                    "link": "",
+                    "published": "",
+                    "image": "",
+                    "feedName": name,
+                    "feedImage": it.get("feedImage", ""),
+                    "stale": True,
+                    "staleDays": age,
+                }
+            )
+        result.append({**it, "aged": True} if age >= aged_days else it)
     return result

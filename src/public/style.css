@@ -640,6 +640,19 @@ a.wx-link:focus-visible {
   vertical-align: bottom;
 }
 
+/* Aged item (feed's newest article is getting old): subtle background tint,
+   distinct from the much louder .rss-item-stale warning banner below. */
+.rss-item-aged {
+  background: rgba(185, 28, 28, 0.12);
+  border-radius: 6px;
+  padding-left: 12px;
+  padding-right: 12px;
+  margin: 6px 0;
+}
+.rss-item-aged + .rss-item,
+.rss-item + .rss-item-aged,
+.rss-item-aged + .rss-item-aged { border-top: none; }
+
 /* Stale-feed warning: deliberately loud so it prompts investigation. */
 .rss-item-stale {
   background: #b91c1c;
