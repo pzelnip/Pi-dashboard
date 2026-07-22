@@ -165,7 +165,10 @@ def _parse_published_date(published: str) -> dt.datetime:
 
 
 def fetch_rss_aggregated(
-    feeds: list[dict], items_per_feed: int = 4, max_items: int | None = None
+    feeds: list[dict],
+    items_per_feed: int = 4,
+    max_items: int | None = None,
+    now: dt.datetime | None = None,
 ) -> list[dict]:
     """Fetch all *feeds*, select items by global recency, grouped by feed.
 
@@ -185,11 +188,17 @@ def fetch_rss_aggregated(
     board entirely, since selection is purely by global recency.
 
     Each feed entry is ``{"name": ..., "url": ...}``.
-    Returns a flat list of item dicts, each augmented with ``feedName``
-    and ``feedImage`` keys so the frontend can display per-item source info.
+    Returns a flat list of item dicts, each augmented with ``feedName``,
+    ``feedImage``, and ``ageHours`` (hours since publication, ``None`` when
+    the published date is missing/unparseable) so the frontend can display
+    per-item source info and an age-tinted background. *now* is injectable
+    for tests and defaults to the current time (naive UTC, matching
+    ``_parse_published_date``).
     """
     if max_items is None:
         max_items = len(feeds) * items_per_feed
+    if now is None:
+        now = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
     # 1. Fetch all available articles from every feed.
     all_articles: list[dict] = []
     for feed_cfg in feeds:
@@ -199,7 +208,18 @@ def fetch_rss_aggregated(
             continue
         name = feed_cfg.get("name", feed_cfg["url"])
         for item in items:
-            augmented = {**item, "feedName": name, "feedImage": feed_image}
+            d = _parse_published_date(item.get("published", ""))
+            age_hours = (
+                None
+                if d == dt.datetime.min
+                else max(0.0, round((now - d).total_seconds() / 3600, 1))
+            )
+            augmented = {
+                **item,
+                "feedName": name,
+                "feedImage": feed_image,
+                "ageHours": age_hours,
+            }
             all_articles.append(augmented)
 
     # 2. Sort globally by published date, newest first.
@@ -240,8 +260,8 @@ def fetch_rss_aggregated(
 # fetch-failure fallback can detect. Rather than a single dead/alive cutoff,
 # staleness escalates in three tiers as a feed's newest article keeps aging:
 STALE_AGED_DAYS = 14  # items get a subtle "this might be old" treatment
-STALE_WARN_DAYS = 30  # a glaring warning entry is prepended to the feed's items
-STALE_HIDE_DAYS = 45  # the feed is skipped from rendering entirely
+STALE_WARN_DAYS = 20  # a glaring warning entry is prepended to the feed's items
+STALE_HIDE_DAYS = 30  # the feed is skipped from rendering entirely
 
 
 def mark_stale_feeds(

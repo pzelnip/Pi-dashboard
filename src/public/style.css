@@ -640,6 +640,23 @@ a.wx-link:focus-visible {
   vertical-align: bottom;
 }
 
+/* Per-item age tint: subtle heat scale from green (fresh) through yellow and
+   amber to red (old), so item age reads at a glance. Structural styling is
+   shared via .rss-item-tinted; the feed-level .rss-item-aged tint below takes
+   precedence (the frontend never applies both). */
+.rss-item-tinted {
+  border-radius: 6px;
+  padding-left: 12px;
+  padding-right: 12px;
+  margin: 6px 0;
+}
+.rss-item-tinted + .rss-item,
+.rss-item + .rss-item-tinted { border-top: none; }
+.rss-age-fresh { background: rgba(74, 222, 128, 0.10); }   /* < 6h */
+.rss-age-today { background: rgba(250, 204, 21, 0.07); }   /* < 24h */
+.rss-age-aging { background: rgba(255, 181, 71, 0.10); }   /* < 3d */
+.rss-age-old   { background: rgba(255, 91, 74, 0.10); }    /* >= 3d */
+
 /* Aged item (feed's newest article is getting old): subtle background tint,
    distinct from the much louder .rss-item-stale warning banner below. */
 .rss-item-aged {

@@ -1335,6 +1335,16 @@ window.DEFAULT_RSS_ICON = `
   <path d="M4 10a10 10 0 0 1 10 10h-3a7 7 0 0 0-7-7z" fill="#fff"/>
 </svg>`.trim();
 
+// Age-tint tier for an item background: fresh (<6h) → today (<24h) →
+// aging (<72h) → old. Unknown age (no parseable date) gets no tint.
+function rssAgeClass(ageHours) {
+  if (ageHours == null) return "";
+  if (ageHours < 6) return " rss-item-tinted rss-age-fresh";
+  if (ageHours < 24) return " rss-item-tinted rss-age-today";
+  if (ageHours < 72) return " rss-item-tinted rss-age-aging";
+  return " rss-item-tinted rss-age-old";
+}
+
 function renderRSS(payload) {
   rssTotalPages = payload.totalPages || 1;
   rssPage = payload.page;
@@ -1377,7 +1387,7 @@ function renderRSS(payload) {
         const itemImage = safeUrl(i.image);
         const tooltip = i.published ? `Published: ${escapeHtml(i.published)}` : "";
         return `
-        <li class="rss-item${i.aged ? " rss-item-aged" : ""}">
+        <li class="rss-item${i.aged ? " rss-item-aged" : rssAgeClass(i.ageHours)}">
           <a href="${escapeHtml(itemLink)}" target="_blank" rel="noopener"${tooltip ? ` title="${tooltip}"` : ""}>
             ${itemImage
               ? `<img class="rss-thumb" src="${escapeHtml(itemImage)}" alt="" loading="lazy" onerror="this.remove()">`

@@ -82,6 +82,41 @@ class FetchRssAggregatedTests(unittest.TestCase):
         self.assertEqual(result[2]["feedName"], "Feed2")
 
     @patch("parsers.rss.fetch_rss")
+    def test_age_hours_computed_from_published(self, mock_fetch):
+        mock_fetch.side_effect = [
+            ("img1.png", [
+                {"title": "SixHours", "link": "", "published": "2020-12-01T06:00:00Z", "image": ""},
+                {"title": "TwoDays", "link": "", "published": "2020-11-29T12:00:00Z", "image": ""},
+            ]),
+        ]
+        now = dt.datetime(2020, 12, 1, 12, 0, 0)
+        result = fetch_rss_aggregated(
+            [{"name": "Feed1", "url": "http://f1"}], items_per_feed=4, now=now
+        )
+        by_title = {i["title"]: i for i in result}
+        self.assertEqual(by_title["SixHours"]["ageHours"], 6.0)
+        self.assertEqual(by_title["TwoDays"]["ageHours"], 48.0)
+
+    @patch("parsers.rss.fetch_rss")
+    def test_age_hours_none_when_unparseable_and_clamped_when_future(self, mock_fetch):
+        mock_fetch.side_effect = [
+            ("img1.png", [
+                {"title": "NoDate", "link": "", "published": "", "image": ""},
+                {"title": "BadDate", "link": "", "published": "not a date", "image": ""},
+                {"title": "Future", "link": "", "published": "2020-12-02T00:00:00Z", "image": ""},
+            ]),
+        ]
+        now = dt.datetime(2020, 12, 1, 12, 0, 0)
+        result = fetch_rss_aggregated(
+            [{"name": "Feed1", "url": "http://f1"}], items_per_feed=4, now=now
+        )
+        by_title = {i["title"]: i for i in result}
+        self.assertIsNone(by_title["NoDate"]["ageHours"])
+        self.assertIsNone(by_title["BadDate"]["ageHours"])
+        # Slightly-future timestamps (clock skew) clamp to 0 rather than negative.
+        self.assertEqual(by_title["Future"]["ageHours"], 0.0)
+
+    @patch("parsers.rss.fetch_rss")
     def test_per_feed_cap_applied_via_global_sort(self, mock_fetch):
         # Feed1 has 6 articles, Feed2 has 2.  With items_per_feed=4,
         # only 4 from Feed1 should be selected (the 4 newest globally).
@@ -221,8 +256,8 @@ class FetchRssAggregatedTests(unittest.TestCase):
 
 class MarkStaleFeedsTests(unittest.TestCase):
     """Staleness escalates in three tiers as a feed's newest article ages:
-    14 days -> items marked "aged" (subtle styling); 30 days -> a warning
-    entry is prepended ahead of the (still-rendered) items; 45 days -> the
+    14 days -> items marked "aged" (subtle styling); 20 days -> a warning
+    entry is prepended ahead of the (still-rendered) items; 30 days -> the
     feed's items are dropped from the result entirely.
     """
 
@@ -247,8 +282,8 @@ class MarkStaleFeedsTests(unittest.TestCase):
 
     def test_aged_feed_items_marked_but_no_warning(self):
         items = [
-            self._item("Aging", "2026-06-25T00:00:00Z", title="A"),
-            self._item("Aging", "2026-06-20T00:00:00Z", title="B"),
+            self._item("Aging", "2026-07-01T00:00:00Z", title="A"),
+            self._item("Aging", "2026-06-29T00:00:00Z", title="B"),
         ]
         out = mark_stale_feeds(items, now=self.NOW)
         self.assertEqual(len(out), 2)
@@ -270,9 +305,9 @@ class MarkStaleFeedsTests(unittest.TestCase):
 
     def test_warn_feed_warning_replaces_oldest_story(self):
         items = [
-            self._item("Dead", "2026-06-15T00:00:00Z", title="Old A"),
-            self._item("Dead", "2026-06-10T00:00:00Z", title="Old B"),
-            self._item("Dead", "2026-06-05T00:00:00Z", title="Old C"),
+            self._item("Dead", "2026-06-27T00:00:00Z", title="Old A"),
+            self._item("Dead", "2026-06-25T00:00:00Z", title="Old B"),
+            self._item("Dead", "2026-06-20T00:00:00Z", title="Old C"),
         ]
         out = mark_stale_feeds(items, now=self.NOW)
         # Warning entry prepended, taking the oldest story's slot — total
@@ -281,21 +316,21 @@ class MarkStaleFeedsTests(unittest.TestCase):
         self.assertTrue(out[0]["stale"])
         self.assertEqual(out[0]["feedName"], "Dead")
         self.assertEqual(out[0]["feedImage"], "img.png")
-        # Age is measured from the feed's *newest* article (Jun 15 -> 33 days).
-        self.assertEqual(out[0]["staleDays"], 33)
-        self.assertIn("33 days", out[0]["title"])
+        # Age is measured from the feed's *newest* article (Jun 27 -> 21 days).
+        self.assertEqual(out[0]["staleDays"], 21)
+        self.assertIn("21 days", out[0]["title"])
         self.assertEqual(out[0]["link"], "")
         self.assertEqual([o["title"] for o in out[1:]], ["Old A", "Old B"])
         self.assertTrue(all(o["aged"] for o in out[1:]))
 
-    def test_boundary_exactly_30_days_is_warned(self):
-        items = [self._item("Edge", "2026-06-18T12:00:00Z")]
+    def test_boundary_exactly_20_days_is_warned(self):
+        items = [self._item("Edge", "2026-06-28T12:00:00Z")]
         out = mark_stale_feeds(items, now=self.NOW)
         self.assertTrue(out[0]["stale"])
-        self.assertEqual(out[0]["staleDays"], 30)
+        self.assertEqual(out[0]["staleDays"], 20)
 
-    def test_boundary_29_days_is_aged_not_warned(self):
-        items = [self._item("Edge", "2026-06-19T12:00:00Z")]
+    def test_boundary_19_days_is_aged_not_warned(self):
+        items = [self._item("Edge", "2026-06-29T12:00:00Z")]
         out = mark_stale_feeds(items, now=self.NOW)
         self.assertEqual(len(out), 1)
         self.assertNotIn("stale", out[0])
@@ -309,24 +344,24 @@ class MarkStaleFeedsTests(unittest.TestCase):
         out = mark_stale_feeds(items, now=self.NOW)
         self.assertEqual(out, [])
 
-    def test_boundary_exactly_45_days_is_hidden(self):
-        items = [self._item("Edge", "2026-06-03T12:00:00Z")]
+    def test_boundary_exactly_30_days_is_hidden(self):
+        items = [self._item("Edge", "2026-06-18T12:00:00Z")]
         out = mark_stale_feeds(items, now=self.NOW)
         self.assertEqual(out, [])
 
-    def test_boundary_44_days_is_warned_not_hidden(self):
+    def test_boundary_29_days_is_warned_not_hidden(self):
         # Single-item group: the warning takes the only story's slot.
-        items = [self._item("Edge", "2026-06-04T12:00:00Z")]
+        items = [self._item("Edge", "2026-06-19T12:00:00Z")]
         out = mark_stale_feeds(items, now=self.NOW)
         self.assertEqual(len(out), 1)
         self.assertTrue(out[0]["stale"])
-        self.assertEqual(out[0]["staleDays"], 44)
+        self.assertEqual(out[0]["staleDays"], 29)
 
     def test_mixed_feeds_preserve_order_and_position(self):
         items = [
             self._item("Fresh1", "2026-07-18T00:00:00Z", title="F1"),
-            self._item("Warned", "2026-06-15T00:00:00Z", title="D1"),
-            self._item("Warned", "2026-06-10T00:00:00Z", title="D2"),
+            self._item("Warned", "2026-06-27T00:00:00Z", title="D1"),
+            self._item("Warned", "2026-06-25T00:00:00Z", title="D2"),
             self._item("Fresh2", "2026-07-16T00:00:00Z", title="F2"),
         ]
         out = mark_stale_feeds(items, now=self.NOW)
