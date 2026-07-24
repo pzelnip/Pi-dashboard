@@ -9,7 +9,8 @@
     "favorites": ["EDM", "VAN", "MTL"]
   },
   "countdowns": [
-    {"date": "2026-12-25", "title": "Christmas"}
+    {"date": "2026-12-25", "title": "Christmas", "icon": "🎄"},
+    {"date": "01-01", "title": "New Year's Day"}
   ],
   "calendar": {
     "urls": [

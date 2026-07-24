@@ -196,8 +196,8 @@ Source: one or more public iCalendar (`.ics`) URLs (`src/parsers/calendar.py`).
 
 ### Countdown view
 
-Source: `countdowns` in `config.local.json` (array of `{date, title}` entries,
-managed via the debug panel UI).
+Source: `countdowns` in `config.local.json` (array of `{date, title, icon?}`
+entries, managed via the debug panel UI).
 
 - Dates can be `YYYY-MM-DD` (one-time) or `MM-DD` (annual/recurring every
   year). Annual events automatically resolve to the next occurrence — if the
@@ -209,7 +209,10 @@ managed via the debug panel UI).
   `<N> day(s) until <title>`.
 - **Styling** — a hero countdown styled to match the season view: an
   accent-lit gradient scene, a glowing number, a spaced uppercase caption, and
-  an ⏳ divider with accent streaks (mirrors the season view's 🏒 divider).
+  a divider with accent streaks (mirrors the season view's 🏒 divider).
+- **Per-event icon** — each entry may set an optional `icon` emoji shown in the
+  divider (e.g. `🎄` for Christmas). Entries without an `icon` fall back to the
+  default ⏳ hourglass. Editable in the debug panel's manage view.
 - View is suppressed entirely when no countdowns are configured.
 - Re-renders hourly so the day count rolls over at midnight without a page
   reload.
@@ -360,7 +363,7 @@ in) merged with `src/config.local.json` (gitignored personal overrides; see
 | `weather.label` | Display string next to the weather panel header. |
 | `nhl.favorites` | Array of team abbreviations; star + sort-to-top. |
 | `nhl.seasonStart` | ISO date of the next season's first game; drives the deep-off-season "days until the NHL season" countdown. Unset/past = view hidden. |
-| `countdowns` | Array of `{date, title}` for the countdown view. Defined in `config.local.json` and managed via the debug panel UI. |
+| `countdowns` | Array of `{date, title, icon?}` for the countdown view; optional `icon` sets a per-event emoji (defaults to ⏳). Defined in `config.local.json` and managed via the debug panel UI. |
 | `calendar.urls` | Array of public `.ics` URLs (typically only in `config.local.json`). |
 | `rss` | Array of `{name, url}`; all rotate. |
 | `rotation.rssSeconds` | RSS feed cadence (seconds). |

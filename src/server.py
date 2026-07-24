@@ -108,6 +108,23 @@ def _valid_countdown_date(date_str: str) -> bool:
         return False
 
 
+# Cap on the stored icon length. An emoji can span several code points (skin
+# tone / ZWJ sequences, regional-indicator flags), so this is deliberately
+# generous while still rejecting anything that's clearly not a single glyph.
+_MAX_ICON_LEN = 8
+
+
+def _clean_countdown_icon(raw) -> str:
+    """Normalise a user-supplied icon to a stored value.
+
+    Returns the stripped icon string, or "" when absent/blank so callers can
+    simply omit the key and let the frontend fall back to the default glyph.
+    """
+    if not isinstance(raw, str):
+        return ""
+    return raw.strip()
+
+
 def _countdown_sort_key(c: dict[str, str]) -> tuple[int, str]:
     """Sort key: annual (MM-DD) events first in ascending order, then full
     dates (YYYY-MM-DD) in ascending order.
@@ -549,11 +566,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if len(title) > 100:
             self._send_error_json("title must be 100 characters or fewer")
             return
+        icon = _clean_countdown_icon(data.get("icon"))
+        if len(icon) > _MAX_ICON_LEN:
+            self._send_error_json(f"icon must be {_MAX_ICON_LEN} characters or fewer")
+            return
 
         # Read effective countdowns from merged config, add entry, save to local.
         cfg = load_config()
         countdowns = list(cfg.get("countdowns", []) or [])
         new_entry = {"date": date_str, "title": title}
+        if icon:
+            new_entry["icon"] = icon
         # Avoid exact duplicates
         if any(c.get("date") == date_str and c.get("title") == title for c in countdowns):
             self._send_error_json("countdown already exists")
@@ -617,13 +640,21 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if len(new_title) > 100:
             self._send_error_json("title must be 100 characters or fewer")
             return
+        new_icon = _clean_countdown_icon(data.get("newIcon"))
+        if len(new_icon) > _MAX_ICON_LEN:
+            self._send_error_json(f"icon must be {_MAX_ICON_LEN} characters or fewer")
+            return
 
         cfg = load_config()
         countdowns = list(cfg.get("countdowns", []) or [])
         found = False
         for i, c in enumerate(countdowns):
             if c.get("date") == old_date and c.get("title") == old_title:
-                countdowns[i] = {"date": new_date, "title": new_title}
+                entry = {"date": new_date, "title": new_title}
+                # Empty icon clears any previous one (revert to default glyph).
+                if new_icon:
+                    entry["icon"] = new_icon
+                countdowns[i] = entry
                 found = True
                 break
         if not found:

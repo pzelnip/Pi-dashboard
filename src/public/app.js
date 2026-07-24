@@ -1054,20 +1054,26 @@ function renderNhlClock() {
   dateEl.textContent = `${weekday}, ${month} ${day}${ordinalSuffix(day)}, ${year}`;
 }
 
+// Default divider glyph when a countdown event has no icon of its own.
+const COUNTDOWN_DEFAULT_ICON = "⏳";
+
 function formatCountdown(c) {
-  if (!c) return { numberText: "", labelText: "No countdowns configured" };
-  if (c.days === 0) return { numberText: "Today", labelText: `is ${c.title}` };
-  if (c.days > 0) return { numberText: `${c.days} ${c.days === 1 ? "day" : "days"}`, labelText: `until ${c.title}` };
-  return { numberText: c.title, labelText: "is past, what's next?" };
+  const icon = (c && c.icon) || COUNTDOWN_DEFAULT_ICON;
+  if (!c) return { numberText: "", labelText: "No countdowns configured", icon };
+  if (c.days === 0) return { numberText: "Today", labelText: `is ${c.title}`, icon };
+  if (c.days > 0) return { numberText: `${c.days} ${c.days === 1 ? "day" : "days"}`, labelText: `until ${c.title}`, icon };
+  return { numberText: c.title, labelText: "is past, what's next?", icon };
 }
 
 function renderNhlCountdown() {
   const numEl = document.querySelector("#nhl .view-nhl-countdown .countdown-number");
   const labelEl = document.querySelector("#nhl .view-nhl-countdown .countdown-label");
   if (!numEl || !labelEl) return;
-  const { numberText, labelText } = formatCountdown(pickCountdown());
+  const { numberText, labelText, icon } = formatCountdown(pickCountdown());
   numEl.textContent = numberText;
   labelEl.textContent = labelText;
+  const iconEl = document.querySelector("#nhl .view-nhl-countdown .cd-divider-icon");
+  if (iconEl) iconEl.textContent = icon;
 }
 
 // Days from local today to the configured next-season start date. Returns null
@@ -1439,9 +1445,11 @@ function renderCountdown() {
   const labelEl = document.querySelector("#weather .countdown-label");
   if (!numEl || !labelEl) return;
 
-  const { numberText, labelText } = formatCountdown(pickCountdown());
+  const { numberText, labelText, icon } = formatCountdown(pickCountdown());
   numEl.textContent = numberText;
   labelEl.textContent = labelText;
+  const iconEl = document.querySelector("#weather .cd-divider-icon");
+  if (iconEl) iconEl.textContent = icon;
   if (nhlDeepOffSeason) renderNhlCountdown();
 }
 
@@ -1880,6 +1888,7 @@ function setupDebugOverlay() {
         <div class="debug-countdown-list"></div>
         <form class="debug-countdown-form" data-debug-action="add-countdown-form">
           <input type="date" name="date" required>
+          <input type="text" name="icon" class="debug-countdown-icon" placeholder="⏳" maxlength="8" title="Optional icon emoji">
           <input type="text" name="title" placeholder="Event title" required maxlength="100">
           <button type="submit" class="debug-action">Add</button>
           <a href="#" class="debug-toggle-annual" data-debug-action="toggle-annual">Annual (MM-DD)</a>
@@ -1896,6 +1905,7 @@ function setupDebugOverlay() {
         listEl.appendChild(empty);
       } else {
         cdList.forEach(c => {
+          const icon = c.icon || "";
           const item = document.createElement("div");
           item.className = "debug-countdown-item";
 
@@ -1904,6 +1914,7 @@ function setupDebugOverlay() {
           editBtn.dataset.debugAction = "edit-countdown";
           editBtn.dataset.cdDate = c.date;
           editBtn.dataset.cdTitle = c.title;
+          editBtn.dataset.cdIcon = icon;
           editBtn.title = "Edit";
           editBtn.textContent = "✎";
 
@@ -1919,7 +1930,8 @@ function setupDebugOverlay() {
           label.dataset.debugAction = "edit-countdown";
           label.dataset.cdDate = c.date;
           label.dataset.cdTitle = c.title;
-          label.textContent = `${c.date} — ${c.title}`;
+          label.dataset.cdIcon = icon;
+          label.textContent = `${icon ? icon + " " : ""}${c.date} — ${c.title}`;
 
           item.append(editBtn, deleteBtn, label);
           listEl.appendChild(item);
@@ -1938,7 +1950,7 @@ function setupDebugOverlay() {
     }
   }
 
-  function showEditCountdown(oldDate, oldTitle) {
+  function showEditCountdown(oldDate, oldTitle, oldIcon) {
     mode = "countdowns";
     const isAnnual = /^\d{2}-\d{2}$/.test(oldDate);
     const toggleLabel = isAnnual ? "Full date (YYYY-MM-DD)" : "Annual (MM-DD)";
@@ -1970,6 +1982,15 @@ function setupDebugOverlay() {
       dateInput.type = "date";
     }
 
+    const iconInput = document.createElement("input");
+    iconInput.type = "text";
+    iconInput.name = "icon";
+    iconInput.className = "debug-countdown-icon";
+    iconInput.maxLength = 8;
+    iconInput.placeholder = "⏳";
+    iconInput.title = "Optional icon emoji";
+    iconInput.value = oldIcon || "";
+
     const titleInput = document.createElement("input");
     titleInput.type = "text";
     titleInput.name = "title";
@@ -1994,16 +2015,16 @@ function setupDebugOverlay() {
     toggleLink.dataset.debugAction = "toggle-annual";
     toggleLink.textContent = toggleLabel;
 
-    form.append(dateInput, titleInput, cancelBtn, saveBtn, toggleLink);
+    form.append(dateInput, iconInput, titleInput, cancelBtn, saveBtn, toggleLink);
     body.appendChild(form);
   }
 
-  async function addCountdown(date, title) {
+  async function addCountdown(date, title, icon) {
     try {
       const resp = await fetch("/api/countdowns", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({date, title})
+        body: JSON.stringify({date, title, icon})
       });
       const data = await resp.json();
       if (data.error) throw new Error(data.error);
@@ -2016,12 +2037,12 @@ function setupDebugOverlay() {
     }
   }
 
-  async function editCountdown(oldDate, oldTitle, newDate, newTitle) {
+  async function editCountdown(oldDate, oldTitle, newDate, newTitle, newIcon) {
     try {
       const resp = await fetch("/api/countdowns", {
         method: "PUT",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({oldDate, oldTitle, newDate, newTitle})
+        body: JSON.stringify({oldDate, oldTitle, newDate, newTitle, newIcon})
       });
       const data = await resp.json();
       if (data.error) throw new Error(data.error);
@@ -2170,7 +2191,8 @@ function setupDebugOverlay() {
     else if (action === "edit-countdown") {
       const d = target.dataset.cdDate;
       const t = target.dataset.cdTitle;
-      if (d && t) showEditCountdown(d, t);
+      const i = target.dataset.cdIcon;
+      if (d && t) showEditCountdown(d, t, i);
     }
     else if (action === "delete-countdown") {
       const d = target.dataset.cdDate;
@@ -2208,15 +2230,17 @@ function setupDebugOverlay() {
       e.preventDefault();
       const date = form.elements.date.value;
       const title = form.elements.title.value.trim();
-      if (date && title) addCountdown(date, title);
+      const icon = form.elements.icon.value.trim();
+      if (date && title) addCountdown(date, title, icon);
     } else if (form.matches("[data-debug-action='save-edit-form']")) {
       e.preventDefault();
       const oldDate = form.dataset.oldDate;
       const oldTitle = form.dataset.oldTitle;
       const newDate = form.elements.date.value;
       const newTitle = form.elements.title.value.trim();
+      const newIcon = form.elements.icon.value.trim();
       if (oldDate && oldTitle && newDate && newTitle) {
-        editCountdown(oldDate, oldTitle, newDate, newTitle);
+        editCountdown(oldDate, oldTitle, newDate, newTitle, newIcon);
       }
     }
   });

@@ -681,6 +681,14 @@ a.wx-link:focus-visible {
 .cd-divider span:last-child {
   background: linear-gradient(270deg, transparent, var(--accent));
 }
+/* The per-event icon sits between the two accent lines — reset the generic
+ * span-as-line styling above so the emoji renders as normal text. */
+.cd-divider .cd-divider-icon {
+  width: auto;
+  height: auto;
+  background: none;
+  box-shadow: none;
+}
 
 /* ---------- "Puck Drop" season countdown (NHL deep off-season) ---------- */
 
@@ -1385,6 +1393,7 @@ a.wx-link:focus-visible {
 .debug-countdown-form input[type="date"] { width: 160px; padding-right: 4px; }
 .debug-countdown-form input[type="text"] { flex: 1; min-width: 120px; }
 .debug-countdown-form input[type="text"][name="date"] { flex: none; width: 100px; min-width: auto; }
+.debug-countdown-form input.debug-countdown-icon { flex: none; width: 56px; min-width: auto; text-align: center; }
 .debug-toggle-annual {
   font-size: 0.75em;
   color: var(--accent);
