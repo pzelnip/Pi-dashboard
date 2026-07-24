@@ -10,7 +10,7 @@ def fetch_weather(lat: float, lon: float) -> dict:
     params = {
         "latitude": lat,
         "longitude": lon,
-        "current": "temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m",
+        "current": "temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m,is_day",
         "daily": "temperature_2m_max,temperature_2m_min,weather_code",
         "forecast_days": 4,
         "timezone": "auto",

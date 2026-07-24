@@ -155,8 +155,12 @@ Source: Open-Meteo (`src/parsers/weather.py`).
 
 - **Hero block** — current temperature (rounded, with unit), weather-code
   emoji + label (e.g. "Partly cloudy ⛅"), wind speed, humidity.
-- **Daily strip** — 4-day forecast (today + 3): short weekday label, icon,
-  min/max range.
+- **Atmospheric backdrop** — a pure-CSS "sky" gradient painted behind the view
+  (no image assets), keyed to the current WMO condition (clear / clouds / fog /
+  rain / snow / storm) with a soft sun-or-moon glow orb. Deepens after dark via
+  Open-Meteo's `is_day` flag. Scoped to the weather view only.
+- **Daily strip** — 4-day forecast (today + 3) in a contained card: short
+  weekday label, icon, and min/max range (min in blue, max in amber).
 - **Clickable** — the entire weather view is a link to
   `https://www.windy.com/?<lat>,<lon>,9` for a detailed forecast at the
   configured coordinates. Opens in a new tab. Configured via
@@ -230,11 +234,14 @@ Source: `src/parsers/rss.py`, rendering in `src/public/app.js` (`renderRSS`).
   shared item-builder.
 - Top 4 items per feed are shown. Clicking an item opens the article in a
   new tab.
-- **Per-item age tint:** each item row gets a subtle background colour on a
-  heat scale keyed to hours since publication (server-computed `ageHours`):
-  green (< 6 h), yellow (< 24 h), amber (< 3 days), red (≥ 3 days). Items
-  with no parseable date get no tint; the feed-level "aged" tint below takes
-  precedence when both apply.
+- **Card layout:** each item is a card with a coloured left accent bar, a
+  thumbnail, source name + logo, headline, and a right-aligned "**X ago**"
+  timestamp. Fresh stories (< 6 h) also get a ⚡ bolt next to the timestamp.
+- **Per-item age tint:** the accent bar, background wash, and timestamp colour
+  follow a heat scale keyed to hours since publication (server-computed
+  `ageHours`): green (< 6 h), yellow (< 24 h), amber (< 3 days), red (≥ 3
+  days). Items with no parseable date stay neutral; the feed-level "aged" tint
+  below takes precedence when both apply.
 - **Staleness escalation:** `mark_stale_feeds` (`rss.py`) judges each feed by
   its newest article's age and escalates through three tiers rather than a
   single dead/alive cutoff:

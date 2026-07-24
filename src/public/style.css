@@ -413,6 +413,8 @@ div.wx-link {
   color: inherit;
   text-decoration: none;
   display: block;
+  position: relative;
+  z-index: 1;
 }
 a.wx-link { cursor: pointer; }
 a.wx-link:hover .wx-temp { color: var(--accent); }
@@ -457,12 +459,18 @@ a.wx-link:focus-visible {
   margin-top: 6px;
 }
 
+/* The forecast strip is a self-contained darker card that floats over the
+ * atmospheric sky backdrop (see .wx-sky below) — echoes the mockup's contained
+ * forecast panel and keeps the day/temp numbers legible on any sky. */
 .wx-daily {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 20px;
-  padding-top: 18px;
-  border-top: 1px solid var(--border);
+  padding: 16px 18px;
+  background: rgba(9, 11, 14, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 14px;
+  backdrop-filter: blur(2px);
 }
 .wx-day {
   display: flex;
@@ -470,6 +478,7 @@ a.wx-link:focus-visible {
   align-items: center;
   gap: 4px;
 }
+.wx-day + .wx-day { border-left: 1px solid rgba(255, 255, 255, 0.06); }
 .wx-day-label {
   font-size: var(--fs-meta);
   color: var(--text-muted);
@@ -480,8 +489,70 @@ a.wx-link:focus-visible {
 .wx-day-range {
   font-size: 1.7em;
   font-variant-numeric: tabular-nums;
+  font-weight: 500;
 }
-.wx-day-range .wx-min { color: var(--text-dim); }
+.wx-day-range .wx-min { color: var(--scheduled); }
+.wx-day-range .wx-max { color: var(--pregame); }
+
+/* ---------- Weather atmospheric backdrop ---------- */
+
+/* Pure-CSS "sky" painted behind the weather view. No image assets — the
+ * gradient + a soft glow orb are driven by a wx-sky-* class the JS sets from
+ * the current WMO code, with .wx-night deepening it after dark. Scoped to
+ * .view-weather so the calendar/clock/countdown views stay flat. */
+.wx-sky {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: linear-gradient(160deg, #24425f 0%, #16222e 55%, #10151b 100%);
+  transition: background 800ms ease;
+}
+/* Soft sun/moon glow orb, upper-right. Per-sky colour set via --wx-orb. */
+.wx-sky > span {
+  position: absolute;
+  top: -60px;
+  right: -40px;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--wx-orb, rgba(255, 214, 140, 0.55)) 0%, transparent 70%);
+  filter: blur(6px);
+}
+
+.wx-sky-clear .wx-sky {
+  background: linear-gradient(160deg, #2f6ca3 0%, #21506f 45%, #14212e 100%);
+  --wx-orb: rgba(255, 216, 140, 0.65);
+}
+.wx-sky-clouds .wx-sky {
+  background: linear-gradient(160deg, #3a4653 0%, #262f38 55%, #141a20 100%);
+  --wx-orb: rgba(210, 224, 235, 0.28);
+}
+.wx-sky-fog .wx-sky {
+  background: linear-gradient(160deg, #454b52 0%, #2c3238 55%, #171b1f 100%);
+  --wx-orb: rgba(220, 226, 230, 0.22);
+}
+.wx-sky-rain .wx-sky {
+  background: linear-gradient(160deg, #2b3d4d 0%, #1e2b36 55%, #10161c 100%);
+  --wx-orb: rgba(150, 180, 205, 0.25);
+}
+.wx-sky-snow .wx-sky {
+  background: linear-gradient(160deg, #46586b 0%, #2e3b47 55%, #161d24 100%);
+  --wx-orb: rgba(225, 236, 245, 0.4);
+}
+.wx-sky-storm .wx-sky {
+  background: linear-gradient(160deg, #383046 0%, #241f30 55%, #0f0d15 100%);
+  --wx-orb: rgba(180, 160, 220, 0.3);
+}
+/* Night deepens every sky and cools the orb to a moon. */
+.wx-night .wx-sky {
+  background: linear-gradient(160deg, #1a2740 0%, #121a2b 55%, #0a0d14 100%);
+  --wx-orb: rgba(196, 210, 235, 0.4);
+}
+.wx-sky-storm.wx-night .wx-sky {
+  background: linear-gradient(160deg, #221d30 0%, #16121f 55%, #08070c 100%);
+}
 
 /* ---------- Clock view ---------- */
 
@@ -761,26 +832,53 @@ a.wx-link:focus-visible {
   opacity: 0;
 }
 
-.rss-list { list-style: none; }
-.rss-item {
-  padding: 14px 0;
-  font-size: 1.75em;
+/* Each story is a self-contained card with a coloured left accent bar and a
+   faint accent "streak" fading in from the left — a restyle of the older flat
+   list into the mockup's card treatment. The accent hue is driven by story
+   age (--rss-accent, set by the age classes below) so freshness still reads at
+   a glance; the explicit "X ago" label + ⚡ bolt reinforce it. */
+.rss-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
-.rss-item + .rss-item { border-top: 1px solid var(--border); }
+.rss-item {
+  --rss-accent: var(--text-muted);
+  position: relative;
+  font-size: 1.75em;
+  border-radius: 10px;
+  overflow: hidden;
+  background:
+    linear-gradient(100deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.015) 34%, transparent 72%),
+    var(--surface-raised);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+/* Left accent bar, coloured by age. */
+.rss-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--rss-accent);
+}
 .rss-item a {
   color: var(--text);
   text-decoration: none;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
+  padding: 12px 18px 12px 16px;
 }
 .rss-thumb {
-  width: 80px;
-  height: 56px;
+  width: 84px;
+  height: 60px;
   object-fit: cover;
-  border-radius: 4px;
+  border-radius: 6px;
   flex-shrink: 0;
-  background: var(--surface-raised);
+  background: var(--surface);
 }
 .rss-title {
   flex: 1;
@@ -790,10 +888,12 @@ a.wx-link:focus-visible {
   line-clamp: 2;
   -webkit-box-orient: vertical;
   max-height: 2.9em; /* fallback for non-WebKit: ~2 lines at default line-height */
+  font-weight: 600;
 }
 .rss-item-source {
   display: inline;
   font-size: 0.7em;
+  font-weight: 500;
   color: var(--text-dim);
   margin-right: 6px;
 }
@@ -814,46 +914,67 @@ a.wx-link:focus-visible {
   vertical-align: bottom;
 }
 
-/* Per-item age tint: subtle heat scale from green (fresh) through yellow and
-   amber to red (old), so item age reads at a glance. Structural styling is
-   shared via .rss-item-tinted; the feed-level .rss-item-aged tint below takes
-   precedence (the frontend never applies both). */
-.rss-item-tinted {
-  border-radius: 6px;
-  padding-left: 12px;
-  padding-right: 12px;
-  margin: 6px 0;
+/* Right-hand meta: "X ago" + a ⚡ bolt for fresh stories, in the accent hue. */
+.rss-item-meta {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.62em;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--rss-accent);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
-.rss-item-tinted + .rss-item,
-.rss-item + .rss-item-tinted { border-top: none; }
-.rss-age-fresh { background: rgba(74, 222, 128, 0.10); }   /* < 6h */
-.rss-age-today { background: rgba(250, 204, 21, 0.07); }   /* < 24h */
-.rss-age-aging { background: rgba(255, 181, 71, 0.10); }   /* < 3d */
-.rss-age-old   { background: rgba(255, 91, 74, 0.10); }    /* >= 3d */
+.rss-bolt {
+  font-size: 0.95em;
+  filter: drop-shadow(0 0 5px currentColor);
+}
 
-/* Aged item (feed's newest article is getting old): subtle background tint,
+/* Per-item age tint: a heat scale from green (fresh) through yellow and amber
+   to red (old), applied as the accent hue + a faint background wash so item
+   age reads at a glance. The feed-level .rss-item-aged / .rss-item-stale
+   states below take precedence (the frontend never applies both). */
+.rss-age-fresh {
+  --rss-accent: #4ade80;   /* < 6h */
+  background:
+    linear-gradient(100deg, rgba(74, 222, 128, 0.16) 0%, transparent 60%), var(--surface-raised);
+}
+.rss-age-today {
+  --rss-accent: #facc15;   /* < 24h */
+  background:
+    linear-gradient(100deg, rgba(250, 204, 21, 0.13) 0%, transparent 60%), var(--surface-raised);
+}
+.rss-age-aging {
+  --rss-accent: #ffb547;   /* < 3d */
+  background:
+    linear-gradient(100deg, rgba(255, 181, 71, 0.15) 0%, transparent 60%), var(--surface-raised);
+}
+.rss-age-old {
+  --rss-accent: #ff5b4a;   /* >= 3d */
+  background:
+    linear-gradient(100deg, rgba(255, 91, 74, 0.15) 0%, transparent 60%), var(--surface-raised);
+}
+
+/* Aged item (feed's newest article is getting old): deeper red accent + wash,
    distinct from the much louder .rss-item-stale warning banner below. */
 .rss-item-aged {
-  background: rgba(185, 28, 28, 0.12);
-  border-radius: 6px;
-  padding-left: 12px;
-  padding-right: 12px;
-  margin: 6px 0;
+  --rss-accent: #dc2626;
+  background:
+    linear-gradient(100deg, rgba(185, 28, 28, 0.22) 0%, transparent 62%),
+    var(--surface-raised);
 }
-.rss-item-aged + .rss-item,
-.rss-item + .rss-item-aged,
-.rss-item-aged + .rss-item-aged { border-top: none; }
 
 /* Stale-feed warning: deliberately loud so it prompts investigation. */
 .rss-item-stale {
+  --rss-accent: #f87171;
   background: #b91c1c;
   color: #fff;
-  border-radius: 6px;
-  padding: 14px 12px;
-  margin: 6px 0;
+  padding: 14px 18px 14px 16px;
 }
-.rss-item-stale + .rss-item { border-top: none; }
-.rss-item-stale .rss-title { color: #fff; font-weight: 600; }
+.rss-item-stale::before { background: #fecaca; }
+.rss-item-stale .rss-title { color: #fff; font-weight: 700; }
 .rss-item-stale .rss-item-source { color: rgba(255, 255, 255, 0.85); }
 
 .rot-dot {

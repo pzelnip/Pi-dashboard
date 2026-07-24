@@ -1027,9 +1027,15 @@ function renderNhlWeather() {
     if (el) el.textContent = "Weather loading…";
     return;
   }
-  // Render the same weather widget into the NHL panel.
+  // Render the same weather widget into the NHL panel. The sky-* class lives on
+  // the source .view-weather element (not its children), so copy it across too
+  // or the cloned .wx-sky backdrop would fall back to the neutral gradient.
   const target = document.querySelector("#weather .view-weather");
   if (target) {
+    el.className = el.className.replace(/\bwx-(?:sky-\w+|night)\b/g, "").trim();
+    target.classList.forEach(c => {
+      if (/^wx-(sky-|night$)/.test(c)) el.classList.add(c);
+    });
     el.textContent = "";
     Array.from(target.cloneNode(true).childNodes).forEach(n => el.appendChild(n));
   }
@@ -1137,6 +1143,21 @@ function wxLabel(code) {
   return WX_CODES[code] || [`code ${code}`, "·"];
 }
 
+// Map a WMO weather code + day/night flag to an atmospheric "sky" class. Drives
+// the CSS gradient backdrop behind the weather view (pure CSS, no image assets)
+// so the panel reflects real conditions the way the mockup's city photo did.
+// isDay is Open-Meteo's `is_day` (1 day / 0 night); undefined → assume day.
+function wxSkyClass(code, isDay) {
+  const night = isDay === 0 ? " wx-night" : "";
+  let cond = "wx-sky-clear";
+  if (code >= 95) cond = "wx-sky-storm";
+  else if (code >= 71 && code <= 77) cond = "wx-sky-snow";
+  else if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) cond = "wx-sky-rain";
+  else if (code === 45 || code === 48) cond = "wx-sky-fog";
+  else if (code === 2 || code === 3) cond = "wx-sky-clouds";
+  return `${cond}${night}`;
+}
+
 const fmtNum = (v, suffix = "") =>
   (v == null || Number.isNaN(v)) ? "—" : `${Math.round(v)}${suffix}`;
 
@@ -1161,6 +1182,13 @@ function renderWeather(data) {
   el.classList.remove("error");
 
   const cur = data.current || {};
+  // Atmospheric backdrop keyed to the current condition + day/night. Reset the
+  // previous sky class first so the panel doesn't accumulate them across refreshes.
+  el.classList.remove(
+    "wx-sky-clear", "wx-sky-clouds", "wx-sky-fog", "wx-sky-rain",
+    "wx-sky-snow", "wx-sky-storm", "wx-night"
+  );
+  wxSkyClass(cur.weather_code, cur.is_day).split(" ").forEach(c => el.classList.add(c));
   const curUnits = (data.units && data.units.current) || {};
   const [curDesc, curIcon] = wxLabel(cur.weather_code);
   const tempUnit = curUnits.temperature_2m || "°C";
@@ -1255,14 +1283,26 @@ function renderWeather(data) {
     minSpan.className = "wx-min";
     minSpan.textContent = fmtNum(d.min, "°");
     rangeEl.appendChild(minSpan);
-    rangeEl.appendChild(document.createTextNode(` ${fmtNum(d.max, "°")}`));
+    rangeEl.appendChild(document.createTextNode(" "));
+    const maxSpan = document.createElement("span");
+    maxSpan.className = "wx-max";
+    maxSpan.textContent = fmtNum(d.max, "°");
+    rangeEl.appendChild(maxSpan);
     dayEl.appendChild(rangeEl);
 
     dailyEl.appendChild(dayEl);
   });
   wrapper.appendChild(dailyEl);
 
-  el.replaceChildren(wrapper);
+  // Pure-CSS atmospheric backdrop rendered behind the content. The sky-* class
+  // on `el` (set above) selects the gradient; this element just gives it a
+  // layer to paint on plus a soft "sun/moon" glow orb the gradients position.
+  const sky = document.createElement("div");
+  sky.className = "wx-sky";
+  sky.setAttribute("aria-hidden", "true");
+  sky.appendChild(document.createElement("span")); // glow orb
+
+  el.replaceChildren(sky, wrapper);
 }
 
 async function refreshWeather() {
@@ -1424,6 +1464,14 @@ function rssAgeClass(ageHours) {
   return " rss-item-tinted rss-age-old";
 }
 
+// Compact "X ago" label for a story, from its age in hours (may be fractional
+// for very recent items). Reuses formatAgo by converting hours → ms. Returns ""
+// when the age is unknown so the meta slot is simply omitted.
+function rssAgeLabel(ageHours) {
+  if (ageHours == null || Number.isNaN(ageHours)) return "";
+  return formatAgo(ageHours * 3600 * 1000);
+}
+
 function renderRSS(payload) {
   rssTotalPages = payload.totalPages || 1;
   rssPage = payload.page;
@@ -1465,6 +1513,18 @@ function renderRSS(payload) {
         const itemLink = safeUrl(i.link);
         const itemImage = safeUrl(i.image);
         const tooltip = i.published ? `Published: ${escapeHtml(i.published)}` : "";
+        // Right-hand meta: "X ago" plus a ⚡ "hot" bolt for fresh stories
+        // (< 6h). The age tint class on the <li> already conveys freshness in
+        // colour; the explicit label + bolt make it read at a glance the way
+        // the mockup's timestamps do.
+        const ageLabel = rssAgeLabel(i.ageHours);
+        const isFresh = i.ageHours != null && i.ageHours < 6;
+        const meta = ageLabel
+          ? `<span class="rss-item-meta">
+              <span class="rss-age">${escapeHtml(ageLabel)}</span>
+              ${isFresh ? `<span class="rss-bolt" aria-hidden="true">⚡</span>` : ""}
+            </span>`
+          : "";
         return `
         <li class="rss-item${i.aged ? " rss-item-aged" : rssAgeClass(i.ageHours)}">
           <a href="${escapeHtml(itemLink)}" target="_blank" rel="noopener"${tooltip ? ` title="${tooltip}"` : ""}>
@@ -1474,6 +1534,7 @@ function renderRSS(payload) {
             <span class="rss-title">
               <span class="rss-item-source">${itemLogo}<span class="rss-item-feed-name">${escapeHtml(i.feedName || "")}</span> &mdash;</span>${escapeHtml(i.title)}
             </span>
+            ${meta}
           </a>
         </li>
       `;
