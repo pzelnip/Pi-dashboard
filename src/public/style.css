@@ -485,7 +485,8 @@ a.wx-link:focus-visible {
 
 /* ---------- Clock view ---------- */
 
-#weather .view-clock {
+#weather .view-clock,
+#nhl .view-nhl-clock {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -507,7 +508,8 @@ a.wx-link:focus-visible {
 
 /* ---------- Countdown view ---------- */
 
-#weather .view-countdown {
+#weather .view-countdown,
+#nhl .view-nhl-countdown {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -797,7 +799,9 @@ a.wx-link:focus-visible {
   /* Belt-and-braces min-height for the centered clock/countdown views in
    * case the panel-body min-height above is overridden by future styling. */
   #weather .view-clock,
-  #weather .view-countdown {
+  #weather .view-countdown,
+  #nhl .view-nhl-clock,
+  #nhl .view-nhl-countdown {
     min-height: 200px;
   }
 
