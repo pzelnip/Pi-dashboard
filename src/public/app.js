@@ -1050,7 +1050,7 @@ function renderNhlClock() {
   const month = now.toLocaleDateString("en-US", { month: "long" });
   const day = now.getDate();
   const year = now.getFullYear();
-  timeEl.textContent = formatTime(now);
+  renderClockTime(timeEl, now);
   dateEl.textContent = `${weekday}, ${month} ${day}${ordinalSuffix(day)}, ${year}`;
 }
 
@@ -1359,6 +1359,25 @@ async function refreshCalendar() {
 
 // ---------- Clock ----------
 
+// Render the time into a clock-time element as two spans — the h:mm digits and
+// a smaller accent meridiem (AM/PM) — so CSS can style them independently. The
+// en-US 12-hour format ("8:03 PM") always splits cleanly on the space; if a
+// locale ever omits the meridiem the whole string falls into the digits span.
+function renderClockTime(timeEl, now) {
+  const [digits, meridiem] = formatTime(now).split(" ");
+  const hm = document.createElement("span");
+  hm.className = "clk-hm";
+  hm.textContent = digits;
+  const parts = [hm];
+  if (meridiem) {
+    const mer = document.createElement("span");
+    mer.className = "clk-mer";
+    mer.textContent = meridiem;
+    parts.push(mer);
+  }
+  timeEl.replaceChildren(...parts);
+}
+
 function ordinalSuffix(n) {
   const mod100 = n % 100;
   if (mod100 >= 11 && mod100 <= 13) return "th";
@@ -1379,7 +1398,7 @@ function renderClock() {
   const date = `${weekday}, ${month} ${day}${ordinalSuffix(day)}, ${year}`;
   const timeEl = document.querySelector("#weather .clock-time");
   const dateEl = document.querySelector("#weather .clock-date");
-  if (timeEl) timeEl.textContent = formatTime(now);
+  if (timeEl) renderClockTime(timeEl, now);
   if (dateEl) dateEl.textContent = date;
   if (nhlDeepOffSeason) renderNhlClock();
 }

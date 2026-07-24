@@ -188,6 +188,9 @@ Source: one or more public iCalendar (`.ics`) URLs (`src/parsers/calendar.py`).
 - Large 12-hour time + a manually-built date string
   (`Tuesday, May 6th, 2026`). Always renders en-US locale to avoid silent
   24-hour regressions on the Pi's default system locale.
+- **Styling** — a pure-CSS twilight-gradient hero (same scene treatment as the
+  "Puck Drop" season view). The time glows softly with a smaller accent
+  meridiem (AM/PM), over a spaced uppercase date caption.
 - Re-renders every minute.
 - Always present (no config flag).
 
@@ -204,6 +207,9 @@ managed via the debug panel UI).
   most-recent past one as "X is past, what's next?".
 - Same-day entries render as `Today is <title>`; future entries as
   `<N> day(s) until <title>`.
+- **Styling** — a hero countdown styled to match the season view: an
+  accent-lit gradient scene, a glowing number, a spaced uppercase caption, and
+  an ⏳ divider with accent streaks (mirrors the season view's 🏒 divider).
 - View is suppressed entirely when no countdowns are configured.
 - Re-renders hourly so the day count rolls over at midnight without a page
   reload.

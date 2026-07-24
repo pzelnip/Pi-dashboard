@@ -556,13 +556,35 @@ a.wx-link:focus-visible {
 
 /* ---------- Clock view ---------- */
 
+/* A twilight-gradient hero clock — same pure-CSS scene treatment as the
+ * "Puck Drop" season view (no image assets). The time glows softly with a
+ * smaller accent meridiem; the date sits below in spaced uppercase caps. */
 #weather .view-clock,
 #nhl .view-nhl-clock {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  overflow: hidden;
+  border-radius: 10px;
+  background:
+    radial-gradient(120% 90% at 16% -10%, rgba(79, 195, 247, 0.16), transparent 60%),
+    radial-gradient(120% 85% at 88% 112%, rgba(126, 142, 255, 0.15), transparent 60%),
+    linear-gradient(180deg, #06090f 0%, #0a1019 58%, #090e17 100%);
+}
+.clk-scene {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Soft ceiling glow raking down over the digits. */
+  background: radial-gradient(closest-side at 50% -12%, rgba(180, 210, 255, 0.12), transparent 72%);
+}
+.clk-inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
 }
 .clock-time {
   font-size: 7.5em;
@@ -570,36 +592,94 @@ a.wx-link:focus-visible {
   line-height: 1;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: baseline;
+  gap: 0.12em;
+  color: #eaf2ff;
+  text-shadow: 0 0 34px rgba(120, 180, 255, 0.35);
+}
+.clk-mer {
+  font-size: 0.26em;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--accent);
+  align-self: flex-start;
+  margin-top: 0.9em;
 }
 .clock-date {
-  font-size: 2.6em;
+  font-size: 1.45em;
   color: var(--text-dim);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  text-align: center;
 }
 
 /* ---------- Countdown view ---------- */
 
+/* Hero countdown, styled to match the season view: dark accent-lit scene, a
+ * glowing number, a spaced uppercase caption, and an ⏳ divider with accent
+ * streaks (mirrors the season view's 🏒 divider). */
 #weather .view-countdown,
 #nhl .view-nhl-countdown {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  overflow: hidden;
+  border-radius: 10px;
+  background:
+    radial-gradient(120% 85% at 20% -10%, rgba(79, 195, 247, 0.20), transparent 60%),
+    radial-gradient(120% 85% at 86% 16%, rgba(255, 181, 71, 0.13), transparent 55%),
+    linear-gradient(180deg, #05070d 0%, #0a1220 55%, #0a1524 100%);
+}
+.cd-scene {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Anticipatory glow welling up from the bottom. */
+  background: radial-gradient(closest-side at 50% 118%, rgba(79, 195, 247, 0.16), transparent 72%);
+}
+.cd-inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35em;
   padding: 0 24px;
   text-align: center;
 }
 .countdown-number {
   font-size: 6em;
-  font-weight: 300;
+  font-weight: 700;
   line-height: 1;
-  letter-spacing: -0.02em;
-  color: var(--accent);
+  letter-spacing: -0.01em;
+  color: #eaf6ff;
+  text-shadow: 0 0 28px rgba(79, 195, 247, 0.6), 0 2px 6px rgba(0, 0, 0, 0.5);
 }
 .countdown-label {
-  font-size: 2em;
-  color: var(--text-dim);
-  letter-spacing: 0.02em;
+  font-size: 1.35em;
+  color: #cfe0f5;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.cd-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 0.45em;
+  font-size: 1.1em;
+  filter: drop-shadow(0 0 8px rgba(79, 195, 247, 0.55));
+}
+.cd-divider span {
+  display: block;
+  width: 60px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent));
+  box-shadow: 0 0 8px rgba(79, 195, 247, 0.6);
+}
+.cd-divider span:last-child {
+  background: linear-gradient(270deg, transparent, var(--accent));
 }
 
 /* ---------- "Puck Drop" season countdown (NHL deep off-season) ---------- */
