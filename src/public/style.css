@@ -930,9 +930,18 @@ a.wx-link:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* Fill the panel body and let the (up to 4) cards share its fixed height so
+     the panel never overflows — see .rss-item flex below. Without this the list
+     is content-sized, and two-plus two-line headlines push it past the panel
+     and add a scrollbar. */
+  height: 100%;
 }
 .rss-item {
   --rss-accent: var(--text-muted);
+  /* Share the panel height equally instead of growing with content, so a page
+     of two-line headlines still fits on one screen (no vertical scrollbar). */
+  flex: 1 1 0;
+  min-height: 0;
   position: relative;
   font-size: 1.75em;
   border-radius: 10px;
