@@ -54,6 +54,7 @@ Notable knobs the frontend reads from `config.json` via `/api/config`:
 
 - `rotation.{rssSeconds, weatherPanelSeconds, nhlPanelSeconds}` — per-panel rotation cadence; `nhlPanelSeconds` defaults to `weatherPanelSeconds` if omitted.
 - `nhl.favorites` — array of team abbreviations (`["EDM", "VAN"]`). Favorited teams sort to the top of their status group and get a ★ next to the team name. Empty/missing means no preference.
+- `nhl.seasonStart` — ISO date (`"2026-09-29"`) of the next season's first game. During the deep off-season the NHL panel adds a "days until the NHL season" countdown view. On the eve of the opener (and opening day itself) the panel drops the countdown and shows the real opening-night slate instead — `find_opening_night` surfaces tomorrow's games when today is still empty. Omit/empty (or a past date) and both behaviours are simply skipped.
 - `countdowns` — list of `{date, title}` objects driving the countdown view in the weather panel.
 - `calendar.urls` — list of public iCalendar (`.ics`) URLs. Multiple are merged. The calendar view is suppressed entirely when none are configured.
 

@@ -29,6 +29,7 @@ from parsers.calendar import fetch_calendar
 from parsers.nhl import (
     fetch_nhl,
     find_off_season_games,
+    find_opening_night,
     extract_cup_winner,
     has_upcoming_games,
 )
@@ -340,6 +341,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
                         and not has_upcoming_games(favorites)
                     )
 
+                    # Opening-night preview: as the season opener arrives, the
+                    # panel should drop the off-season countdown and show the
+                    # real slate. On opening day today's games load normally; on
+                    # the eve `today` is still empty, so surface tomorrow's
+                    # opening slate here (the display would otherwise sit on
+                    # "No games today").
+                    season_start = cfg.get("nhl", {}).get("seasonStart") or None
+                    opening_night = find_opening_night(
+                        today_games, favorites, season_start
+                    )
+
                     self._send_json(
                         {
                             "today": {"date": today_iso, "games": today_games},
@@ -350,6 +362,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                             "hasLiveToday": has_live,
                             "offSeason": off_season,
                             "deepOffSeason": deep_off,
+                            "seasonStart": season_start,
+                            "openingNight": opening_night,
                         }
                     )
             except Exception as e:

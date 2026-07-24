@@ -49,6 +49,15 @@ Source: `src/parsers/nhl.py`, rendering in `src/public/app.js` (`renderNHL`,
   weather panel. The same upcoming-game check guards this, so a short
   mid-season gap with a game on the horizon keeps the normal panel rather than
   flipping to weather/clock.
+- During the deep off-season the panel also cycles a "days until the NHL
+  season" countdown when `nhl.seasonStart` is configured (an ISO date, e.g.
+  `2026-09-29`). If the date is unset — or already in the past — the view is
+  dropped from the rotation rather than shown.
+- On the eve of the opener (and opening day itself) the panel drops the
+  off-season views entirely and shows the regular scores view. On opening day
+  today's games load normally; on the day before — when today is still empty —
+  the server surfaces the opening-night slate so the panel previews tomorrow's
+  matchups (titled "Opening Night") instead of sitting on "No games today".
 
 ### Game card
 
@@ -334,6 +343,7 @@ in) merged with `src/config.local.json` (gitignored personal overrides; see
 | `weather.latitude` / `weather.longitude` | Open-Meteo coordinates and Windy.com link target. |
 | `weather.label` | Display string next to the weather panel header. |
 | `nhl.favorites` | Array of team abbreviations; star + sort-to-top. |
+| `nhl.seasonStart` | ISO date of the next season's first game; drives the deep-off-season "days until the NHL season" countdown. Unset/past = view hidden. |
 | `countdowns` | Array of `{date, title}` for the countdown view. Defined in `config.local.json` and managed via the debug panel UI. |
 | `calendar.urls` | Array of public `.ics` URLs (typically only in `config.local.json`). |
 | `rss` | Array of `{name, url}`; all rotate. |

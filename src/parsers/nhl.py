@@ -499,3 +499,36 @@ def find_off_season_games(
                 "cupWinner": extract_cup_winner(past_games),
             }
     return None
+
+
+def find_opening_night(
+    today_games: list[dict],
+    favorites: list[str],
+    season_start: str | None,
+    today: dt.date | None = None,
+) -> dict | None:
+    """Preview the season opener as it arrives.
+
+    When today already has games (opening day itself), it renders normally, so
+    this only fires when ``today_games`` is empty. On the *eve* of the opener
+    the panel would otherwise sit on "No games today", so we surface tomorrow's
+    opening slate for a preview. Returns
+    ``{"date", "games", "isTomorrow"}`` or None when the opener isn't
+    today/tomorrow, no start date is configured, or that slate has no games yet.
+    """
+    if not season_start or today_games:
+        return None
+    if today is None:
+        today = dt.date.today()
+    today_iso = today.isoformat()
+    tomorrow_iso = (today + dt.timedelta(days=1)).isoformat()
+    if season_start not in (today_iso, tomorrow_iso):
+        return None
+    opener_games = fetch_nhl(season_start, favorites)
+    if not opener_games:
+        return None
+    return {
+        "date": season_start,
+        "games": opener_games,
+        "isTomorrow": season_start == tomorrow_iso,
+    }

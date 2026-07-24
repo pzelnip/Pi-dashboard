@@ -998,5 +998,60 @@ class HasUpcomingGamesTests(unittest.TestCase):
         self.assertEqual(mock_fetch.call_count, 1)
 
 
+class OpeningNightTests(unittest.TestCase):
+    """Tests for find_opening_night season-opener preview."""
+
+    def _opener(self):
+        return [{"state": "FUT", "home": {"abbrev": "EDM"}, "away": {"abbrev": "CGY"}}]
+
+    def test_returns_none_when_no_season_start(self):
+        result = nhl.find_opening_night([], [], None, today=dt.date(2026, 9, 28))
+        self.assertIsNone(result)
+
+    def test_returns_none_when_today_has_games(self):
+        # Opening day itself: today's games load normally, no preview needed.
+        today_games = [{"state": "LIVE", "home": {"abbrev": "EDM"}}]
+        with patch("parsers.nhl.fetch_nhl") as mock_fetch:
+            result = nhl.find_opening_night(
+                today_games, [], "2026-09-29", today=dt.date(2026, 9, 29)
+            )
+        self.assertIsNone(result)
+        mock_fetch.assert_not_called()
+
+    @patch("parsers.nhl.fetch_nhl")
+    def test_previews_opener_on_the_eve(self, mock_fetch):
+        opener = self._opener()
+        mock_fetch.return_value = opener
+        result = nhl.find_opening_night([], [], "2026-09-29", today=dt.date(2026, 9, 28))
+        self.assertIsNotNone(result)
+        self.assertEqual(result["date"], "2026-09-29")
+        self.assertEqual(result["games"], opener)
+        self.assertTrue(result["isTomorrow"])
+        mock_fetch.assert_called_once_with("2026-09-29", [])
+
+    @patch("parsers.nhl.fetch_nhl")
+    def test_previews_opener_when_today_is_opening_day_but_empty(self, mock_fetch):
+        # Opening day with an empty today slate (e.g. schedule not yet loaded):
+        # still surface it, flagged as not-tomorrow.
+        opener = self._opener()
+        mock_fetch.return_value = opener
+        result = nhl.find_opening_night([], [], "2026-09-29", today=dt.date(2026, 9, 29))
+        self.assertIsNotNone(result)
+        self.assertFalse(result["isTomorrow"])
+
+    @patch("parsers.nhl.fetch_nhl")
+    def test_returns_none_when_opener_more_than_a_day_out(self, mock_fetch):
+        result = nhl.find_opening_night([], [], "2026-09-29", today=dt.date(2026, 9, 27))
+        self.assertIsNone(result)
+        mock_fetch.assert_not_called()
+
+    @patch("parsers.nhl.fetch_nhl")
+    def test_returns_none_when_opener_slate_is_empty(self, mock_fetch):
+        # Date matches but the upstream slate has no games yet — no preview.
+        mock_fetch.return_value = []
+        result = nhl.find_opening_night([], [], "2026-09-29", today=dt.date(2026, 9, 28))
+        self.assertIsNone(result)
+
+
 if __name__ == "__main__":
     unittest.main()

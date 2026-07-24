@@ -366,6 +366,34 @@ components:
         hasLiveToday:
           type: boolean
           description: True if any of today's games is in `LIVE` or `CRIT` state.
+        seasonStart:
+          oneOf:
+            - type: string
+              format: date
+            - type: "null"
+          description: >-
+            ISO date of the next season's first game from `nhl.seasonStart`, or
+            null when unconfigured. Drives the deep-off-season season countdown.
+        openingNight:
+          oneOf:
+            - type: object
+              required: [date, games, isTomorrow]
+              properties:
+                date:
+                  type: string
+                  format: date
+                games:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/NhlGame"
+                isTomorrow:
+                  type: boolean
+                  description: True on the eve of the opener; false on opening day.
+            - type: "null"
+          description: >-
+            Present only when the opener is today or tomorrow and today's slate
+            is empty. Lets the panel preview the opening-night games instead of
+            the off-season views. Null otherwise.
 
     NhlDayEnvelope:
       type: object

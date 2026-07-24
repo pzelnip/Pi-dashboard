@@ -509,7 +509,8 @@ a.wx-link:focus-visible {
 /* ---------- Countdown view ---------- */
 
 #weather .view-countdown,
-#nhl .view-nhl-countdown {
+#nhl .view-nhl-countdown,
+#nhl .view-nhl-season {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -801,7 +802,8 @@ a.wx-link:focus-visible {
   #weather .view-clock,
   #weather .view-countdown,
   #nhl .view-nhl-clock,
-  #nhl .view-nhl-countdown {
+  #nhl .view-nhl-countdown,
+  #nhl .view-nhl-season {
     min-height: 200px;
   }
 

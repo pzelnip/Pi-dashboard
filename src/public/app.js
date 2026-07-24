@@ -930,10 +930,11 @@ function setupGameDetails() {
   });
 }
 
-const NHL_TITLES = { today: "NHL Scores", yesterday: "Yesterday", offseason: "Off-Season", weather: "Weather", clock: "", countdown: "" };
+const NHL_TITLES = { today: "NHL Scores", yesterday: "Yesterday", offseason: "Off-Season", weather: "Weather", clock: "", countdown: "", season: "Next Season" };
 let nhlRotationMs = 10000;
 let nhlRotator = null;
 let nhlDeepOffSeason = false;
+let nhlSeasonStart = null; // ISO "YYYY-MM-DD" of next season's first game, or null if unknown
 
 async function refreshNHL() {
   try {
@@ -942,20 +943,42 @@ async function refreshNHL() {
       showError("nhl", data.error, ".view-nhl-today");
       return;
     }
+    nhlSeasonStart = data.seasonStart || null;
     renderNHL(data.today?.games, "#nhl .view-nhl-today", "No games today.", "today");
     if (data.yesterday) {
       renderNHL(data.yesterday.games, "#nhl .view-nhl-yesterday", "No games yesterday.", "yesterday");
+    }
+
+    // Opening night: the season opener is today or tomorrow. Drop the
+    // off-season countdown and show the real slate. On the eve `today` is
+    // still empty, so the server hands us tomorrow's opening games to preview
+    // here rather than sitting on "No games today".
+    if (data.openingNight) {
+      nhlDeepOffSeason = false;
+      renderNHL(data.openingNight.games, "#nhl .view-nhl-today", "No games today.", "today");
+      nhlRotator.setViews(["today"]);
+      const t = document.getElementById("nhl-title-text");
+      if (t) t.textContent = data.openingNight.isTomorrow ? "Opening Night — Tomorrow 🏒" : "Opening Night 🏒";
+      setUpdated("nhl");
+      return;
     }
 
     // Deep off-season: >7 days with no games — cycle weather/clock/countdown
     // in the NHL panel to keep the display useful.
     if (data.deepOffSeason) {
       nhlDeepOffSeason = true;
-      const deepViews = ["weather", "clock", ...(countdowns.length ? ["countdown"] : [])];
+      const seasonKnown = daysUntilSeasonStart() !== null;
+      const deepViews = [
+        "weather",
+        "clock",
+        ...(countdowns.length ? ["countdown"] : []),
+        ...(seasonKnown ? ["season"] : []),
+      ];
       nhlRotator.setViews(deepViews);
       renderNhlWeather();
       renderNhlClock();
       renderNhlCountdown();
+      renderNhlSeason();
       setUpdated("nhl");
       return;
     }
@@ -1039,6 +1062,43 @@ function renderNhlCountdown() {
   const { numberText, labelText } = formatCountdown(pickCountdown());
   numEl.textContent = numberText;
   labelEl.textContent = labelText;
+}
+
+// Days from local today to the configured next-season start date. Returns null
+// when no valid start date is configured or it's already in the past — in
+// either case the "season" view is dropped from the rotation entirely.
+function daysUntilSeasonStart() {
+  if (!nhlSeasonStart) return null;
+  const parts = nhlSeasonStart.split("-").map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+  const [y, m, d] = parts;
+  const now = new Date();
+  const todayUtc = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const targetUtc = Date.UTC(y, m - 1, d);
+  const days = Math.round((targetUtc - todayUtc) / 86400000);
+  return days >= 0 ? days : null;
+}
+
+// Ramp up the hockey flair as the season opener gets closer.
+function seasonHype(days) {
+  if (days <= 7) return "🚨🏒🚨";
+  if (days <= 30) return "🔥🏒";
+  return "🏒";
+}
+
+function renderNhlSeason() {
+  const numEl = document.querySelector("#nhl .view-nhl-season .countdown-number");
+  const labelEl = document.querySelector("#nhl .view-nhl-season .countdown-label");
+  if (!numEl || !labelEl) return;
+  const days = daysUntilSeasonStart();
+  if (days === null) return; // view isn't in the rotation; nothing to render
+  if (days === 0) {
+    numEl.textContent = "Tonight";
+    labelEl.textContent = "🚨 puck drops! 🏒";
+  } else {
+    numEl.textContent = `${days} ${days === 1 ? "day" : "days"}`;
+    labelEl.textContent = `until puck drop! ${seasonHype(days)}`;
+  }
 }
 
 // ---------- Weather ----------
