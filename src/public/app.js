@@ -1079,26 +1079,45 @@ function daysUntilSeasonStart() {
   return days >= 0 ? days : null;
 }
 
-// Ramp up the hockey flair as the season opener gets closer.
-function seasonHype(days) {
-  if (days <= 7) return "🚨🏒🚨";
-  if (days <= 30) return "🔥🏒";
-  return "🏒";
+// Live "Puck Drop" countdown: whole calendar days until the opener, plus the
+// hours/mins/secs remaining in the current day (so the seconds tick and the
+// day count rolls at local midnight). Returns false when there's no valid,
+// future start date so callers can skip work.
+function renderNhlSeason() {
+  const view = document.querySelector("#nhl .view-nhl-season");
+  if (!view) return false;
+  const days = daysUntilSeasonStart();
+  if (days === null) return false; // view isn't in the rotation; nothing to render
+
+  const now = new Date();
+  const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  let rem = Math.max(0, Math.floor((nextMidnight - now) / 1000));
+  const hrs = Math.floor(rem / 3600); rem -= hrs * 3600;
+  const mins = Math.floor(rem / 60); const secs = rem - mins * 60;
+
+  const set = (unit, val) => {
+    const el = view.querySelector(`[data-unit="${unit}"]`);
+    if (el) el.textContent = String(val).padStart(2, "0");
+  };
+  set("days", days);
+  set("hrs", hrs);
+  set("mins", mins);
+  set("secs", secs);
+
+  const seasonEl = view.querySelector(".puck-season");
+  const startYear = parseInt(nhlSeasonStart.slice(0, 4), 10);
+  if (seasonEl && !Number.isNaN(startYear)) {
+    seasonEl.textContent = `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
+  }
+  return true;
 }
 
-function renderNhlSeason() {
-  const numEl = document.querySelector("#nhl .view-nhl-season .countdown-number");
-  const labelEl = document.querySelector("#nhl .view-nhl-season .countdown-label");
-  if (!numEl || !labelEl) return;
-  const days = daysUntilSeasonStart();
-  if (days === null) return; // view isn't in the rotation; nothing to render
-  if (days === 0) {
-    numEl.textContent = "Tonight";
-    labelEl.textContent = "🚨 puck drops! 🏒";
-  } else {
-    numEl.textContent = `${days} ${days === 1 ? "day" : "days"}`;
-    labelEl.textContent = `until puck drop! ${seasonHype(days)}`;
-  }
+// Drive the seconds display, but only while the season view is actually
+// on-screen — no work during the rest of the rotation or in-season.
+function tickNhlSeason() {
+  if (!nhlSeasonStart) return;
+  const view = document.querySelector("#nhl .view-nhl-season.active");
+  if (view) renderNhlSeason();
 }
 
 // ---------- Weather ----------
@@ -1568,6 +1587,9 @@ async function start() {
 
   // Clock ticks every minute; render immediately so it's ready when rotation lands on it.
   renderClock(); setInterval(renderClock, 60 * 1000);
+
+  // "Puck Drop" countdown ticks every second while its view is on-screen.
+  setInterval(tickNhlSeason, 1000);
 
   // Keep "X ago" labels accurate as time passes between data refreshes.
   setInterval(refreshUpdatedLabels, 5 * 1000);

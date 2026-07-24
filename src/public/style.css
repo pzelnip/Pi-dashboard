@@ -509,8 +509,7 @@ a.wx-link:focus-visible {
 /* ---------- Countdown view ---------- */
 
 #weather .view-countdown,
-#nhl .view-nhl-countdown,
-#nhl .view-nhl-season {
+#nhl .view-nhl-countdown {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -530,6 +529,178 @@ a.wx-link:focus-visible {
   font-size: 2em;
   color: var(--text-dim);
   letter-spacing: 0.02em;
+}
+
+/* ---------- "Puck Drop" season countdown (NHL deep off-season) ---------- */
+
+/* An arena-styled hero countdown that replaces the plain season view. The
+ * background is pure CSS (spotlights, blue/red rink lighting, a faint
+ * centre-ice circle) so it stays zero-dependency — no image assets. */
+#nhl .view-nhl-season {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: #eaf4ff;
+  border-radius: 10px;
+  background:
+    radial-gradient(120% 85% at 18% -5%, rgba(90,155,255,0.20), transparent 60%),
+    radial-gradient(120% 85% at 88% 15%, rgba(255,72,72,0.18), transparent 55%),
+    radial-gradient(70% 45% at 50% 112%, rgba(120,185,255,0.16), transparent 72%),
+    linear-gradient(180deg, #05070d 0%, #0a1524 55%, #0b1b30 100%);
+}
+#nhl .view-nhl-season .puck-scene {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Arena spotlights raking down from the roof line. */
+  background:
+    radial-gradient(closest-side at 14% -12%, rgba(255,255,255,0.22), transparent 70%),
+    radial-gradient(closest-side at 40% -14%, rgba(185,215,255,0.16), transparent 70%),
+    radial-gradient(closest-side at 64% -14%, rgba(255,255,255,0.15), transparent 70%),
+    radial-gradient(closest-side at 88% -12%, rgba(255,190,190,0.15), transparent 70%);
+}
+/* Faint centre-ice faceoff circle glowing up from the bottom. */
+#nhl .view-nhl-season .puck-scene::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -46%;
+  width: 125%;
+  aspect-ratio: 1 / 1;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  border: 2px solid rgba(120,185,255,0.14);
+  box-shadow: inset 0 0 70px rgba(80,150,255,0.16);
+}
+/* Ice sheen along the bottom. */
+#nhl .view-nhl-season .puck-scene::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 40%;
+  background: linear-gradient(180deg, transparent, rgba(90,150,220,0.12));
+}
+
+.puck-countdown {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  padding: 0 20px;
+  text-align: center;
+}
+
+.puck-title { margin-bottom: 0.55em; }
+.puck-title-sm {
+  display: block;
+  font-size: 0.9em;
+  letter-spacing: 0.5em;
+  text-indent: 0.5em;
+  text-transform: uppercase;
+  color: #cfe4ff;
+}
+.puck-title-lg {
+  display: inline-block;
+  position: relative;
+  margin-top: 0.15em;
+  font-size: 2.7em;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 0 20px rgba(120,185,255,0.55), 0 2px 4px rgba(0,0,0,0.6);
+}
+/* Red motion streaks flanking the wordmark. */
+.puck-title-lg::before,
+.puck-title-lg::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 0.9em;
+  height: 3px;
+  box-shadow: 0 0 12px rgba(255,72,72,0.8);
+}
+.puck-title-lg::before {
+  right: 100%;
+  margin-right: 0.45em;
+  background: linear-gradient(90deg, transparent, var(--live));
+}
+.puck-title-lg::after {
+  left: 100%;
+  margin-left: 0.45em;
+  background: linear-gradient(270deg, transparent, var(--live));
+}
+
+.puck-clock {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  margin: 0.4em 0 0.7em;
+}
+.puck-unit {
+  position: relative;
+  min-width: 1.9em;
+  padding: 0.28em 0.34em 0.22em;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(22,44,78,0.55), rgba(8,16,30,0.68));
+  border: 1px solid rgba(110,178,255,0.45);
+  box-shadow: 0 0 20px rgba(60,140,240,0.25), inset 0 0 18px rgba(40,90,160,0.22);
+}
+/* Split-flap seam across the digit. */
+.puck-unit::before {
+  content: "";
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 41%;
+  height: 1px;
+  background: rgba(0,0,0,0.45);
+}
+.puck-num {
+  display: block;
+  font-size: 2.5em;
+  font-weight: 700;
+  line-height: 1;
+  color: #9fd2ff;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 14px rgba(90,170,255,0.85);
+}
+.puck-lbl {
+  display: block;
+  margin-top: 0.4em;
+  font-size: 0.62em;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #7fa8d8;
+}
+
+.puck-sub {
+  font-size: 0.85em;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: #cfe0f5;
+}
+.puck-sub .puck-season { color: #fff; font-weight: 700; }
+
+.puck-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 0.7em;
+  font-size: 0.95em;
+}
+.puck-divider span {
+  display: block;
+  width: 64px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--live));
+  box-shadow: 0 0 8px rgba(255,72,72,0.7);
+}
+.puck-divider span:last-child {
+  background: linear-gradient(270deg, transparent, var(--live));
 }
 
 /* ---------- Weather-panel view rotation + Calendar ---------- */
@@ -796,6 +967,12 @@ a.wx-link:focus-visible {
   .clock-date { font-size: 1.4em; }
   .countdown-number { font-size: 3.5em; }
   .countdown-label { font-size: 1.2em; }
+
+  /* Puck-drop countdown: trim the hero type so four boxes stay one row. */
+  .puck-title-lg { font-size: 1.9em; }
+  .puck-num { font-size: 1.9em; }
+  .puck-clock { gap: 8px; }
+  .puck-unit { min-width: 1.7em; }
 
   /* Belt-and-braces min-height for the centered clock/countdown views in
    * case the panel-body min-height above is overridden by future styling. */

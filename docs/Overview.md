@@ -49,10 +49,13 @@ Source: `src/parsers/nhl.py`, rendering in `src/public/app.js` (`renderNHL`,
   weather panel. The same upcoming-game check guards this, so a short
   mid-season gap with a game on the horizon keeps the normal panel rather than
   flipping to weather/clock.
-- During the deep off-season the panel also cycles a "days until the NHL
-  season" countdown when `nhl.seasonStart` is configured (an ISO date, e.g.
-  `2026-09-29`). If the date is unset — or already in the past — the view is
-  dropped from the rotation rather than shown.
+- During the deep off-season the panel also cycles a "Puck Drop" hero
+  countdown when `nhl.seasonStart` is configured (an ISO date, e.g.
+  `2026-09-29`): an arena-styled view (pure-CSS rink lighting, no image
+  assets) with a live days/hours/mins/secs counter and a "Until the 2026-27
+  NHL Season" caption whose year range is derived from the start date. The
+  seconds tick only while the view is on-screen. If the date is unset — or
+  already in the past — the view is dropped from the rotation rather than shown.
 - On the eve of the opener (and opening day itself) the panel drops the
   off-season views entirely and shows the regular scores view. On opening day
   today's games load normally; on the day before — when today is still empty —
