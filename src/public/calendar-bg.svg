@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 200" fill="none" stroke="#cfe0f5" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+  <!-- binding rings crossing the top edge -->
+  <rect x="62" y="12" width="10" height="30" rx="5"/>
+  <rect x="148" y="12" width="10" height="30" rx="5"/>
+  <!-- calendar body + header divider -->
+  <rect x="22" y="28" width="176" height="158" rx="16"/>
+  <line x1="22" y1="66" x2="198" y2="66"/>
+  <!-- day grid: 4 columns x 3 rows of rounded cells -->
+  <rect x="44"  y="84"  width="22" height="22" rx="4"/>
+  <rect x="78"  y="84"  width="22" height="22" rx="4"/>
+  <rect x="112" y="84"  width="22" height="22" rx="4"/>
+  <rect x="146" y="84"  width="22" height="22" rx="4"/>
+  <rect x="44"  y="116" width="22" height="22" rx="4"/>
+  <rect x="78"  y="116" width="22" height="22" rx="4"/>
+  <rect x="146" y="116" width="22" height="22" rx="4"/>
+  <rect x="44"  y="148" width="22" height="22" rx="4"/>
+  <rect x="78"  y="148" width="22" height="22" rx="4"/>
+  <rect x="112" y="148" width="22" height="22" rx="4"/>
+  <rect x="146" y="148" width="22" height="22" rx="4"/>
+  <!-- one highlighted "today" cell, filled in the accent hue -->
+  <rect x="112" y="116" width="22" height="22" rx="4" fill="#4fc3f7" stroke="none"/>
+</svg>
