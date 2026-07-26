@@ -1329,28 +1329,66 @@ async function refreshWeather() {
 
 // ---------- Calendar ----------
 
+// Pick a contextual emoji from keywords in the event title, so the calendar
+// reads at a glance like the other panels' emoji flair. Falls back to a neutral
+// marker (📌 for all-day, 📅 for timed).
+const CAL_ICONS = [
+  [/birthday|b-?day/i, "🎂"],
+  [/flight|airport|depart|boarding/i, "✈️"],
+  [/doctor|dentist|\bdr\.?\b|appt|appointment|clinic|physio|checkup/i, "🩺"],
+  [/meeting|\bcall\b|sync|stand-?up|1:1|interview|zoom|review/i, "👥"],
+  [/lunch|dinner|breakfast|brunch|reservation|restaurant/i, "🍽️"],
+  [/coffee/i, "☕"],
+  [/gym|workout|\brun\b|yoga|climb|swim|training|practice/i, "🏋️"],
+  [/\bpay\b|bill|rent|invoice|renew|\bdue\b/i, "💸"],
+  [/trash|garbage|recycl|compost|\bbins?\b/i, "🗑️"],
+  [/hockey|\bnhl\b|\bgame\b|\bmatch\b/i, "🏒"],
+  [/movie|film|cinema|concert|theatre|theater|\bshow\b/i, "🎬"],
+  [/party|celebrat|anniversary/i, "🎉"],
+  [/holiday|vacation|\btrip\b|travel/i, "🌴"],
+  [/deadline|submit|\bdue date\b/i, "⏰"],
+  [/school|class|lecture|\bexam\b|homework|lesson/i, "🎓"],
+];
+function eventIcon(summary, allDay) {
+  for (const [re, icon] of CAL_ICONS) if (re.test(summary)) return icon;
+  return allDay ? "📌" : "📅";
+}
+
+// Colour the card's accent bar by rough time of day (or a blue for all-day),
+// echoing the RSS panel's age-hue treatment so the agenda has visual rhythm.
+function eventTimeClass(ev, allDay) {
+  if (allDay) return "cal-allday";
+  const h = new Date(ev.start).getHours();
+  if (h < 12) return "cal-morning";
+  if (h < 17) return "cal-afternoon";
+  return "cal-evening";
+}
+
 function renderCalendar(data) {
   const el = document.querySelector("#weather .view-calendar");
   el.classList.remove("error");
 
   if (data.error) {
-    el.innerHTML = `<p class="cal-empty">⚠ ${escapeHtml(data.error)}</p>`;
+    el.innerHTML = `<div class="cal-empty cal-empty-error"><span class="cal-empty-icon">⚠️</span><span>${escapeHtml(data.error)}</span></div>`;
     return;
   }
   if (!data.events || !data.events.length) {
-    el.innerHTML = '<p class="cal-empty">No events today</p>';
+    el.innerHTML = '<div class="cal-empty"><span class="cal-empty-icon">🗓️</span><span>No events today</span></div>';
     return;
   }
 
   const isDateOnly = ev => typeof ev.start === "string" && ev.start.length === 10;
-  const timeLabel = ev => (ev.allDay || isDateOnly(ev)) ? "All day" : formatTime(ev.start);
 
-  el.innerHTML = data.events.map(ev => `
-    <div class="cal-event ${ev.allDay ? "cal-allday" : ""}">
-      <span class="cal-time">${escapeHtml(timeLabel(ev))}</span>
+  el.innerHTML = `<div class="cal-list">${data.events.map(ev => {
+    const allDay = ev.allDay || isDateOnly(ev);
+    const timeLabel = allDay ? "All day" : formatTime(ev.start);
+    return `
+    <div class="cal-event ${eventTimeClass(ev, allDay)}">
+      <span class="cal-icon" aria-hidden="true">${eventIcon(ev.summary, allDay)}</span>
       <span class="cal-title">${escapeHtml(ev.summary)}</span>
-    </div>
-  `).join("");
+      <span class="cal-time">${escapeHtml(timeLabel)}</span>
+    </div>`;
+  }).join("")}</div>`;
 }
 
 async function refreshCalendar() {

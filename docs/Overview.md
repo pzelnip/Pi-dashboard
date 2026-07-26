@@ -178,6 +178,14 @@ Source: one or more public iCalendar (`.ics`) URLs (`src/parsers/calendar.py`).
 - Multiple feeds are merged. Today's events only.
 - All-day events are listed first ("All day"), followed by timed events
   sorted by start time.
+- Sits on a dark accent-lit scene (matching the sibling clock/countdown
+  views) with a faint calendar-page watermark (`calendar-bg.svg`) behind the
+  agenda.
+- Each event renders as a card (matching the RSS panel): a coloured left
+  accent bar hued by time of day (amber morning / cyan afternoon / purple
+  evening / blue all-day), a contextual emoji picked from keywords in the
+  title (🎂 birthday, 👥 meeting, 🩺 appointment, ✈️ flight, …), and a
+  pill-shaped time badge. Empty and error states get a centred icon.
 - TZID-aware: `Z` (UTC) and `TZID=<IANA name>` (e.g. America/Vancouver) are
   resolved via stdlib `zoneinfo` and converted to host-local time. Floating
   / unknown TZIDs fall back to naive parsing with a server-side warning.
