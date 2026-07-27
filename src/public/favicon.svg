@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Dashboard">
+  <rect width="64" height="64" rx="12" fill="#0f1729"/>
+  <rect x="10" y="10" width="24" height="24" rx="4" fill="#38bdf8"/>
+  <rect x="38" y="10" width="16" height="24" rx="4" fill="#f472b6"/>
+  <rect x="10" y="38" width="44" height="16" rx="4" fill="#facc15"/>
+</svg>
