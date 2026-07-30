@@ -1641,8 +1641,9 @@ function onRssViewShown(active) {
 
 // ---------- Bootstrap ----------
 
+let calendarEnabled = false;
+
 async function start() {
-  let calendarEnabled = false;
   try {
     const cfg = await fetchJson("/api/config");
     const secs = cfg?.rotation?.rssSeconds;
@@ -1723,6 +1724,7 @@ async function start() {
   setupDebugOverlay();
   setupGameDetails();
   watchVersion();
+  watchWake();
 }
 
 // ---------- Debug overlay ----------
@@ -2303,22 +2305,76 @@ function setupDebugOverlay() {
   });
 }
 
+// ---------- Wake / day-rollover recovery ----------
+
+// A backgrounded tab gets its timers throttled, and once the browser freezes or
+// discards it they stop firing altogether — so on return everything on screen is
+// as stale as the moment the tab lost focus. Most of the dashboard is also
+// "today"-relative (the NHL slate, the calendar, the countdowns, the clock all
+// anchor on the local date when they render), which means a tab that sat through
+// midnight quietly shows yesterday's dashboard. So we re-check on every plausible
+// resume signal and either hard-reload (date moved on) or re-fetch (same day, but
+// we were away long enough for the data to have gone stale).
+
+const RESUME_STALE_MS = 5 * 60 * 1000;
+
+const dayKey = (d = new Date()) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+
+let _awakeDay = dayKey();
+let _awakeAt = Date.now();
+
+function refreshAllPanels() {
+  refreshNHL();
+  refreshWeather();
+  refreshRSS();
+  if (calendarEnabled) refreshCalendar();
+  if (countdowns.length) renderCountdown();
+  renderClock();
+}
+
+function onWake() {
+  if (dayKey() !== _awakeDay) {
+    // Reload rather than refresh: a fresh document re-derives every date-anchored
+    // view from scratch, and picks up any deploy we slept through.
+    location.reload();
+    return;
+  }
+  const away = Date.now() - _awakeAt;
+  _awakeAt = Date.now();
+  if (away >= RESUME_STALE_MS) {
+    refreshAllPanels();
+    checkVersion();
+  }
+}
+
+function watchWake() {
+  // Kiosk case: the tab is never hidden, so this interval is what catches
+  // midnight. Backgrounded-tab case: the interval is throttled or frozen, and
+  // the events below are what catch the return.
+  setInterval(onWake, 60 * 1000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) onWake(); });
+  window.addEventListener("focus", onWake);
+  window.addEventListener("pageshow", onWake);  // back/forward-cache restore
+}
+
 // Captured at startup; read by fireUpdate so it can fast-poll for a SHA
 // flip without waiting up to 30s for the next watchVersion tick.
 let initialVersion = null;
 
-async function watchVersion() {
+async function checkVersion() {
   try {
-    initialVersion = (await fetchJson("/api/version"))?.version;
-  } catch { return; }
-  if (!initialVersion) return;
+    const { version } = await fetchJson("/api/version");
+    if (!version) return;
+    // First successful read just establishes the baseline — including when the
+    // read at startup failed, so a transient blip doesn't disable the watcher.
+    if (!initialVersion) initialVersion = version;
+    else if (version !== initialVersion) location.reload();
+  } catch { /* transient — try again next tick */ }
+}
 
-  setInterval(async () => {
-    try {
-      const { version } = await fetchJson("/api/version");
-      if (version && version !== initialVersion) location.reload();
-    } catch { /* transient — try again next tick */ }
-  }, 30 * 1000);
+async function watchVersion() {
+  await checkVersion();
+  setInterval(checkVersion, 30 * 1000);
 }
 
 start();

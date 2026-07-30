@@ -321,6 +321,25 @@ warning without destroying the rest of the layout.
   and restarted the service.
 - See [`docs/deployment.md`](deployment.md) for the full update flow.
 
+### Waking up stale (day rollover)
+
+Most of the dashboard is anchored on the local date at render time — the NHL
+slate, the calendar, the countdowns, the clock. A browser tab left open in the
+background has its timers throttled (and frozen outright once the browser
+discards the tab), so without this it would come back showing yesterday's
+dashboard.
+
+- On the 60 s tick and on every resume signal (`visibilitychange` back to
+  visible, window `focus`, `pageshow` from the back/forward cache) the frontend
+  compares the current local date against the date the page was rendered for.
+- Different day → full `location.reload()`, which rebuilds every date-anchored
+  view and picks up any deploy that landed while the tab slept.
+- Same day but away longer than 5 minutes → re-fetch every panel (NHL, weather,
+  RSS, calendar, countdown, clock) and re-check `/api/version` instead of
+  waiting out the normal refresh intervals.
+- On the kiosk the tab is never hidden, so the 60 s tick is what carries it
+  across midnight.
+
 ### Debug overlay
 
 A small dot in the bottom corner (also bound to the **`d`** or **`?`**
