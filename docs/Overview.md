@@ -294,6 +294,34 @@ Every panel uses the same `createRotator` abstraction:
 - All controls share the same `.rot-*` CSS classes so they look consistent
   across panels.
 
+### Background image (frosted panels)
+
+Off by default — with nothing configured the layout keeps its flat dark
+background and solid panels.
+
+- `background.image` points at an image **on the machine running the
+  dashboard** (the Pi), not a URL: absolute, `~`-relative, or relative to
+  `src/`. `.png`, `.jpg`/`.jpeg`, `.gif`, `.webp`, `.avif` and `.bmp` are
+  accepted; anything else is ignored.
+- The server resolves the path per request (`resolve_background_image` in
+  `src/config.py`) and streams the file from `/api/background`. It lives
+  outside `public/`, so it is not a checked-in asset and can be swapped on the
+  Pi without touching the repo.
+- `/api/config` reports `background.{enabled, dim, blur}`; `app.js`
+  (`applyBackground`) adds `.has-bg` to `<body>` and sets `--bg-image`,
+  `--bg-dim` and `--bg-blur`.
+- With a background active the panels become translucent
+  (`backdrop-filter: blur() saturate()`), gaining a hairline border and drop
+  shadow, and the image shows through the gutters between them. The glass
+  vars are scoped to `.panel`, so the debug and game sheets stay opaque.
+- `background.dim` (0–0.95, default 0.45) is a black scrim over the photo —
+  raise it if a busy image is fighting the text. `background.blur` (0–60 px,
+  default 18) is the panel blur radius; `0` keeps the translucency but skips
+  `backdrop-filter` entirely, which is the cheaper option on slower Pis.
+- A bad path is not an error: the panel chrome simply stays solid. The debug
+  overlay's **Background** row distinguishes "not set" from "configured but
+  not found".
+
 ### Cross-fade transitions
 
 - NHL and weather toggle a `.active` class on stacked `.view` elements; CSS
@@ -356,6 +384,8 @@ keyboard shortcut) opens a debug side-sheet showing:
   `docs.python.org/release/<version>/`.
 - Platform string.
 - RSS feed count, calendar URL count.
+- **Background** — resolved background image path, `(not set)`, or a red
+  "not found" line when `background.image` is set but doesn't resolve.
 - **Cache table** — every entry currently held in `fetch_cached` with
   remaining TTL.
 - **Service log / Update log** — tail of `journalctl -u dashboard.service`
@@ -396,6 +426,9 @@ in) merged with `src/config.local.json` (gitignored personal overrides; see
 | `rotation.rssSeconds` | RSS feed cadence (seconds). |
 | `rotation.weatherPanelSeconds` | Weather panel view cadence (seconds). |
 | `rotation.nhlPanelSeconds` | NHL panel view cadence (seconds). Falls back to `weatherPanelSeconds`. |
+| `background.image` | Path to an image file on the dashboard host (absolute, `~`-relative, or relative to `src/`). Blank/missing/unresolvable = flat dark background. |
+| `background.dim` | Darkness of the scrim over the background image, 0–0.95 (default 0.45). |
+| `background.blur` | Frosted-glass blur behind the panels, 0–60 px (default 18). `0` = translucent panels, no blur. |
 
 ---
 

@@ -62,7 +62,7 @@ paths:
       description: |
         Exposes only the parts of `config.json` (merged with `config.local.json`)
         that the frontend needs: rotation cadences, calendar feature flag,
-        and the configured countdowns list.
+        the configured countdowns list, and the background-image settings.
       responses:
         "200":
           description: OK
@@ -70,6 +70,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ConfigResponse"
+
+  /api/background:
+    get:
+      tags: [meta]
+      summary: Configured background image
+      description: |
+        Streams the image at `background.image` — a file on the machine running
+        the dashboard, resolved outside `public/`. Returns 404 when no image is
+        configured, the path doesn't exist, or the extension isn't a known image
+        type. The frontend only requests this when `/api/config` reports
+        `background.enabled`.
+      responses:
+        "200":
+          description: The image bytes; `Content-Type` is guessed from the file extension.
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: No usable background image configured.
 
   /api/debug:
     get:
@@ -259,7 +280,7 @@ components:
 
     ConfigResponse:
       type: object
-      required: [rotation, calendar, countdowns]
+      required: [rotation, calendar, countdowns, background]
       properties:
         rotation:
           type: object
@@ -294,6 +315,24 @@ components:
               title:
                 type: string
                 example: "Christmas"
+        background:
+          type: object
+          description: |
+            Page-background settings. The image path itself is not exposed —
+            the frontend points at `/api/background` when `enabled` is true.
+          required: [enabled, dim, blur]
+          properties:
+            enabled:
+              type: boolean
+              description: True iff `background.image` resolves to an existing image file.
+            dim:
+              type: number
+              description: Opacity of the black scrim over the image, clamped to 0–0.95.
+              example: 0.45
+            blur:
+              type: number
+              description: Frosted-glass blur radius behind the panels, in px, clamped to 0–60. 0 disables `backdrop-filter`.
+              example: 18
 
     DebugResponse:
       type: object
@@ -322,6 +361,12 @@ components:
           type: integer
         calendarUrlCount:
           type: integer
+        backgroundConfigured:
+          type: string
+          description: Raw `background.image` setting (empty string when unset).
+        backgroundImage:
+          type: string
+          description: Resolved absolute path, or empty string when the setting is unset or doesn't resolve to an existing image.
         cache:
           type: array
           description: Snapshot of cached upstream URLs and their remaining TTL (calendar URLs excluded).

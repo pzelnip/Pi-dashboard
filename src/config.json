@@ -50,5 +50,10 @@
     "rssSeconds": 10,
     "weatherPanelSeconds": 6,
     "nhlPanelSeconds": 10
+  },
+  "background": {
+    "image": "ForestMountains.png",
+    "dim": 0.45,
+    "blur": 18
   }
 }

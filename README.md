@@ -39,6 +39,12 @@ Edit [src/config.json](src/config.json):
   array shows all games with no preference.
 - `rss` — array of `{name, url}`. All entries rotate.
 - `rotation.rssSeconds` — how often the RSS panel switches to the next feed.
+- `background.image` — path to an image **on the machine running the dashboard**
+  (e.g. `/home/pi/wallpaper.jpg`); absolute, `~`-relative, or relative to `src/`.
+  Set it and the layout gets that wallpaper with frosted-glass panels floating on
+  top. Leave it blank for the flat dark background. `background.dim` (0–0.95)
+  darkens the image behind the panels; `background.blur` (0–60 px, `0` to
+  disable) controls the frosting.
 
 ## Endpoints
 

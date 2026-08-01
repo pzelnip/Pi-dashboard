@@ -62,6 +62,42 @@ html, body {
 
 .panel-wide { grid-column: 1 / -1; }
 
+/* ---------- Background image / frosted panels ----------
+ * Opt-in: app.js adds .has-bg (and .has-bg-blur, when blur > 0) to <body>
+ * and sets --bg-image/--bg-dim/--bg-blur from /api/config. Without a
+ * configured background none of this applies and the flat dark theme stands.
+ *
+ * The surface vars are overridden on .panel rather than on :root so the glass
+ * stops at the panel boundary — the debug and game sheets stay fully opaque. */
+
+body.has-bg {
+  /* Scrim first so it paints over the photo; both layers use `cover`. */
+  background-image:
+    linear-gradient(rgba(0, 0, 0, var(--bg-dim, 0.45)), rgba(0, 0, 0, var(--bg-dim, 0.45))),
+    var(--bg-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+body.has-bg .panel {
+  --surface: rgba(22, 25, 29, 0.62);
+  --surface-raised: rgba(33, 37, 43, 0.66);
+  background: rgba(16, 19, 23, 0.46);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.38);
+}
+
+body.has-bg.has-bg-blur .panel {
+  -webkit-backdrop-filter: blur(var(--bg-blur, 18px)) saturate(135%);
+  backdrop-filter: blur(var(--bg-blur, 18px)) saturate(135%);
+}
+
+/* Panel chrome sits directly on the photo, so lean on the brighter text tier
+ * and a soft shadow instead of the muted greys that read fine on flat dark. */
+body.has-bg .updated { color: var(--text-dim); }
+body.has-bg .panel-header h2 { text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55); }
+
 .panel-header {
   display: flex;
   justify-content: space-between;

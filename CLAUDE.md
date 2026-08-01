@@ -57,6 +57,7 @@ Notable knobs the frontend reads from `config.json` via `/api/config`:
 - `nhl.seasonStart` — ISO date (`"2026-09-29"`) of the next season's first game. During the deep off-season the NHL panel adds a "days until the NHL season" countdown view. On the eve of the opener (and opening day itself) the panel drops the countdown and shows the real opening-night slate instead — `find_opening_night` surfaces tomorrow's games when today is still empty. Omit/empty (or a past date) and both behaviours are simply skipped.
 - `countdowns` — list of `{date, title}` objects driving the countdown view in the weather panel.
 - `calendar.urls` — list of public iCalendar (`.ics`) URLs. Multiple are merged. The calendar view is suppressed entirely when none are configured.
+- `background.{image, dim, blur}` — `image` is a path on the *dashboard host* (absolute, `~`-relative, or relative to `src/`), not a URL, and not a file under `public/`; the server streams it from `/api/background`. Set it and `app.js` puts `.has-bg` on `<body>`, which turns the panels into translucent frosted glass over the wallpaper. Blank, missing, non-image, or non-existent → the flat dark theme, unchanged. `dim` (0–0.95) is the scrim over the photo, `blur` (0–60px, `0` skips `backdrop-filter`) the panel frosting; both are clamped server-side in `background_settings()`.
 
 ## Architecture
 

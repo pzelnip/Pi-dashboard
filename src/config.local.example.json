@@ -21,5 +21,11 @@
     "rssSeconds": 10,
     "weatherPanelSeconds": 6,
     "nhlPanelSeconds": 10
+  },
+  "background": {
+    "_comment": "Path to an image ON THE MACHINE RUNNING THE DASHBOARD (not a URL). Absolute, ~-relative, or relative to src/. Blank/missing = plain dark background. dim = 0-0.95 scrim over the image, blur = px of frosted-glass blur behind the panels (0 disables).",
+    "image": "/home/pi/dashboard-background.jpg",
+    "dim": 0.45,
+    "blur": 18
   }
 }

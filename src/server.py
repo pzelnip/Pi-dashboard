@@ -24,7 +24,14 @@ import datetime as dt
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import cache
-from config import HERE, load_config, load_local_config, save_local_config
+from config import (
+    HERE,
+    background_settings,
+    load_config,
+    load_local_config,
+    resolve_background_image,
+    save_local_config,
+)
 from parsers.calendar import fetch_calendar
 from parsers.nhl import (
     fetch_nhl,
@@ -170,6 +177,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if os.path.commonpath([full, PUBLIC_REAL]) != PUBLIC_REAL or not os.path.isfile(full):
             self.send_error(404, "Not Found")
             return
+        self._send_file(full)
+
+    def _send_file(self, full: str):
         ctype, _ = mimetypes.guess_type(full)
         with open(full, "rb") as f:
             body = f.read()
@@ -218,6 +228,11 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     "platform": platform.platform(),
                     "rssFeedCount": len(cfg.get("rss", []) or []),
                     "calendarUrlCount": len(cal_url_set),
+                    # Both the raw setting and the resolved path: when a
+                    # background doesn't show up, the usual cause is a path
+                    # typo, and seeing "configured but unresolved" says so.
+                    "backgroundConfigured": (cfg.get("background") or {}).get("image") or "",
+                    "backgroundImage": resolve_background_image(cfg) or "",
                     "cache": cache_entries,
                 }
             )
@@ -313,8 +328,19 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     "rotation": cfg.get("rotation", {"rssSeconds": 30}),
                     "calendar": {"enabled": bool(cal_urls)},
                     "countdowns": cfg.get("countdowns", []) or [],
+                    "background": background_settings(cfg),
                 }
             )
+            return
+
+        if path == "/api/background":
+            # The wallpaper behind the whole layout. Lives outside public/ —
+            # it's a file on the Pi named by config, not a checked-in asset.
+            img = resolve_background_image(cfg)
+            if not img:
+                self.send_error(404, "Not Found")
+                return
+            self._send_file(img)
             return
 
         if path == "/api/nhl":

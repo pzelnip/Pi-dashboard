@@ -1643,6 +1643,26 @@ function onRssViewShown(active) {
 
 let calendarEnabled = false;
 
+// Wallpaper behind the whole layout, served from /api/background (a file on
+// the Pi named by config.background.image). Everything is opt-in: with no
+// image configured the body classes are never added and the flat dark theme
+// is untouched. dim/blur arrive from the server already clamped.
+function applyBackground(bg) {
+  if (!bg || !bg.enabled) return;
+  const root = document.documentElement;
+  // Cache-bust per page load: the file can be swapped out on the Pi without
+  // the URL ever changing, and the kiosk reloads on every deploy anyway.
+  root.style.setProperty("--bg-image", `url("/api/background?t=${Date.now()}")`);
+  if (typeof bg.dim === "number") root.style.setProperty("--bg-dim", String(bg.dim));
+  if (typeof bg.blur === "number") root.style.setProperty("--bg-blur", `${bg.blur}px`);
+  document.body.classList.add("has-bg");
+  // blur: 0 means "translucent panels, no frosting" — skip backdrop-filter
+  // entirely rather than compositing a no-op blur on the Pi's GPU.
+  if (typeof bg.blur !== "number" || bg.blur > 0) {
+    document.body.classList.add("has-bg-blur");
+  }
+}
+
 async function start() {
   try {
     const cfg = await fetchJson("/api/config");
@@ -1655,6 +1675,7 @@ async function start() {
     if (typeof nhlSecs === "number" && nhlSecs > 0) nhlRotationMs = nhlSecs * 1000;
     calendarEnabled = !!cfg?.calendar?.enabled;
     countdowns = Array.isArray(cfg?.countdowns) ? cfg.countdowns : [];
+    applyBackground(cfg?.background);
   } catch (e) { /* fall back to default */ }
 
   // Build the weather views list based on what's actually configured.
@@ -1772,6 +1793,14 @@ function renderDebugFields(data) {
       }).join("")
     : '<span style="color:var(--text-muted)">(empty)</span>';
 
+  // Three states worth telling apart: unset, set-but-unusable (bad path or
+  // non-image extension), and resolved.
+  const background = !data.backgroundConfigured
+    ? '<span style="color:var(--text-muted)">(not set)</span>'
+    : data.backgroundImage
+      ? `<span class="mono">${escapeHtml(data.backgroundImage)}</span>`
+      : `<span style="color:var(--live)">not found: ${escapeHtml(data.backgroundConfigured)}</span>`;
+
   const ghCommitUrl = `${GITHUB_REPO_URL}/commit/${encodeURIComponent(data.version)}`;
   const pyDocsUrl = `https://docs.python.org/release/${encodeURIComponent(data.pythonVersion)}/`;
 
@@ -1785,6 +1814,7 @@ function renderDebugFields(data) {
     <dt>Platform</dt><dd>${escapeHtml(data.platform)}</dd>
     <dt>RSS feeds</dt><dd>${data.rssFeedCount}</dd>
     <dt>Calendar URLs</dt><dd>${data.calendarUrlCount}</dd>
+    <dt>Background</dt><dd>${background}</dd>
     <dt>Cache (${data.cache.length})</dt><dd>${cache}</dd>
     <dt>Countdowns</dt><dd><button class="debug-action" data-debug-action="countdowns">manage ›</button></dd>
     <dt>Service log</dt><dd><button class="debug-action" data-debug-action="log-service">view ›</button></dd>
