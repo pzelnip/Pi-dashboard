@@ -30,10 +30,6 @@
       "url": "https://aicoding.leaflet.pub/rss"
     },
     {
-      "name": "BBC World",
-      "url": "http://feeds.bbci.co.uk/news/world/rss.xml"
-    },
-    {
       "name": "TrueAchievements",
       "url": "https://www.trueachievements.com/newsrss.aspx"
     },
