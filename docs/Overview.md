@@ -27,6 +27,12 @@ Source: `src/parsers/nhl.py`, rendering in `src/public/app.js` (`renderNHL`,
   at least one game.
 - When a live game is in progress, the panel **pins to today** and the
   rotation collapses to a single view until the game ends.
+- Game cards are always full size and at most two wide. When a day's slate
+  has more rows than fit the panel, it's split across extra pages (each its
+  own rotation view with its own dot), so a busy night rotates through
+  several screens instead of scrolling or shrinking. On a live night the
+  panel still pins to today, but rotates through today's pages. Phone layout
+  isn't paged; it scrolls a single column.
 - The server anchors on the Pi's local date and hits
   `/schedule/<YYYY-MM-DD>` upstream rather than `/schedule/now`, which lags
   the calendar rollover.

@@ -249,7 +249,10 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
   el.classList.remove("error");
   if (!games || !games.length) {
     el.innerHTML = `<p style="color: var(--text-muted)">${emptyMessage}</p>`;
-    if (bucket) _nhlGamesByBucket[bucket] = [];
+    if (bucket) {
+      _nhlGamesByBucket[bucket] = [];
+      setNhlPages(el, bucket, []);
+    }
     return;
   }
 
@@ -381,40 +384,83 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
     </div>`;
   };
 
-  el.innerHTML = `<div class="games-grid">${sorted.map(renderGame).join("")}</div>`;
-  fitGamesGrid(el);
+  const cards = sorted.map(renderGame);
+  if (bucket) setNhlPages(el, bucket, cards);
+  else el.innerHTML = `<div class="games-grid">${cards.join("")}</div>`;
 }
 
-// Fit a view's game cards to the panel so a busy night doesn't give the kiosk
-// a vertical scrollbar: shrink the grid's font-size (card spacing is em-based,
-// so the whole card scales) to the largest size at which nothing overflows.
-// Always two columns wide. Phone layout is a scrolling single column by
-// design, so it's left alone.
+// Busy nights don't fit one screen of full-size cards, so a bucket's games are
+// split into pages of whole rows (always two games wide), each its own rotator
+// view: the first page renders into the bucket's own .view-nhl-<bucket>
+// element, the rest into generated .view-nhl-<bucket>-2, -3, ... siblings.
+// Phone layout is a scrolling single column by design, so it's never paged.
 const PHONE_LAYOUT = window.matchMedia("(max-width: 720px)");
+const _nhlPageCount = { today: 1, yesterday: 1 };
+const _nhlPageCards = { today: [], yesterday: [] };
 
-function fitGamesGrid(view) {
-  const grid = view.querySelector(".games-grid");
-  if (!grid) return;
-  grid.style.fontSize = "";
-  if (PHONE_LAYOUT.matches) return;
+function setNhlPages(el, bucket, cards) {
+  _nhlPageCards[bucket] = cards;
+  el.parentElement.querySelectorAll(`[data-nhl-page-of="${bucket}"]`).forEach(p => p.remove());
+  _nhlPageCount[bucket] = 1;
+  if (!cards.length) return;
 
-  const fits = scale => {
-    grid.style.fontSize = `${scale}em`;
-    return view.scrollHeight <= view.clientHeight &&
-      [...grid.querySelectorAll(".game")].every(n => n.scrollWidth <= n.clientWidth);
-  };
-  if (fits(1)) return;
-  // Binary search for the largest scale that fits.
-  let lo = 0.1, hi = 1;
-  for (let i = 0; i < 10; i++) {
-    const mid = (lo + hi) / 2;
-    if (fits(mid)) lo = mid; else hi = mid;
+  // Render everything into the first page, measure each row (two cards) of
+  // the full grid, then fill pages row by row until the next row wouldn't
+  // fit the view's height.
+  el.innerHTML = `<div class="games-grid">${cards.join("")}</div>`;
+  if (PHONE_LAYOUT.matches || el.scrollHeight <= el.clientHeight) return;
+  const viewTop = el.getBoundingClientRect().top;
+  const rects = [...el.querySelectorAll(".game")].map(c => c.getBoundingClientRect());
+  const pages = [];
+  let pageTop = viewTop;
+  for (let i = 0; i < cards.length; i += 2) {
+    const rowTop = Math.min(...rects.slice(i, i + 2).map(r => r.top));
+    const rowBottom = Math.max(...rects.slice(i, i + 2).map(r => r.bottom));
+    const current = pages[pages.length - 1];
+    if (!current || rowBottom - pageTop > el.clientHeight + 0.5) {
+      pages.push(cards.slice(i, i + 2));
+      pageTop = rowTop - (rects[0].top - viewTop);
+    } else {
+      current.push(...cards.slice(i, i + 2));
+    }
   }
-  fits(lo);
+  el.innerHTML = `<div class="games-grid">${pages[0].join("")}</div>`;
+  let prev = el;
+  pages.slice(1).forEach((page, i) => {
+    const name = `${bucket}-${i + 2}`;
+    const pageEl = document.createElement("div");
+    pageEl.className = `view view-nhl-${name}`;
+    pageEl.dataset.nhlPageOf = bucket;
+    pageEl.innerHTML = `<div class="games-grid">${page.join("")}</div>`;
+    prev.after(pageEl);
+    prev = pageEl;
+    NHL_TITLES[name] = NHL_TITLES[bucket];
+  });
+  _nhlPageCount[bucket] = pages.length;
 }
 
+// Rotator views for the NHL panel, with today/yesterday expanded into their
+// pages. Remembers the base list so a resize can re-page and re-apply it.
+let _nhlBaseViews = ["today"];
+
+function setNhlViews(baseViews) {
+  _nhlBaseViews = baseViews;
+  nhlRotator.setViews(baseViews.flatMap(v => {
+    const n = _nhlPageCount[v] || 1;
+    return [v, ...Array.from({ length: n - 1 }, (_, i) => `${v}-${i + 2}`)];
+  }));
+}
+
+let _nhlResizeTimer = null;
 window.addEventListener("resize", () => {
-  document.querySelectorAll("#nhl .view").forEach(fitGamesGrid);
+  clearTimeout(_nhlResizeTimer);
+  _nhlResizeTimer = setTimeout(() => {
+    for (const bucket of ["today", "yesterday"]) {
+      const el = document.querySelector(`#nhl .view-nhl-${bucket}`);
+      if (el && _nhlPageCards[bucket].length) setNhlPages(el, bucket, _nhlPageCards[bucket]);
+    }
+    if (nhlRotator) setNhlViews(_nhlBaseViews);
+  }, 200);
 });
 
 // ---------- NHL game details modal ----------
@@ -989,7 +1035,7 @@ async function refreshNHL() {
     if (data.openingNight) {
       nhlDeepOffSeason = false;
       renderNHL(data.openingNight.games, "#nhl .view-nhl-today", "No games today.", "today");
-      nhlRotator.setViews(["today"]);
+      setNhlViews(["today"]);
       const t = document.getElementById("nhl-title-text");
       if (t) t.textContent = data.openingNight.isTomorrow ? "Opening Night — Tomorrow 🏒" : "Opening Night 🏒";
       setUpdated("nhl");
@@ -1007,7 +1053,7 @@ async function refreshNHL() {
         ...(countdowns.length ? ["countdown"] : []),
         ...(seasonKnown ? ["season"] : []),
       ];
-      nhlRotator.setViews(deepViews);
+      setNhlViews(deepViews);
       renderNhlWeather();
       renderNhlClock();
       renderNhlCountdown();
@@ -1034,14 +1080,14 @@ async function refreshNHL() {
         offEl.appendChild(p);
       }
       renderNHL(data.offSeason.games, "#nhl .view-nhl-today", "No games today.", "today");
-      nhlRotator.setViews(["today", "offseason"]);
+      setNhlViews(["today", "offseason"]);
       setUpdated("nhl");
       return;
     }
 
     const yesterdayHasGames = Array.isArray(data.yesterday?.games) && data.yesterday.games.length > 0;
     const canRotate = !data.hasLiveToday && yesterdayHasGames;
-    nhlRotator.setViews(canRotate ? ["today", "yesterday"] : ["today"]);
+    setNhlViews(canRotate ? ["today", "yesterday"] : ["today"]);
     setUpdated("nhl");
   } catch (e) {
     showError("nhl", e.message, ".view-nhl-today");
