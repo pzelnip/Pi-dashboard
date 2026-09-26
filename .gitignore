@@ -7,3 +7,4 @@ src/config.local.json
 .mypy_cache/
 .claude/worktrees/
 .vscode/tasks.json
+pi-shots/

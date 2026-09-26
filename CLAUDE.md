@@ -44,6 +44,14 @@ curl -s http://localhost:8080/api/config | jq          # rotation intervals + fe
 curl -s http://localhost:8080/api/version | jq         # git SHA, for kiosk auto-reload
 ```
 
+To see what the Pi actually renders, use `pi-screenshot.sh` (details in
+`docs/pi-screenshots.md`). `./pi-screenshot.sh live` pulls the kiosk's current
+screen over ssh, and `./pi-screenshot.sh mac` renders the local working copy
+at the Pi's resolution. Both write to `pi-shots/latest-<mode>.png`, which you
+can Read to inspect layout. Mac and Pi render fonts and emoji differently, so
+check layout-sensitive changes against a `live` shot rather than trusting the
+Mac rendering.
+
 When making frontend changes, exercise both the rotation timers and the dots/prev-next controls in a real browser; they're the area most likely to regress. Also visually verify the cross-fade transitions on view swap — RSS fades around the `innerHTML` rewrite while weather/NHL stack their views and toggle `.active`, so a mistake in either path won't show up in `curl`.
 
 ## Configuration
