@@ -81,3 +81,7 @@ CLAUDE.md.
 ## Dependencies
 
 None beyond the Python 3 standard library. Tested with Python 3.10+.
+
+The UI font, [Inter](https://rsms.me/inter/) 4.1, is bundled in
+`src/public/fonts/` under the SIL Open Font License (`Inter-OFL.txt`), so the
+dashboard renders the same on a Mac and on the Pi without installing anything.

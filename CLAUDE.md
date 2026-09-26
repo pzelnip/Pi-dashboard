@@ -95,6 +95,8 @@ The weather panel is special: it stacks four views (weather, calendar, clock, co
 
 CSS classes for the dots/nav controls are `.rot-*` (shared by all three panels). Don't reintroduce panel-specific class names — the controls are intentionally shared.
 
+UI text uses the bundled Inter variable font (`src/public/fonts/`, declared via `@font-face` and the `--font-sans` token at the top of `style.css`). Don't add system UI font stacks (`-apple-system`, `system-ui`, …) to new rules: they resolve to San Francisco on the Mac but DejaVu Sans on the Pi, which is wider and changes every text measurement. Anything that measures rendered text (like the NHL card paging, `setNhlPages`) must re-run once the font loads; see `repageNhl`.
+
 All time/date formatting in `app.js` passes an explicit `"en-US"` locale and `hour12: true`. The Pi's system locale renders 24-hour by default, so calling `toLocaleTimeString()` with no args (or with `[]`) produces "20:03" on the deployed device but "8:03 PM" on a Mac dev machine — silent regression. The clock view also builds its date string manually (weekday/month from `toLocaleDateString("en-US", {...})`, day-of-month + ordinal suffix from `getDate()` + helper) for the same reason.
 
 ### HTML (`src/public/index.html`, 70 lines)

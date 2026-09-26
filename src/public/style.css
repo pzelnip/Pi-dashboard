@@ -1,3 +1,17 @@
+/* Bundled UI font, so the Mac and the Pi render identical glyphs and metrics.
+   System font stacks differ per machine (SF on macOS, DejaVu Sans on the Pi),
+   which changes every text measurement. Variable font: covers weights 100-900
+   and switches to Inter Display's optical size for large text on its own.
+   Inter 4.1, SIL Open Font License (fonts/Inter-OFL.txt). */
+@font-face {
+  font-family: "Inter";
+  src: url("fonts/InterVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  /* Kiosk: brief invisible text beats a fallback-font flash and reflow. */
+  font-display: block;
+}
+
 :root {
   /* Surfaces — darker base, progressively lighter layers */
   --bg: #0b0d10;
@@ -24,14 +38,21 @@
   --fs-primary: 1.05em;
   --fs-secondary: 0.9em;
   --fs-meta: 0.72em;
+
+  /* Fonts. Don't add system UI stacks elsewhere; see @font-face above. */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Form controls don't inherit font-family by default, so without this they'd
+   fall back to each machine's system font. */
+button, input, select, textarea { font-family: inherit; }
+
 html, body {
   height: 100%;
   width: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-sans);
   background: var(--bg);
   color: var(--text);
   font-size: 22px;

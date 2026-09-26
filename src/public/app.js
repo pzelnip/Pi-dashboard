@@ -451,17 +451,23 @@ function setNhlViews(baseViews) {
   }));
 }
 
+function repageNhl() {
+  for (const bucket of ["today", "yesterday"]) {
+    const el = document.querySelector(`#nhl .view-nhl-${bucket}`);
+    if (el && _nhlPageCards[bucket].length) setNhlPages(el, bucket, _nhlPageCards[bucket]);
+  }
+  if (nhlRotator) setNhlViews(_nhlBaseViews);
+}
+
 let _nhlResizeTimer = null;
 window.addEventListener("resize", () => {
   clearTimeout(_nhlResizeTimer);
-  _nhlResizeTimer = setTimeout(() => {
-    for (const bucket of ["today", "yesterday"]) {
-      const el = document.querySelector(`#nhl .view-nhl-${bucket}`);
-      if (el && _nhlPageCards[bucket].length) setNhlPages(el, bucket, _nhlPageCards[bucket]);
-    }
-    if (nhlRotator) setNhlViews(_nhlBaseViews);
-  }, 200);
+  _nhlResizeTimer = setTimeout(repageNhl, 200);
 });
+
+// Paging measures rendered card heights, so if the first NHL render beat the
+// bundled Inter font it measured the fallback font. Re-page once Inter lands.
+document.fonts.load('600 1em "Inter"').then(repageNhl, () => {});
 
 // ---------- NHL game details modal ----------
 
