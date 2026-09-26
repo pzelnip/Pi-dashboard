@@ -39,6 +39,12 @@
   --fs-secondary: 0.9em;
   --fs-meta: 0.72em;
 
+  /* 1% of the layout viewport. app.js overrides these when it zooms the page
+     to fit (see applyFitZoom), because real vw/vh ignore that zoom. Use
+     calc(N * var(--vh)) rather than Nvh in desktop rules. */
+  --vw: 1vw;
+  --vh: 1vh;
+
   /* Fonts. Don't add system UI stacks elsewhere; see @font-face above. */
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
@@ -66,8 +72,14 @@ html, body {
   grid-template-rows: 1fr 1fr;
   gap: 18px;
   padding: 18px;
-  height: 100vh;
-  width: 100vw;
+  height: calc(100 * var(--vh));
+  width: calc(100 * var(--vw));
+}
+
+/* The desktop layout fits the window exactly; clip sub-pixel overflow from
+   the fit zoom rather than showing scrollbars. */
+@media (min-width: 721px) {
+  html, body { overflow: hidden; }
 }
 
 /* ---------- Panels ---------- */
@@ -228,7 +240,7 @@ body.has-bg .panel-header h2 { text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55); }
   font-weight: 600;
   /* MUCH bigger — fills nearly the card height. clamp() keeps it sane on
      very small or very large viewports. */
-  font-size: clamp(4rem, 16vh, 11rem);
+  font-size: clamp(4rem, calc(16 * var(--vh)), 11rem);
   line-height: 1;
   letter-spacing: 0.02em;
   color: rgba(255, 255, 255, 0.08);
@@ -1398,7 +1410,7 @@ a.wx-link:focus-visible {
   left: 0;
   right: 0;
   bottom: 0;
-  max-height: 50vh;
+  max-height: calc(50 * var(--vh));
   background: var(--surface-raised);
   border-top-left-radius: 14px;
   border-top-right-radius: 14px;
@@ -1499,7 +1511,7 @@ a.wx-link:focus-visible {
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: 0.78em;
   line-height: 1.4;
-  max-height: 35vh;
+  max-height: calc(35 * var(--vh));
   overflow: auto;
   background: var(--bg);
   color: var(--text-dim);
@@ -1509,7 +1521,7 @@ a.wx-link:focus-visible {
 }
 
 .debug-countdown-list {
-  max-height: 30vh;
+  max-height: calc(30 * var(--vh));
   overflow: auto;
   margin-bottom: 12px;
 }
@@ -1605,8 +1617,8 @@ a.wx-link:focus-visible {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%) scale(0.96);
-  width: min(640px, calc(100vw - 32px));
-  max-height: calc(100vh - 64px);
+  width: min(640px, calc(100 * var(--vw) - 32px));
+  max-height: calc(100 * var(--vh) - 64px);
   background: var(--surface-raised);
   border-radius: 14px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);

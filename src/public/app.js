@@ -5,6 +5,41 @@ const REFRESH_WEATHER_MS = 10 * 60 * 1000;
 
 const _lastUpdated = {};  // { panelName: Date }
 
+// ---------- Scale to fit ----------
+//
+// The layout is designed for the kiosk's 1920x1200 display and sized mostly in
+// px, so a smaller window (e.g. a laptop browser) would cram the same 22px text
+// into smaller panels. Instead, zoom the whole page so any window shows a
+// scaled copy of the kiosk; on the Pi the zoom is exactly 1. The page is laid
+// out at window size / zoom, so it still fills a window of another aspect ratio.
+//
+// Two zoom gotchas: CSS vw/vh still measure the real window, so desktop rules
+// use var(--vw)/var(--vh) (1% of the zoomed layout viewport) instead; and
+// getBoundingClientRect() returns zoomed px while clientHeight/scrollHeight
+// don't, so divide rects by fitZoom before comparing them (see setNhlPages).
+const DESIGN_WIDTH = 1920;
+const DESIGN_HEIGHT = 1200;
+// Phone layout is a scrolling single column by design, so it's never zoomed
+// (or paged, see setNhlPages).
+const PHONE_LAYOUT = window.matchMedia("(max-width: 720px)");
+let fitZoom = 1;
+
+function applyFitZoom() {
+  const root = document.documentElement.style;
+  if (PHONE_LAYOUT.matches) {
+    fitZoom = 1;
+    for (const prop of ["zoom", "--vw", "--vh"]) root.removeProperty(prop);
+    return;
+  }
+  fitZoom = Math.min(innerWidth / DESIGN_WIDTH, innerHeight / DESIGN_HEIGHT);
+  root.zoom = fitZoom;
+  root.setProperty("--vw", `${innerWidth / fitZoom / 100}px`);
+  root.setProperty("--vh", `${innerHeight / fitZoom / 100}px`);
+}
+applyFitZoom();
+// Registered before the NHL resize handler so re-paging sees the new zoom.
+window.addEventListener("resize", applyFitZoom);
+
 function formatAgo(ms) {
   const secs = Math.max(0, Math.floor(ms / 1000));
   if (secs < 5) return "just now";
@@ -394,7 +429,6 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
 // view: the first page renders into the bucket's own .view-nhl-<bucket>
 // element, the rest into generated .view-nhl-<bucket>-2, -3, ... siblings.
 // Phone layout is a scrolling single column by design, so it's never paged.
-const PHONE_LAYOUT = window.matchMedia("(max-width: 720px)");
 const _nhlPageCount = { today: 1, yesterday: 1 };
 const _nhlPageCards = { today: [], yesterday: [] };
 
@@ -409,8 +443,12 @@ function setNhlPages(el, bucket, cards) {
   // fit the view's height.
   el.innerHTML = `<div class="games-grid">${cards.join("")}</div>`;
   if (PHONE_LAYOUT.matches || el.scrollHeight <= el.clientHeight) return;
-  const viewTop = el.getBoundingClientRect().top;
-  const rects = [...el.querySelectorAll(".game")].map(c => c.getBoundingClientRect());
+  // Rects are in zoomed px but clientHeight isn't; convert to layout px.
+  const viewTop = el.getBoundingClientRect().top / fitZoom;
+  const rects = [...el.querySelectorAll(".game")].map(c => {
+    const r = c.getBoundingClientRect();
+    return { top: r.top / fitZoom, bottom: r.bottom / fitZoom };
+  });
   const pages = [];
   let pageTop = viewTop;
   for (let i = 0; i < cards.length; i += 2) {
@@ -1893,7 +1931,7 @@ function renderDebugFields(data) {
     <dt>SHA</dt><dd class="mono"><a href="${escapeHtml(ghCommitUrl)}" target="_blank" rel="noopener">${escapeHtml(data.versionShort)}</a> <a href="${escapeHtml(ghCommitUrl)}" target="_blank" rel="noopener" style="color:var(--text-muted)">(${escapeHtml(data.version)})</a></dd>
     <dt>Latest commit</dt><dd>${commit}</dd>
     <dt>Server uptime</dt><dd><span id="debug-uptime">${uptime}</span></dd>
-    <dt>Viewport</dt><dd>${window.innerWidth}×${window.innerHeight}</dd>
+    <dt>Viewport</dt><dd>${window.innerWidth}×${window.innerHeight} (zoom ${fitZoom.toFixed(3)})</dd>
     <dt>User agent</dt><dd id="debug-ua"></dd>
     <dt>Python</dt><dd><a href="${escapeHtml(pyDocsUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(data.pythonVersion)}</a></dd>
     <dt>Platform</dt><dd>${escapeHtml(data.platform)}</dd>
