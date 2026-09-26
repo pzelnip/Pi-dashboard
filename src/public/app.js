@@ -1701,7 +1701,7 @@ function renderRSS(payload) {
         const itemLink = safeUrl(i.link);
         const itemImage = safeUrl(i.image);
         const tooltip = i.published ? `Published: ${escapeHtml(i.published)}` : "";
-        // Right-hand meta: "X ago" plus a ⚡ "hot" bolt for fresh stories
+        // Meta line under the headline: "X ago" plus a ⚡ "hot" bolt for fresh stories
         // (< 6h). The age tint class on the <li> already conveys freshness in
         // colour; the explicit label + bolt make it read at a glance the way
         // the mockup's timestamps do.
@@ -1719,10 +1719,12 @@ function renderRSS(payload) {
             ${itemImage
               ? `<img class="rss-thumb" src="${escapeHtml(itemImage)}" alt="" loading="lazy" onerror="this.remove()">`
               : ""}
-            <span class="rss-title">
-              <span class="rss-item-source">${itemLogo}<span class="rss-item-feed-name">${escapeHtml(i.feedName || "")}</span> &mdash;</span>${escapeHtml(i.title)}
+            <span class="rss-text">
+              <span class="rss-title">
+                <span class="rss-item-source">${itemLogo}<span class="rss-item-feed-name">${escapeHtml(i.feedName || "")}</span> &mdash;</span>${escapeHtml(i.title)}
+              </span>
+              ${meta}
             </span>
-            ${meta}
           </a>
         </li>
       `;

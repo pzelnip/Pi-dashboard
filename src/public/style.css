@@ -1097,7 +1097,7 @@ a.wx-link:focus-visible {
   flex: 1 1 0;
   min-height: 0;
   position: relative;
-  font-size: 1.75em;
+  font-size: 1.6em;
   border-radius: 10px;
   overflow: hidden;
   background:
@@ -1131,14 +1131,22 @@ a.wx-link:focus-visible {
   flex-shrink: 0;
   background: var(--surface);
 }
-.rss-title {
+/* Headline on one line, with the age meta on its own line beneath it. Each
+   card gets an equal share of the panel (~100px at 1920x1200), which fits one
+   headline line plus the meta line but not a wrapped second headline line. */
+.rss-text {
   flex: 1;
+  min-width: 0; /* let the headline shrink below its content width to ellipsize */
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rss-title {
+  display: block;
+  white-space: nowrap;
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  max-height: 2.9em; /* fallback for non-WebKit: ~2 lines at default line-height */
+  text-overflow: ellipsis;
+  line-height: 1.3;
   font-weight: 600;
 }
 .rss-item-source {
@@ -1165,9 +1173,9 @@ a.wx-link:focus-visible {
   vertical-align: bottom;
 }
 
-/* Right-hand meta: "X ago" + a ⚡ bolt for fresh stories, in the accent hue. */
+/* Meta line under the headline: "X ago" + a ⚡ bolt for fresh stories, in the
+   accent hue. */
 .rss-item-meta {
-  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1177,6 +1185,7 @@ a.wx-link:focus-visible {
   color: var(--rss-accent);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+  line-height: 1.2;
 }
 .rss-bolt {
   font-size: 0.95em;

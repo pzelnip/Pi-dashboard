@@ -258,8 +258,10 @@ Source: `src/parsers/rss.py`, rendering in `src/public/app.js` (`renderRSS`).
 - Top 4 items per feed are shown. Clicking an item opens the article in a
   new tab.
 - **Card layout:** each item is a card with a coloured left accent bar, a
-  thumbnail, source name + logo, headline, and a right-aligned "**X ago**"
-  timestamp. Fresh stories (< 6 h) also get a ⚡ bolt next to the timestamp.
+  thumbnail, source name + logo, and headline on one line, with an
+  "**X ago**" timestamp on a second line beneath it. Headlines too long for
+  the card are truncated with an ellipsis. Fresh stories (< 6 h) also get a ⚡
+  bolt next to the timestamp.
 - **Per-item age tint:** the accent bar, background wash, and timestamp colour
   follow a heat scale keyed to hours since publication (server-computed
   `ageHours`): green (< 6 h), yellow (< 24 h), amber (< 3 days), red (≥ 3
