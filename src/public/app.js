@@ -386,52 +386,31 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
 }
 
 // Fit a view's game cards to the panel so a busy night doesn't give the kiosk
-// a vertical scrollbar. Tries 2-4 columns, and for each the largest font scale
-// at which nothing overflows and no card or team name is clipped; keeps
-// whichever layout fits biggest (fewer columns win ties). If nothing fits, a
-// second pass lets long team names ellipsize. Card spacing is em-based, so
-// scaling the grid's font-size scales the whole card. Phone layout is a
-// scrolling single column by design, so it's left alone.
-const GAMES_MIN_SCALE = 0.5;
-const GAMES_MAX_COLS = 4;
+// a vertical scrollbar: shrink the grid's font-size (card spacing is em-based,
+// so the whole card scales) to the largest size at which nothing overflows.
+// Always two columns wide. Phone layout is a scrolling single column by
+// design, so it's left alone.
 const PHONE_LAYOUT = window.matchMedia("(max-width: 720px)");
 
 function fitGamesGrid(view) {
   const grid = view.querySelector(".games-grid");
   if (!grid) return;
   grid.style.fontSize = "";
-  grid.style.removeProperty("--game-cols");
   if (PHONE_LAYOUT.matches) return;
 
-  const apply = (cols, scale) => {
-    grid.style.setProperty("--game-cols", cols);
+  const fits = scale => {
     grid.style.fontSize = `${scale}em`;
+    return view.scrollHeight <= view.clientHeight &&
+      [...grid.querySelectorAll(".game")].every(n => n.scrollWidth <= n.clientWidth);
   };
-  const clipped = sel => [...grid.querySelectorAll(sel)].some(n => n.scrollWidth > n.clientWidth);
-  const fits = allowTruncatedNames =>
-    view.scrollHeight <= view.clientHeight &&
-    !clipped(allowTruncatedNames ? ".game" : ".game, .team-name");
-
-  const maxCols = Math.min(GAMES_MAX_COLS, Math.max(2, grid.children.length));
-  const search = allowTruncatedNames => {
-    let best = null;
-    for (let cols = 2; cols <= maxCols; cols++) {
-      for (let scale = 1; scale >= GAMES_MIN_SCALE - 1e-9; scale -= 0.05) {
-        apply(cols, scale);
-        if (fits(allowTruncatedNames)) {
-          if (!best || scale > best.scale + 1e-9) best = { cols, scale };
-          break;
-        }
-      }
-      if (best && best.scale >= 1) break;
-    }
-    return best;
-  };
-
-  // Still nothing: smallest 2-column layout, and .panel-body scrolls rather
-  // than shrinking text to illegibility.
-  const best = search(false) || search(true) || { cols: 2, scale: GAMES_MIN_SCALE };
-  apply(best.cols, best.scale);
+  if (fits(1)) return;
+  // Binary search for the largest scale that fits.
+  let lo = 0.1, hi = 1;
+  for (let i = 0; i < 10; i++) {
+    const mid = (lo + hi) / 2;
+    if (fits(mid)) lo = mid; else hi = mid;
+  }
+  fits(lo);
 }
 
 window.addEventListener("resize", () => {
