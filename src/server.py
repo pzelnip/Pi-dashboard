@@ -436,15 +436,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if not feeds:
                 self._send_error_json("no rss feeds configured")
                 return
-            items_per_feed = 4
+            # 4 items per page, and the 4 * N most recent articles across all
+            # N feeds — so there are still N pages, but each can mix feeds.
+            page_size = 4
             try:
                 page = int(query.get("page", ["0"])[0])
             except ValueError:
                 page = 0
             try:
-                all_items = fetch_rss_aggregated(feeds, items_per_feed=items_per_feed)
+                all_items = fetch_rss_aggregated(feeds, items_per_feed=page_size)
                 all_items = mark_stale_feeds(all_items)
-                page_size = items_per_feed
                 total_pages = max(1, -(-len(all_items) // page_size))  # ceil division
                 page = page % total_pages if total_pages else 0
                 page_items = all_items[page * page_size:(page + 1) * page_size]

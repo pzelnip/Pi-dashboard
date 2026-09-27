@@ -241,11 +241,10 @@ entries, managed via the debug panel UI).
 
 Source: `src/parsers/rss.py`, rendering in `src/public/app.js` (`renderRSS`).
 
-- Configured via `rss` in `config.json` — array of `{name, url}`. All entries
-  rotate.
+- Configured via `rss` in `config.json` — array of `{name, url}`. All feeds
+  are merged into one "News" stream.
 - Cadence: `rotation.rssSeconds` (default 30 seconds).
-- Each rotation **fetches** the next feed and updates the panel header
-  (feed name + favicon/logo) and item list.
+- Each rotation **fetches** the next page (4 items) of the merged stream.
 - Cross-fades the panel body and header on swap (~200 ms).
 - Per-feed logo: extracted from `<channel><image><url>` (RSS 2.0),
   `<media:thumbnail>`, or Atom `<logo>` / `<icon>`. Falls back to a built-in
@@ -255,8 +254,16 @@ Source: `src/parsers/rss.py`, rendering in `src/public/app.js` (`renderRSS`).
   description / summary / content field.
 - **Both RSS 2.0 (`<item>`) and Atom (`<entry>`) are supported** via a
   shared item-builder.
-- Top 4 items per feed are shown. Clicking an item opens the article in a
-  new tab.
+- **Selection by recency across feeds:** with N feeds configured, the 4×N
+  most recent articles across *all* feeds are selected, 4 per page (so N
+  pages). A busy feed can take more than 4 slots, and every feed is
+  guaranteed at least its newest article, so a low-frequency feed is never
+  crowded off entirely.
+- **Grouped by feed for display:** the selected articles are grouped by feed.
+  Groups are ordered by each feed's newest selected article, and articles
+  within a group are newest-first. A page can span the end of one group and
+  the start of the next.
+- Clicking an item opens the article in a new tab.
 - **Card layout:** each item is a card with a coloured left accent bar, a
   thumbnail, source name + logo, and headline on one line, with an
   "**X ago**" timestamp on a second line beneath it. Headlines too long for
@@ -274,10 +281,11 @@ Source: `src/parsers/rss.py`, rendering in `src/public/app.js` (`renderRSS`).
     with a subtle "aged" background tint.
   - **≥ 20 days** (`STALE_WARN_DAYS`) — a loud red warning entry ("no new
     stories in N days — feed still active?") takes the place of the feed's
-    oldest story (dropped), so the feed's total item count — and pagination —
+    oldest selected story (dropped), so the total item count — and pagination —
     is unaffected; the remaining (still-shown) items are marked aged.
-  - **≥ 30 days** (`STALE_HIDE_DAYS`) — the feed's items are dropped from the
-    rendered result entirely. The feed is still fetched and parsed every
+  - **≥ 30 days** (`STALE_HIDE_DAYS`) — the feed is excluded before articles
+    are selected, so it gives up its guaranteed slot and the 4×N total is
+    filled from live feeds. The feed is still fetched and parsed every
     request, so a new post immediately un-hides it.
 
   This catches feeds that are *dead but still responsive* — e.g. CBC's legacy

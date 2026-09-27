@@ -169,23 +169,27 @@ def fetch_rss_aggregated(
     items_per_feed: int = 4,
     max_items: int | None = None,
     now: dt.datetime | None = None,
+    hide_days: int | None = None,
 ) -> list[dict]:
-    """Fetch all *feeds*, select items by global recency, grouped by feed.
+    """Fetch all *feeds* and select the *max_items* most recent articles.
 
     Algorithm:
     1. Fetch all available articles from every feed.
-    2. Sort all articles globally by published date (newest first).
-    3. Walk the sorted list, selecting each article only if fewer than
-       *items_per_feed* articles from that feed have already been selected.
-       Stop once *max_items* articles have been selected.
-    4. Group selected articles by feed for presentation: feed groups are
-       ordered by their most recent selected article, articles within each
-       group are sorted newest-first.
+    2. Sort all articles globally by published date (newest first), and drop
+       every article from feeds whose newest article is at least *hide_days*
+       old (defaults to ``STALE_HIDE_DAYS``) — those feeds would be hidden by
+       ``mark_stale_feeds`` anyway, so they give up their slots to live feeds.
+       Feeds with no parseable dates are kept.
+    3. Every remaining feed's newest article is guaranteed a slot, so low-frequency
+       feeds (e.g. a weekly blog) are never crowded off the board, and
+       ``mark_stale_feeds`` always sees each feed's newest article.
+    4. The remaining slots go to the newest of the other articles,
+       regardless of feed — a busy feed can take more than its share.
+    5. Group the selected articles by feed for display: groups are ordered
+       by their newest selected article, and each group is newest-first.
 
-    *max_items* defaults to ``len(feeds) * items_per_feed`` so every configured
-    feed can contribute its full share. A fixed cap below that total lets
-    high-frequency feeds crowd low-frequency ones (e.g. a weekly blog) off the
-    board entirely, since selection is purely by global recency.
+    *max_items* defaults to ``len(feeds) * items_per_feed``. If
+    an explicit *max_items* is below the feed count, the guarantee wins.
 
     Each feed entry is ``{"name": ..., "url": ...}``.
     Returns a flat list of item dicts, each augmented with ``feedName``,
@@ -197,6 +201,8 @@ def fetch_rss_aggregated(
     """
     if max_items is None:
         max_items = len(feeds) * items_per_feed
+    if hide_days is None:
+        hide_days = STALE_HIDE_DAYS
     if now is None:
         now = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
     # 1. Fetch all available articles from every feed.
@@ -227,32 +233,45 @@ def fetch_rss_aggregated(
         key=lambda i: _parse_published_date(i.get("published", "")), reverse=True
     )
 
-    # 3. Walk sorted list, picking at most items_per_feed per feed, max_items total.
-    selected: list[dict] = []
-    feed_counts: dict[str, int] = {}
+    # Each feed's first article in the sorted list is its newest; judge
+    # hidden-tier staleness from it and drop the whole feed if so.
+    hidden_feeds: set[str] = set()
+    seen_feeds: set[str] = set()
     for article in all_articles:
-        feed_name = article["feedName"]
-        if feed_counts.get(feed_name, 0) >= items_per_feed:
+        name = article["feedName"]
+        if name in seen_feeds:
             continue
-        selected.append(article)
-        feed_counts[feed_name] = feed_counts.get(feed_name, 0) + 1
-        if len(selected) >= max_items:
-            break
+        seen_feeds.add(name)
+        d = _parse_published_date(article.get("published", ""))
+        if d != dt.datetime.min and (now - d).days >= hide_days:
+            hidden_feeds.add(name)
+    all_articles = [a for a in all_articles if a["feedName"] not in hidden_feeds]
 
-    # 4. Group by feed for presentation.
+    # 3. Each feed's newest article (its first in the sorted list) is guaranteed.
+    seen_feeds = set()
+    guaranteed: set[int] = set()
+    for idx, article in enumerate(all_articles):
+        if article["feedName"] not in seen_feeds:
+            seen_feeds.add(article["feedName"])
+            guaranteed.add(idx)
+
+    # 4. Fill the remaining slots by global recency, preserving sorted order.
+    budget = max_items - len(guaranteed)
+    selected: list[dict] = []
+    for idx, article in enumerate(all_articles):
+        if idx in guaranteed:
+            selected.append(article)
+        elif budget > 0:
+            selected.append(article)
+            budget -= 1
+
+    # 5. Group by feed for display. dicts keep insertion order, and we walk
+    # the newest-first list, so groups are ordered by their newest article
+    # and each group is newest-first.
     groups: dict[str, list[dict]] = {}
     for article in selected:
-        feed_name = article["feedName"]
-        if feed_name not in groups:
-            groups[feed_name] = []
-        groups[feed_name].append(article)
-
-    # Flatten: feed groups ordered by their most recent article (already in
-    # insertion order since we walked the globally-sorted list).
-    result: list[dict] = []
-    for group in groups.values():
-        result.extend(group)
-    return result
+        groups.setdefault(article["feedName"], []).append(article)
+    return [article for group in groups.values() for article in group]
 
 
 # Some upstreams (e.g. CBC's legacy rss.cbc.ca lineup feeds) keep returning
@@ -273,25 +292,28 @@ def mark_stale_feeds(
 ) -> list[dict]:
     """Flag or hide feeds whose newest article has gone stale, by tier.
 
-    *items* is the flat, feed-grouped list produced by
-    ``fetch_rss_aggregated``. For each feed, staleness is judged by its newest
-    parseable article's age:
+    *items* is the feed-grouped list produced by ``fetch_rss_aggregated``
+    (interleaved input works too). For each feed, staleness
+    is judged by its newest parseable article's age:
 
     - < *aged_days*: untouched.
     - >= *aged_days*: every item from that feed is marked ``{"aged": True}``
       so the frontend can apply a subtle "this might be old" style, without
       hiding anything.
     - >= *warn_days*: a synthetic warning item (``{"stale": True, ...}``) is
-      inserted first in that feed's group, taking the place of that group's
-      oldest story (dropped) so the feed's total item count — and therefore
-      pagination — is unaffected. Remaining items are marked aged.
+      inserted at the position of that feed's first item, taking the place
+      of the feed's oldest selected story (dropped) so the total item count —
+      and therefore pagination — is unaffected. Remaining items are marked
+      aged.
     - >= *hide_days*: the feed's items are dropped from the result entirely.
-      This only affects rendering; ``fetch_rss_aggregated`` still fetches and
+      ``fetch_rss_aggregated`` already excludes these feeds before selection
+      (so their slots are refilled); this tier is a backstop. It only affects
+      rendering; ``fetch_rss_aggregated`` still fetches and
       parses the feed every call, so a new post immediately un-hides it.
 
-    A feed's newest *selected* article is its newest article overall (selection
-    is purely by recency), so operating on the aggregated result is sufficient
-    and keeps this concern out of ``fetch_rss_aggregated``.
+    ``fetch_rss_aggregated`` guarantees every feed's newest article a slot, so
+    operating on the aggregated result is sufficient and keeps this concern
+    out of ``fetch_rss_aggregated``.
 
     A feed with no parseable dates at all is left untouched — we can't tell
     whether it's stale or merely dateless. *now* is injectable for tests and
@@ -309,45 +331,44 @@ def mark_stale_feeds(
         if d != dt.datetime.min and (prev is None or d > prev):
             newest[name] = d
 
-    # Items are contiguous per feed (fetch_rss_aggregated groups them), so
-    # collapsing into runs lets each feed's tier decision see its full item
-    # count — needed to drop one story when a warning is inserted.
-    groups: list[tuple[str, list[dict]]] = []
-    for it in items:
-        name = it["feedName"]
-        if groups and groups[-1][0] == name:
-            groups[-1][1].append(it)
-        else:
-            groups.append((name, [it]))
+    # Find each feed's first and last position up front (without assuming its
+    # items are contiguous): a warning goes at the first, and the last
+    # (oldest) story yields its slot to it.
+    first_idx: dict[str, int] = {}
+    last_idx: dict[str, int] = {}
+    for idx, it in enumerate(items):
+        first_idx.setdefault(it["feedName"], idx)
+        last_idx[it["feedName"]] = idx
 
     result: list[dict] = []
-    for name, group_items in groups:
+    for idx, it in enumerate(items):
+        name = it["feedName"]
         feed_newest = newest[name]
         if feed_newest is None:
-            result.extend(group_items)
+            result.append(it)
             continue
 
         age = (now - feed_newest).days
         if age >= hide_days:
             continue
         if age >= warn_days:
-            result.append(
-                {
-                    "title": f"WARNING: no new stories in {age} days — feed still active?",
-                    "link": "",
-                    "published": "",
-                    "image": "",
-                    "feedName": name,
-                    "feedImage": group_items[0].get("feedImage", ""),
-                    "stale": True,
-                    "staleDays": age,
-                }
-            )
-            # Oldest story (last, since groups sort newest-first) yields its
-            # slot to the warning above.
-            result.extend({**it, "aged": True} for it in group_items[:-1])
+            if idx == first_idx[name]:
+                result.append(
+                    {
+                        "title": f"WARNING: no new stories in {age} days — feed still active?",
+                        "link": "",
+                        "published": "",
+                        "image": "",
+                        "feedName": name,
+                        "feedImage": it.get("feedImage", ""),
+                        "stale": True,
+                        "staleDays": age,
+                    }
+                )
+            if idx != last_idx[name]:
+                result.append({**it, "aged": True})
         elif age >= aged_days:
-            result.extend({**it, "aged": True} for it in group_items)
+            result.append({**it, "aged": True})
         else:
-            result.extend(group_items)
+            result.append(it)
     return result

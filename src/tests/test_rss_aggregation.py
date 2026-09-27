@@ -51,12 +51,17 @@ class ParsePublishedDateTests(unittest.TestCase):
 
 
 class FetchRssAggregatedTests(unittest.TestCase):
+    # Most of these tests use fixed 2020 dates and aren't about staleness, so
+    # they switch off the hidden-feed exclusion (covered by its own tests).
+    def _aggregate(self, feeds, **kwargs):
+        kwargs.setdefault("hide_days", 10**6)
+        return fetch_rss_aggregated(feeds, **kwargs)
+
     @patch("parsers.rss.fetch_rss")
     def test_selects_by_global_sort_grouped_by_feed(self, mock_fetch):
         # Feed1 has articles at Jan and Dec; Feed2 has article at Jun.
-        # Global sort: Dec (Feed1), Jun (Feed2), Jan (Feed1).
-        # All within per-feed cap of 4, so all selected.
-        # Grouped: Feed1 first (newest=Dec), then Feed2.
+        # Recency order is Dec, Jun, Jan; grouped by feed that becomes
+        # Feed1 (Dec, Jan) then Feed2 (Jun).
         mock_fetch.side_effect = [
             ("img1.png", [
                 {"title": "Old", "link": "", "published": "2020-01-01T00:00:00Z", "image": ""},
@@ -68,18 +73,12 @@ class FetchRssAggregatedTests(unittest.TestCase):
         ]
 
         feeds = [{"name": "Feed1", "url": "http://f1"}, {"name": "Feed2", "url": "http://f2"}]
-        result = fetch_rss_aggregated(feeds, items_per_feed=4)
+        result = self._aggregate(feeds, items_per_feed=4)
 
-        self.assertEqual(len(result), 3)
-        # Feed1 group first (its newest selected article is Dec)
-        self.assertEqual(result[0]["title"], "New")
-        self.assertEqual(result[0]["feedName"], "Feed1")
+        self.assertEqual([r["title"] for r in result], ["New", "Old", "Mid"])
+        self.assertEqual([r["feedName"] for r in result], ["Feed1", "Feed1", "Feed2"])
         self.assertEqual(result[0]["feedImage"], "img1.png")
-        self.assertEqual(result[1]["title"], "Old")
-        self.assertEqual(result[1]["feedName"], "Feed1")
-        # Feed2 group second
-        self.assertEqual(result[2]["title"], "Mid")
-        self.assertEqual(result[2]["feedName"], "Feed2")
+        self.assertEqual(result[2]["feedImage"], "img2.png")
 
     @patch("parsers.rss.fetch_rss")
     def test_age_hours_computed_from_published(self, mock_fetch):
@@ -90,7 +89,7 @@ class FetchRssAggregatedTests(unittest.TestCase):
             ]),
         ]
         now = dt.datetime(2020, 12, 1, 12, 0, 0)
-        result = fetch_rss_aggregated(
+        result = self._aggregate(
             [{"name": "Feed1", "url": "http://f1"}], items_per_feed=4, now=now
         )
         by_title = {i["title"]: i for i in result}
@@ -107,7 +106,7 @@ class FetchRssAggregatedTests(unittest.TestCase):
             ]),
         ]
         now = dt.datetime(2020, 12, 1, 12, 0, 0)
-        result = fetch_rss_aggregated(
+        result = self._aggregate(
             [{"name": "Feed1", "url": "http://f1"}], items_per_feed=4, now=now
         )
         by_title = {i["title"]: i for i in result}
@@ -117,35 +116,92 @@ class FetchRssAggregatedTests(unittest.TestCase):
         self.assertEqual(by_title["Future"]["ageHours"], 0.0)
 
     @patch("parsers.rss.fetch_rss")
-    def test_per_feed_cap_applied_via_global_sort(self, mock_fetch):
-        # Feed1 has 6 articles, Feed2 has 2.  With items_per_feed=4,
-        # only 4 from Feed1 should be selected (the 4 newest globally).
+    def test_prolific_feed_can_exceed_per_feed_share(self, mock_fetch):
+        # 2 feeds -> 8 slots. Feed1 posts constantly, Feed2 has one old post.
+        # No per-feed cap: Feed1 takes 7 slots, Feed2 keeps its guaranteed 1.
         mock_fetch.side_effect = [
             ("img1.png", [
-                {"title": "F1-Jan", "link": "", "published": "2020-01-01T00:00:00Z", "image": ""},
-                {"title": "F1-Feb", "link": "", "published": "2020-02-01T00:00:00Z", "image": ""},
-                {"title": "F1-Mar", "link": "", "published": "2020-03-01T00:00:00Z", "image": ""},
-                {"title": "F1-Apr", "link": "", "published": "2020-04-01T00:00:00Z", "image": ""},
-                {"title": "F1-May", "link": "", "published": "2020-05-01T00:00:00Z", "image": ""},
-                {"title": "F1-Jun", "link": "", "published": "2020-06-01T00:00:00Z", "image": ""},
+                {"title": f"F1-{i}", "link": "", "published": f"2020-06-{i+1:02d}T00:00:00Z", "image": ""}
+                for i in range(10)
             ]),
             ("img2.png", [
-                {"title": "F2-Jul", "link": "", "published": "2020-07-01T00:00:00Z", "image": ""},
-                {"title": "F2-Aug", "link": "", "published": "2020-08-01T00:00:00Z", "image": ""},
+                {"title": "F2-old", "link": "", "published": "2020-01-01T00:00:00Z", "image": ""},
             ]),
         ]
 
         feeds = [{"name": "Feed1", "url": "http://f1"}, {"name": "Feed2", "url": "http://f2"}]
-        result = fetch_rss_aggregated(feeds, items_per_feed=4)
+        result = self._aggregate(feeds, items_per_feed=4)
 
-        self.assertEqual(len(result), 6)  # 4 from Feed1 + 2 from Feed2
-        # Feed2 group first (newest=Aug), then Feed1 (newest=Jun)
-        self.assertEqual(result[0]["feedName"], "Feed2")
-        self.assertEqual(result[1]["feedName"], "Feed2")
-        self.assertEqual(result[2]["feedName"], "Feed1")
-        # Feed1 should have Jun, May, Apr, Mar (the 4 newest), not Jan/Feb
+        self.assertEqual(len(result), 8)
         feed1_titles = [r["title"] for r in result if r["feedName"] == "Feed1"]
-        self.assertEqual(feed1_titles, ["F1-Jun", "F1-May", "F1-Apr", "F1-Mar"])
+        # The 7 newest of Feed1's 10 (Jun 10 back to Jun 4).
+        self.assertEqual(feed1_titles, [f"F1-{i}" for i in range(9, 2, -1)])
+        self.assertEqual(result[-1]["title"], "F2-old")
+
+    @patch("parsers.rss.fetch_rss")
+    def test_every_feed_guaranteed_its_newest_article(self, mock_fetch):
+        # 3 feeds -> 12 slots. Two busy feeds have 12 recent posts each, which
+        # would fill every slot on recency alone. The quiet feed still gets
+        # exactly one slot: its newest article, at the end.
+        def busy(prefix, month):
+            return [
+                {"title": f"{prefix}-{i}", "link": "", "published": f"2020-{month:02d}-{i+1:02d}T00:00:00Z", "image": ""}
+                for i in range(12)
+            ]
+        mock_fetch.side_effect = [
+            ("a.png", busy("A", 6)),
+            ("b.png", busy("B", 7)),
+            ("q.png", [
+                {"title": "Q-newer", "link": "", "published": "2020-02-01T00:00:00Z", "image": ""},
+                {"title": "Q-older", "link": "", "published": "2020-01-01T00:00:00Z", "image": ""},
+            ]),
+        ]
+
+        feeds = [
+            {"name": "A", "url": "http://a"},
+            {"name": "B", "url": "http://b"},
+            {"name": "Quiet", "url": "http://q"},
+        ]
+        result = self._aggregate(feeds, items_per_feed=4)
+
+        self.assertEqual(len(result), 12)
+        quiet = [r["title"] for r in result if r["feedName"] == "Quiet"]
+        self.assertEqual(quiet, ["Q-newer"])
+        self.assertEqual(result[-1]["title"], "Q-newer")
+        # 3 guaranteed slots (one per feed) leave 9 to fill. B's July posts all
+        # outrank A's June ones, so B gets its newest + 9 more and A only its
+        # guaranteed newest.
+        self.assertEqual(sum(r["feedName"] == "B" for r in result), 10)
+        self.assertEqual([r["title"] for r in result if r["feedName"] == "A"], ["A-11"])
+
+    @patch("parsers.rss.fetch_rss")
+    def test_groups_ordered_by_newest_article(self, mock_fetch):
+        # Recency order: Chek, TA, CBC, CBC, Chek. Grouped for display, each
+        # feed's articles pull up to its newest: Chek x2, TA, CBC x2.
+        mock_fetch.side_effect = [
+            ("cbc.png", [
+                {"title": "CBC-a", "link": "", "published": "2020-01-03T00:00:00Z", "image": ""},
+                {"title": "CBC-b", "link": "", "published": "2020-01-02T00:00:00Z", "image": ""},
+            ]),
+            ("chek.png", [
+                {"title": "Chek-a", "link": "", "published": "2020-01-05T00:00:00Z", "image": ""},
+                {"title": "Chek-b", "link": "", "published": "2020-01-01T00:00:00Z", "image": ""},
+            ]),
+            ("ta.png", [
+                {"title": "TA-a", "link": "", "published": "2020-01-04T00:00:00Z", "image": ""},
+            ]),
+        ]
+        feeds = [
+            {"name": "CBC", "url": "http://cbc"},
+            {"name": "Chek", "url": "http://chek"},
+            {"name": "TA", "url": "http://ta"},
+        ]
+        result = self._aggregate(feeds, items_per_feed=4)
+
+        self.assertEqual(
+            [r["title"] for r in result],
+            ["Chek-a", "Chek-b", "TA-a", "CBC-a", "CBC-b"],
+        )
 
     @patch("parsers.rss.fetch_rss")
     def test_skips_failed_feeds(self, mock_fetch):
@@ -157,14 +213,14 @@ class FetchRssAggregatedTests(unittest.TestCase):
         ]
 
         feeds = [{"name": "Bad", "url": "http://bad"}, {"name": "Good", "url": "http://good"}]
-        result = fetch_rss_aggregated(feeds, items_per_feed=4)
+        result = self._aggregate(feeds, items_per_feed=4)
 
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["title"], "OK")
 
     @patch("parsers.rss.fetch_rss")
     def test_empty_feeds_returns_empty(self, mock_fetch):
-        result = fetch_rss_aggregated([], items_per_feed=4)
+        result = self._aggregate([], items_per_feed=4)
         self.assertEqual(result, [])
 
     @patch("parsers.rss.fetch_rss")
@@ -178,7 +234,7 @@ class FetchRssAggregatedTests(unittest.TestCase):
         ]
 
         feeds = [{"name": "Feed", "url": "http://f"}]
-        result = fetch_rss_aggregated(feeds, items_per_feed=4)
+        result = self._aggregate(feeds, items_per_feed=4)
 
         self.assertEqual(len(result), 3)
         self.assertEqual(result[0]["title"], "Has date")
@@ -199,7 +255,7 @@ class FetchRssAggregatedTests(unittest.TestCase):
         ]
         feeds = [{"name": f"Feed{i}", "url": f"http://f{i}"} for i in range(10)]
 
-        result = fetch_rss_aggregated(feeds, items_per_feed=4, max_items=32)
+        result = self._aggregate(feeds, items_per_feed=4, max_items=32)
 
         self.assertEqual(len(result), 32)
 
@@ -217,7 +273,7 @@ class FetchRssAggregatedTests(unittest.TestCase):
         ]
         feeds = [{"name": f"Feed{i}", "url": f"http://f{i}"} for i in range(10)]
 
-        result = fetch_rss_aggregated(feeds, items_per_feed=4)
+        result = self._aggregate(feeds, items_per_feed=4)
 
         self.assertEqual(len(result), 40)
         self.assertTrue(all(any(it["feedName"] == f"Feed{i}" for it in result) for i in range(10)))
@@ -236,7 +292,7 @@ class FetchRssAggregatedTests(unittest.TestCase):
             ]),
         ]
         feeds = [{"name": "Feed1", "url": "http://f1"}, {"name": "Feed2", "url": "http://f2"}]
-        result = fetch_rss_aggregated(feeds, items_per_feed=4)
+        result = self._aggregate(feeds, items_per_feed=4)
         self.assertEqual(len(result), 8)
 
     @patch("parsers.rss.fetch_rss")
@@ -247,11 +303,55 @@ class FetchRssAggregatedTests(unittest.TestCase):
         mock_fetch.return_value = ("img.png", original_items)
 
         feeds = [{"name": "Feed", "url": "http://f"}]
-        fetch_rss_aggregated(feeds, items_per_feed=4)
+        self._aggregate(feeds, items_per_feed=4)
 
         # Original items should not have feedName/feedImage added
         self.assertNotIn("feedName", original_items[0])
         self.assertNotIn("feedImage", original_items[0])
+
+    @patch("parsers.rss.fetch_rss")
+    def test_hidden_feed_gives_up_its_slots(self, mock_fetch):
+        # 2 feeds -> 8 slots. Dead's newest post is 30+ days old (hidden tier),
+        # so it's excluded before selection and Live fills all 8 slots.
+        now = dt.datetime(2026, 7, 18, 12, 0, 0)
+        mock_fetch.side_effect = [
+            ("live.png", [
+                {"title": f"L{i}", "link": "", "published": f"2026-07-{i+1:02d}T00:00:00Z", "image": ""}
+                for i in range(10)
+            ]),
+            ("dead.png", [
+                {"title": "D1", "link": "", "published": "2026-06-01T00:00:00Z", "image": ""},
+            ]),
+        ]
+        feeds = [{"name": "Live", "url": "http://l"}, {"name": "Dead", "url": "http://d"}]
+        result = fetch_rss_aggregated(feeds, items_per_feed=4, now=now)
+
+        self.assertEqual(len(result), 8)
+        self.assertTrue(all(r["feedName"] == "Live" for r in result))
+
+    @patch("parsers.rss.fetch_rss")
+    def test_hide_boundary_29_days_kept_30_days_dropped(self, mock_fetch):
+        now = dt.datetime(2026, 7, 18, 12, 0, 0)
+        mock_fetch.side_effect = [
+            ("a.png", [{"title": "29d", "link": "", "published": "2026-06-19T12:00:00Z", "image": ""}]),
+            ("b.png", [{"title": "30d", "link": "", "published": "2026-06-18T12:00:00Z", "image": ""}]),
+        ]
+        feeds = [{"name": "A", "url": "http://a"}, {"name": "B", "url": "http://b"}]
+        result = fetch_rss_aggregated(feeds, items_per_feed=4, now=now)
+
+        self.assertEqual([r["title"] for r in result], ["29d"])
+
+    @patch("parsers.rss.fetch_rss")
+    def test_dateless_feed_not_hidden(self, mock_fetch):
+        # Can't tell if a dateless feed is stale, so it keeps its slot.
+        now = dt.datetime(2026, 7, 18, 12, 0, 0)
+        mock_fetch.side_effect = [
+            ("a.png", [{"title": "NoDate", "link": "", "published": "", "image": ""}]),
+        ]
+        result = fetch_rss_aggregated(
+            [{"name": "A", "url": "http://a"}], items_per_feed=4, now=now
+        )
+        self.assertEqual([r["title"] for r in result], ["NoDate"])
 
 
 class MarkStaleFeedsTests(unittest.TestCase):
@@ -371,6 +471,25 @@ class MarkStaleFeedsTests(unittest.TestCase):
         self.assertTrue(out[1]["stale"])
         self.assertEqual(out[2]["title"], "D1")
         self.assertEqual(out[3]["title"], "F2")
+
+    def test_interleaved_feeds_warning_at_first_position(self):
+        # fetch_rss_aggregated interleaves feeds by recency; the warning must
+        # land at the warned feed's first position and its oldest story drop.
+        items = [
+            self._item("Fresh", "2026-07-18T00:00:00Z", title="F1"),
+            self._item("Warned", "2026-06-27T00:00:00Z", title="W1"),
+            self._item("Fresh", "2026-07-17T00:00:00Z", title="F2"),
+            self._item("Warned", "2026-06-25T00:00:00Z", title="W2"),
+            self._item("Fresh", "2026-07-16T00:00:00Z", title="F3"),
+        ]
+        out = mark_stale_feeds(items, now=self.NOW)
+        self.assertEqual(len(out), 5)
+        self.assertEqual(out[0]["title"], "F1")
+        self.assertTrue(out[1]["stale"])
+        self.assertEqual(out[1]["feedName"], "Warned")
+        self.assertEqual(out[2]["title"], "W1")
+        self.assertTrue(out[2]["aged"])
+        self.assertEqual([o["title"] for o in out[3:]], ["F2", "F3"])
 
     def test_feed_with_no_parseable_dates_left_alone(self):
         # Can't tell if it's stale or merely dateless — don't warn.
