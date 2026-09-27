@@ -212,7 +212,7 @@ body.has-bg .panel-header h2 { text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55); }
   padding: 0.45em 0.65em;
   display: flex;
   flex-direction: column;
-  gap: 0.27em;
+  gap: 0.2em;
   position: relative;
   overflow: hidden;
   isolation: isolate;
@@ -333,6 +333,9 @@ body.has-bg .panel-header h2 { text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55); }
   align-items: center;
   gap: 0.31em;
   font-size: 1.45em;
+  /* Tight line-height + logos only a little taller than the text keep a card
+     short enough for three rows of games per NHL page on the kiosk. */
+  line-height: 1.15;
   position: relative;
   padding-left: 0.31em;
 }
@@ -374,8 +377,8 @@ body.has-bg .panel-header h2 { text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55); }
 .game-team.winner .game-team-glyph { color: #7fd184; }
 
 .team-logo {
-  width: 1.6em;
-  height: 1.6em;
+  width: 1.25em;
+  height: 1.25em;
   object-fit: contain;
   flex-shrink: 0;
 }
