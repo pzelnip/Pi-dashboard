@@ -399,6 +399,18 @@ keyboard shortcut) opens a debug side-sheet showing:
 - Git SHA — short + full, both linking to the matching commit on GitHub.
 - Latest commit — relative time + subject.
 - Server uptime (live-counting, ticks every second).
+- **Host health** — refreshed every 5 s while the field list is open, so a
+  struggling Pi is visible without ssh'ing in to run `top`:
+  - **Load average** — 1 / 5 / 15-minute, with the core count. Amber from
+    1.0 (a whole core busy, e.g. Chromium's compositor pinned), red once
+    it reaches the core count.
+  - **Memory** — available RAM (top's "avail Mem") out of total, plus swap
+    in use. Amber under 20% available, red under 10%.
+  - **CPU temp** — SoC temperature. Amber from 60 °C (the Pi 3B+'s soft
+    throttle), red from 80 °C.
+
+  Memory and temperature come from Linux `/proc` and `/sys` (`src/sysinfo.py`),
+  so a Mac dev machine shows them as "(unavailable)".
 - Viewport dimensions.
 - **User agent** — structured fields from `navigator.userAgentData`
   (brands, platform, mobile/desktop) when available, plus the raw UA

@@ -4,6 +4,7 @@
 This file is the entry point and HTTP routing layer. The real work lives in:
   - cache.py          — in-memory TTL cache with stale-on-failure fallback
   - config.py         — config.json + config.local.json overlay
+  - sysinfo.py        — host load / memory / temperature for /api/debug
   - parsers/nhl.py    — NHL schedule
   - parsers/weather.py — Open-Meteo
   - parsers/rss.py    — RSS 2.0 + Atom
@@ -42,6 +43,7 @@ from parsers.nhl import (
 )
 from parsers.rss import fetch_rss, fetch_rss_aggregated, mark_stale_feeds
 from parsers.weather import fetch_weather
+from sysinfo import system_health
 
 PUBLIC_DIR = os.path.join(HERE, "public")
 PUBLIC_REAL = os.path.realpath(PUBLIC_DIR)
@@ -234,6 +236,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     "backgroundConfigured": (cfg.get("background") or {}).get("image") or "",
                     "backgroundImage": resolve_background_image(cfg) or "",
                     "cache": cache_entries,
+                    "system": system_health(),
                 }
             )
             return

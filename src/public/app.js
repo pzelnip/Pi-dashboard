@@ -1957,9 +1957,50 @@ function shortUrl(url) {
   }
 }
 
+// Host health rows (load / memory / temperature). Each value is null when the
+// server can't read it — memory and temperature are Linux-only, so a Mac dev
+// box shows "(unavailable)" for those. Thresholds colour the value amber/red.
+const UNAVAILABLE = '<span style="color:var(--text-muted)">(unavailable)</span>';
+
+function levelSpan(text, level) {
+  const color = level === "bad" ? "var(--live)" : level === "warn" ? "var(--pregame)" : "";
+  return color ? `<span style="color:${color}">${text}</span>` : text;
+}
+
+// Amber from 1.0: a whole core busy, which an idle kiosk shouldn't be — and
+// Chromium's software compositor pinning one core shows up as ~1.0 on the
+// Pi's four, well under the usual "load > cores" rule. Red once every core
+// is busy.
+function renderLoad(load) {
+  if (!load) return UNAVAILABLE;
+  const fmt = (v) => levelSpan(v.toFixed(2), v >= load.cpus ? "bad" : v >= 1 ? "warn" : "");
+  return `${fmt(load.one)} · ${fmt(load.five)} · ${fmt(load.fifteen)}`
+    + ` <span style="color:var(--text-muted)">(1 / 5 / 15 min, ${load.cpus} cores)</span>`;
+}
+
+// Coloured on available RAM (top's "avail Mem"), not swap: pages parked in
+// swap are normal on a 1 GB Pi; running out of reclaimable memory isn't.
+function renderMemory(mem) {
+  if (!mem) return UNAVAILABLE;
+  const pct = mem.totalMb ? mem.availableMb / mem.totalMb : 1;
+  const avail = levelSpan(`${mem.availableMb} MB available`, pct < 0.1 ? "bad" : pct < 0.2 ? "warn" : "");
+  const swap = mem.swapTotalMb
+    ? `swap ${mem.swapUsedMb} / ${mem.swapTotalMb} MB used`
+    : "no swap";
+  return `${avail} of ${mem.totalMb} MB <span style="color:var(--text-muted)">· ${swap}</span>`;
+}
+
+// The Pi 3B+ drops its clock at 60 °C (soft limit) and throttles hard from
+// 80 °C, so those are the amber/red lines.
+function renderCpuTemp(tempC) {
+  if (tempC == null) return UNAVAILABLE;
+  return levelSpan(`${tempC.toFixed(1)} °C`, tempC >= 80 ? "bad" : tempC >= 60 ? "warn" : "");
+}
+
 function renderDebugFields(data) {
   const now = Date.now();
   const uptime = formatUptime(now - data.serverStartedAt * 1000);
+  const sys = data.system || {};
   const commit = data.latestCommitAt
     ? `${formatAgo(now - data.latestCommitAt * 1000)} — "${escapeHtml(data.latestCommitSubject)}"`
     : "(unavailable)";
@@ -1987,6 +2028,9 @@ function renderDebugFields(data) {
     <dt>SHA</dt><dd class="mono"><a href="${escapeHtml(ghCommitUrl)}" target="_blank" rel="noopener">${escapeHtml(data.versionShort)}</a> <a href="${escapeHtml(ghCommitUrl)}" target="_blank" rel="noopener" style="color:var(--text-muted)">(${escapeHtml(data.version)})</a></dd>
     <dt>Latest commit</dt><dd>${commit}</dd>
     <dt>Server uptime</dt><dd><span id="debug-uptime">${uptime}</span></dd>
+    <dt>Load average</dt><dd id="debug-load">${renderLoad(sys.load)}</dd>
+    <dt>Memory</dt><dd id="debug-memory">${renderMemory(sys.memory)}</dd>
+    <dt>CPU temp</dt><dd id="debug-temp">${renderCpuTemp(sys.cpuTempC)}</dd>
     <dt>Viewport</dt><dd>${window.innerWidth}×${window.innerHeight} (zoom ${fitZoom.toFixed(3)})</dd>
     <dt>User agent</dt><dd id="debug-ua"></dd>
     <dt>Python</dt><dd><a href="${escapeHtml(pyDocsUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(data.pythonVersion)}</a></dd>
@@ -2066,6 +2110,8 @@ function setupDebugOverlay() {
   let open = false;
   let mode = "fields";         // "fields" | "log" — controls Escape behavior
   let tickTimer = null;        // 1Hz interval that updates uptime + page-age
+  let tickCount = 0;           // tickTimer ticks, for the slower system refresh
+  const SYSTEM_REFRESH_TICKS = 5;
   let cancelTimer = null;      // 1Hz interval for the 3s force-update countdown
   let firedTimeout = null;     // 30s fallback after firing — swaps banner if no reload
   let fastPollTimer = null;    // 1Hz post-fire SHA poll — beats watchVersion's 30s cadence
@@ -2083,6 +2129,26 @@ function setupDebugOverlay() {
     if (serverStartedAt == null) return;
     const uptimeEl = document.getElementById("debug-uptime");
     if (uptimeEl) uptimeEl.textContent = formatUptime(Date.now() - serverStartedAt * 1000);
+    if (++tickCount % SYSTEM_REFRESH_TICKS === 0) refreshSystem();
+  }
+
+  // Load/memory/temperature move while the sheet is open (the point is to
+  // watch them), so re-poll /api/debug every few ticks and patch just those
+  // rows. Rides tickTimer, so it stops when the sheet closes or leaves the
+  // field list.
+  async function refreshSystem() {
+    try {
+      const data = await fetchJson("/api/debug");
+      const sys = data.system;
+      if (data.error || !sys || mode !== "fields") return;
+      const set = (id, html) => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = html;
+      };
+      set("debug-load", renderLoad(sys.load));
+      set("debug-memory", renderMemory(sys.memory));
+      set("debug-temp", renderCpuTemp(sys.cpuTempC));
+    } catch (e) { /* keep the last reading on screen */ }
   }
 
   async function showFields() {
