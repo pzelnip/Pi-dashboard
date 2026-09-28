@@ -96,8 +96,9 @@ html, body {
 .panel-wide { grid-column: 1 / -1; }
 
 /* ---------- Background image / frosted panels ----------
- * Opt-in: app.js adds .has-bg (and .has-bg-blur, when blur > 0) to <body>
- * and sets --bg-image/--bg-dim/--bg-blur from /api/config. Without a
+ * Opt-in: app.js adds .has-bg to <body> and sets --bg-image/--bg-dim from
+ * /api/config; when blur > 0 it also adds .has-bg-blur once the frosted copy
+ * (--bg-image-frosted) is ready. Without a
  * configured background none of this applies and the flat dark theme stands.
  *
  * The surface vars are overridden on .panel rather than on :root so the glass
@@ -121,9 +122,15 @@ body.has-bg .panel {
   box-shadow: 0 10px 34px rgba(0, 0, 0, 0.38);
 }
 
+/* Frosting without backdrop-filter: app.js pre-blurs the wallpaper once into
+ * --bg-image-frosted, and each panel paints it viewport-fixed so it lines up
+ * with the photo behind. Layers top-down: the panel tint, the same scrim the
+ * body uses, then the blurred photo. */
 body.has-bg.has-bg-blur .panel {
-  -webkit-backdrop-filter: blur(var(--bg-blur, 18px)) saturate(135%);
-  backdrop-filter: blur(var(--bg-blur, 18px)) saturate(135%);
+  background:
+    linear-gradient(rgba(16, 19, 23, 0.46), rgba(16, 19, 23, 0.46)),
+    linear-gradient(rgba(0, 0, 0, var(--bg-dim, 0.45)), rgba(0, 0, 0, var(--bg-dim, 0.45))),
+    var(--bg-image-frosted) center / cover no-repeat fixed;
 }
 
 /* Panel chrome sits directly on the photo, so lean on the brighter text tier

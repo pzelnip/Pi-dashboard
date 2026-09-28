@@ -1792,15 +1792,54 @@ function applyBackground(bg) {
   const root = document.documentElement;
   // Cache-bust per page load: the file can be swapped out on the Pi without
   // the URL ever changing, and the kiosk reloads on every deploy anyway.
-  root.style.setProperty("--bg-image", `url("/api/background?t=${Date.now()}")`);
+  const imageUrl = `/api/background?t=${Date.now()}`;
+  root.style.setProperty("--bg-image", `url("${imageUrl}")`);
   if (typeof bg.dim === "number") root.style.setProperty("--bg-dim", String(bg.dim));
-  if (typeof bg.blur === "number") root.style.setProperty("--bg-blur", `${bg.blur}px`);
   document.body.classList.add("has-bg");
-  // blur: 0 means "translucent panels, no frosting" — skip backdrop-filter
-  // entirely rather than compositing a no-op blur on the Pi's GPU.
-  if (typeof bg.blur !== "number" || bg.blur > 0) {
-    document.body.classList.add("has-bg-blur");
-  }
+  // blur: 0 means "translucent panels, no frosting" — the panels just show
+  // the photo through their tint.
+  const blur = typeof bg.blur === "number" ? bg.blur : 18;
+  if (blur > 0) frostBackground(imageUrl, blur);
+}
+
+// The Pi composites in software, so a live backdrop-filter re-blurs the whole
+// wallpaper under every panel on each frame that touches it (fades, the 1Hz
+// season countdown) and pins a CPU core. Instead, blur the wallpaper once into
+// a small canvas and hand that to the panels as a fixed, viewport-aligned
+// background (see body.has-bg-blur .panel). Same look, no per-frame blur.
+// Sized for the current window; the kiosk never resizes, so it isn't redone.
+function frostBackground(imageUrl, blurPx) {
+  const img = new Image();
+  img.onload = () => {
+    const iw = img.naturalWidth, ih = img.naturalHeight;
+    if (!iw || !ih) return;
+    // Blurred output doesn't need full resolution; a quarter-size canvas is
+    // cheaper to build and indistinguishable once upscaled.
+    const scale = 0.25;
+    const w = Math.max(1, Math.round(iw * scale));
+    const h = Math.max(1, Math.round(ih * scale));
+    // blurPx is in design px (pre-zoom); the photo is drawn at `cover` scale
+    // in screen px. Convert to canvas px so the result matches what
+    // backdrop-filter drew.
+    const cover = Math.max(innerWidth / iw, innerHeight / ih);
+    const r = (blurPx * fitZoom / cover) * scale;
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    ctx.filter = `blur(${r}px) saturate(135%)`;
+    // Overdraw past the edges so the blur doesn't pull in transparent pixels
+    // and leave a dark fringe; the slight stretch vanishes under the blur.
+    const pad = r * 3;
+    ctx.drawImage(img, -pad, -pad, w + pad * 2, h + pad * 2);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const root = document.documentElement;
+      root.style.setProperty("--bg-image-frosted", `url("${URL.createObjectURL(blob)}")`);
+      document.body.classList.add("has-bg-blur");
+    });
+  };
+  img.src = imageUrl;
 }
 
 async function start() {

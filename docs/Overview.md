@@ -327,11 +327,15 @@ background and solid panels.
   outside `public/`, so it is not a checked-in asset and can be swapped on the
   Pi without touching the repo.
 - `/api/config` reports `background.{enabled, dim, blur}`; `app.js`
-  (`applyBackground`) adds `.has-bg` to `<body>` and sets `--bg-image`,
-  `--bg-dim` and `--bg-blur`.
-- With a background active the panels become translucent
-  (`backdrop-filter: blur() saturate()`), gaining a hairline border and drop
-  shadow, and the image shows through the gutters between them. The glass
+  (`applyBackground`) adds `.has-bg` to `<body>` and sets `--bg-image` and
+  `--bg-dim`.
+- With a background active the panels become frosted glass, gaining a
+  hairline border and drop shadow, and the image shows through the gutters
+  between them. The frosting is not a live `backdrop-filter` (which the Pi
+  composites in software and would pin a CPU core): `frostBackground` blurs
+  the wallpaper once into a small canvas at load, sets `--bg-image-frosted`
+  and `.has-bg-blur`, and each panel paints that copy viewport-fixed so it
+  lines up with the photo behind. The glass
   vars are scoped to `.panel`, so the debug and game sheets stay opaque.
 - `background.dim` (0–0.95, default 0.45) is a black scrim over the photo —
   raise it if a busy image is fighting the text. `background.blur` (0–60 px,
