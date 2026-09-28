@@ -79,6 +79,7 @@ function showError(panel, message, viewSelector) {
   const html = `<p class="panel-error">⚠ ${escapeHtml(message)}</p>`;
   const target = viewSelector ? el.querySelector(viewSelector) : null;
   if (target) {
+    target.classList.remove("nhl-empty");
     target.classList.add("error");
     target.innerHTML = html;
     el.classList.remove("error");
@@ -282,8 +283,22 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
   const el = document.querySelector(containerSelector);
   if (!el) return;
   el.classList.remove("error");
+  el.classList.toggle("nhl-empty", !games || !games.length);
   if (!games || !games.length) {
-    el.innerHTML = `<p style="color: var(--text-muted)">${emptyMessage}</p>`;
+    // Arena hero in the style of the "Puck Drop" season view, so an empty
+    // slate reads from across the room instead of as a tiny muted line.
+    const day = new Date();
+    if (bucket === "yesterday") day.setDate(day.getDate() - 1);
+    const dateText = day.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+    el.innerHTML = `
+      <div class="puck-scene" aria-hidden="true"></div>
+      <div class="puck-countdown">
+        <div class="puck-title">
+          <span class="puck-title-sm">${escapeHtml(dateText)}</span>
+          <span class="puck-title-lg">${escapeHtml(emptyMessage.replace(/\.$/, ""))}</span>
+        </div>
+        <div class="puck-divider" aria-hidden="true"><span></span>🏒<span></span></div>
+      </div>`;
     if (bucket) {
       _nhlGamesByBucket[bucket] = [];
       setNhlPages(el, bucket, []);

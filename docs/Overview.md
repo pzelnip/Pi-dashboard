@@ -33,6 +33,9 @@ Source: `src/parsers/nhl.py`, rendering in `src/public/app.js` (`renderNHL`,
   several screens instead of scrolling or shrinking. On a live night the
   panel still pins to today, but rotates through today's pages. Phone layout
   isn't paged; it scrolls a single column.
+- A day with no games (e.g. an off night in the schedule) shows a large
+  arena-styled "No Games Today" / "No Games Yesterday" card with the date,
+  in the same style as the "Puck Drop" countdown.
 - The server anchors on the Pi's local date and hits
   `/schedule/<YYYY-MM-DD>` upstream rather than `/schedule/now`, which lags
   the calendar rollover.
