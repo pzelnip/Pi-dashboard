@@ -14,7 +14,9 @@ included) live in [`docs/`](.).
 ### Update flow
 
 1. Push to GitHub.
-2. A cron job on the Pi polls `origin/main` every minute.
+2. Trigger the update from the dashboard's "Force update" button (the usual
+   path), or wait for the cron job on the Pi, which polls `origin/main` every
+   30 minutes as a fallback in case the manual update is forgotten.
 3. If the remote is ahead, the Pi pulls and restarts the systemd service.
 
 ---
@@ -97,7 +99,7 @@ fi
 Edit with `crontab -e`:
 
 ```cron
-* * * * * /home/pi/temp/sandbox/Pi-dashboard/update-dashboard.sh >> /home/pi/temp/sandbox/Pi-dashboard/update.log 2>&1
+*/30 * * * * /home/pi/temp/sandbox/Pi-dashboard/update-dashboard.sh >> /home/pi/temp/sandbox/Pi-dashboard/update.log 2>&1
 ```
 
 ---

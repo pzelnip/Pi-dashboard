@@ -111,4 +111,4 @@ Three panels, each with `data-body="<name>"` for `bodyEl()`/`showError()` lookup
 
 ## Deployment
 
-`docs/deployment.md` has the full Pi setup. The TL;DR: a cron job on the Pi runs `update-dashboard.sh` every minute, which fetches `origin/main` and `systemctl restart`s the service if the remote is ahead. The frontend's `/api/version` poll then triggers a browser reload. So pushing to `main` is effectively the deploy.
+`docs/deployment.md` has the full Pi setup. The TL;DR: a cron job on the Pi runs `update-dashboard.sh` every 30 minutes, which fetches `origin/main` and `systemctl restart`s the service if the remote is ahead. The frontend's `/api/version` poll then triggers a browser reload. The cron is only a fallback: after pushing to `main`, the usual path is the dashboard's "Force update" button, which runs the same script immediately.
