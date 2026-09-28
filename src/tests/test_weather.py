@@ -27,7 +27,7 @@ class FetchWeatherTests(unittest.TestCase):
         raw = fixture_bytes("weather.json")
         captured = {}
 
-        def fake_cache(url, ttl_seconds):
+        def fake_cache(url, ttl_seconds, validate=None):
             captured["url"] = url
             captured["ttl"] = ttl_seconds
             return raw

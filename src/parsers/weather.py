@@ -16,11 +16,8 @@ def fetch_weather(lat: float, lon: float) -> dict:
         "timezone": "auto",
     }
     url = "https://api.open-meteo.com/v1/forecast?" + urllib.parse.urlencode(params)
-    raw = fetch_cached(url, ttl_seconds=600)
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        raise ValueError("upstream returned non-JSON response (got HTML?)")
+    raw = fetch_cached(url, ttl_seconds=600, validate=json.loads)
+    data = json.loads(raw)
     return {
         "current": data.get("current", {}),
         "daily": data.get("daily", {}),

@@ -323,11 +323,8 @@ def fetch_nhl(date: str | None, favorites: list[str]) -> list[dict]:
     url = f"https://api-web.nhle.com/v1/schedule/{target_date}"
     # 20s TTL is shorter than the client's 30s poll so live-game state changes
     # (period clock, score) reach the kiosk on every poll without re-fetching.
-    raw = fetch_cached(url, ttl_seconds=20)
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        raise ValueError("upstream returned non-JSON response (got HTML?)")
+    raw = fetch_cached(url, ttl_seconds=20, validate=json.loads)
+    data = json.loads(raw)
     weeks = data.get("gameWeek", [])
 
     fav_set = set(favorites or [])

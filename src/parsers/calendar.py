@@ -149,12 +149,19 @@ def _redact_url(url: str) -> str:
     return f"<sha256:{h}>"
 
 
+def _validate_ics(raw: bytes) -> None:
+    # parse_ics is lenient and would turn an HTML login/error page into zero
+    # events; reject it so the last good calendar keeps being served.
+    if b"BEGIN:VCALENDAR" not in raw[:1024]:
+        raise ValueError("no BEGIN:VCALENDAR")
+
+
 def fetch_calendar(urls: list[str]) -> list[dict]:
     today = dt.date.today()
     all_events: list[dict] = []
     for idx, url in enumerate(urls):
         try:
-            raw = fetch_cached(url, ttl_seconds=300)
+            raw = fetch_cached(url, ttl_seconds=300, validate=_validate_ics)
         except Exception as e:
             sys.stderr.write(f"[calendar] fetch failed for url #{idx} ({_redact_url(url)}): {e}\n")
             continue

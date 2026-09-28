@@ -131,7 +131,7 @@ def parse_rss(xml_bytes: bytes, limit: int = 4) -> tuple[str, list[dict]]:
 
 
 def fetch_rss(url: str, limit: int = 4) -> tuple[str, list[dict]]:
-    raw = fetch_cached(url, ttl_seconds=900)
+    raw = fetch_cached(url, ttl_seconds=900, validate=ET.fromstring)
     return parse_rss(raw, limit=limit)
 
 
