@@ -1,0 +1,12 @@
+[project]
+name = "pi-dashboard"
+version = "0.1.0"
+description = "Zero-dependency Raspberry Pi kiosk dashboard"
+# The deployed interpreter is chosen from this range by `uv run` (see
+# docs/deployment.md). Bump it here to move the Pi to a new Python.
+requires-python = "==3.13.*"
+dependencies = []
+
+[tool.uv]
+# Never fall back to the OS's /usr/bin/python3; always use a uv-managed build.
+python-preference = "only-managed"

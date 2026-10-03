@@ -49,13 +49,17 @@ Wants=network-online.target
 Type=simple
 User=pi
 WorkingDirectory=/home/pi/temp/sandbox/Pi-dashboard
-ExecStart=/usr/bin/python3 /home/pi/temp/sandbox/Pi-dashboard/src/server.py
+ExecStart=/home/pi/.local/bin/uv run src/server.py
 Restart=always
 RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 ```
+
+`uv run` picks the interpreter from `requires-python` in
+[`pyproject.toml`](../pyproject.toml), so the Python version lives in the repo,
+not in this unit file. See [Python version](#python-version) below.
 
 ### Common commands
 
@@ -64,6 +68,35 @@ systemctl status dashboard.service
 sudo systemctl restart dashboard.service
 journalctl -u dashboard.service -f
 ```
+
+---
+
+## Python version
+
+The service runs on a [uv](https://docs.astral.sh/uv/)-managed Python rather
+than the OS's `/usr/bin/python3`, which lags upstream patch releases.
+`pyproject.toml` sets `requires-python` (currently `==3.13.*`) and
+`python-preference = "only-managed"`, so `uv run` never falls back to the
+system Python. On first start uv creates `.venv/` in the repo (gitignored).
+The project has no dependencies; the venv only fixes the interpreter.
+
+uv must be installed for the `pi` user (the service's `User=`) at
+`/home/pi/.local/bin/uv`, version 0.8 or newer.
+
+**Patch upgrades** (e.g. 3.13.15 → 3.13.16) aren't automatic:
+
+```bash
+uv python upgrade 3.13
+sudo systemctl restart dashboard.service
+```
+
+The venv follows uv's minor-version link, so it picks up the new patch without
+being recreated. Managed Pythons are shared with any other uv project of the
+`pi` user, so this upgrades them too.
+
+**Minor upgrades** (e.g. 3.13 → 3.14): change `requires-python` in
+`pyproject.toml`, run `uv lock`, and push. On the next restart `uv run`
+installs the new Python if it's missing and rebuilds `.venv/`.
 
 ---
 

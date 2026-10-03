@@ -8,3 +8,4 @@ src/config.local.json
 .claude/worktrees/
 .vscode/tasks.json
 pi-shots/
+.venv/
