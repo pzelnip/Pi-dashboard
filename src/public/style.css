@@ -1383,6 +1383,22 @@ a.wx-link:focus-visible {
   /* Game-row text was 1.45em / 1.6em logos — fine at 16px root, but trim
    * padding so two-line cards aren't taller than necessary. */
   .game { padding: 8px 12px; }
+
+  /* RSS: the desktop list splits the panel's fixed height between its cards
+   * (height:100% + flex:1 1 0). Here the panel is content-sized, so that
+   * collapses every card to 0px — size the cards to their content instead,
+   * and let headlines wrap rather than ellipsizing at phone width. */
+  .rss-list { height: auto; }
+  .rss-item { flex: none; font-size: 1.1em; }
+  .rss-item a { gap: 12px; padding: 10px 12px 10px 14px; }
+  .rss-thumb { width: 64px; height: 48px; }
+  .rss-title {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
 }
 
 /* ---------- Debug overlay ----------
