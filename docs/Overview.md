@@ -76,7 +76,7 @@ Source: `src/parsers/nhl.py`, rendering in `src/public/app.js` (`renderNHL`,
 For each game the panel shows a card with:
 
 - **Status pill** — colour-coded by state:
-  - `LIVE` / `CRIT`: red pulsing `● LIVE` pill paired with a quieter
+  - `LIVE` / `CRIT`: red `● LIVE` pill (static dot) paired with a quieter
     period chip (`1ST` / `2ND` / `OT` / `SO`).
   - `FUT` / `PRE`: scheduled, shows local start time (en-US, 12-hour).
   - `OFF` / `FINAL`: muted "Final", "Final/OT", or "Final/SO".
