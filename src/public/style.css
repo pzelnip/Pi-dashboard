@@ -1088,7 +1088,7 @@ a.wx-link:focus-visible {
   opacity: 0;
 }
 
-/* rotation.fade: false — instant view swaps (see fadesEnabled in app.js).
+/* ?fade=0 or rotation.fade: false — instant view swaps (see fadesEnabled in app.js).
    RSS also skips the .fading dance in JS; this just drops the transitions. */
 body.no-fade #weather .view,
 body.no-fade #nhl .view,

@@ -1645,9 +1645,12 @@ function onWeatherViewShown(active) {
 let rssPage = 0;
 let rssTotalPages = 1;
 let rssRotationMs = 30 * 1000;
-// rotation.fade: false (set in the Pi's config.local.json) swaps views
-// instantly. The Pi draws every frame of a fade in software, and at ~20 view
-// swaps a minute the fades alone cost about half a CPU core.
+// Instant view swaps instead of cross-fades. The Pi draws every frame of a
+// fade in software, and at ~20 view swaps a minute the fades alone cost about
+// half a CPU core. The kiosk opts out per browser with ?fade=0 in its URL
+// (runKiosk.sh), so other viewers of the same server keep their fades;
+// rotation.fade: false in config turns them off for everyone, and ?fade=1
+// overrides that. See applyFadeSetting().
 let fadesEnabled = true;
 let rssFadeTimer = null;
 let rssRotator = null;
@@ -1851,7 +1854,15 @@ function frostBackground(imageUrl, blurPx) {
   img.src = imageUrl;
 }
 
+// The URL wins over config: ?fade=0 / ?fade=1, else rotation.fade.
+function applyFadeSetting(configFade) {
+  const param = new URLSearchParams(location.search).get("fade");
+  fadesEnabled = param === "0" ? false : param === "1" ? true : configFade;
+  document.body.classList.toggle("no-fade", !fadesEnabled);
+}
+
 async function start() {
+  let configFade = true;
   try {
     const cfg = await fetchJson("/api/config");
     const secs = cfg?.rotation?.rssSeconds;
@@ -1861,14 +1872,12 @@ async function start() {
     // Default nhlPanelSeconds to weatherPanelSeconds if not explicitly set.
     const nhlSecs = cfg?.rotation?.nhlPanelSeconds ?? cfg?.rotation?.weatherPanelSeconds;
     if (typeof nhlSecs === "number" && nhlSecs > 0) nhlRotationMs = nhlSecs * 1000;
-    if (cfg?.rotation?.fade === false) {
-      fadesEnabled = false;
-      document.body.classList.add("no-fade");
-    }
+    configFade = cfg?.rotation?.fade !== false;
     calendarEnabled = !!cfg?.calendar?.enabled;
     countdowns = Array.isArray(cfg?.countdowns) ? cfg.countdowns : [];
     applyBackground(cfg?.background);
   } catch (e) { /* fall back to default */ }
+  applyFadeSetting(configFade);
 
   // Build the weather views list based on what's actually configured.
   const weatherViews = ["weather"];

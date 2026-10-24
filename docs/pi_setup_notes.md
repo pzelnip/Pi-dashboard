@@ -18,8 +18,12 @@ until curl -sf http://localhost:8080/api/version >/dev/null; do
   sleep 1
 done
 
-exec chromium --kiosk --password-store=basic http://localhost:8080
+exec chromium --kiosk --password-store=basic 'http://localhost:8080/?fade=0'
 ```
+
+`?fade=0` turns off the cross-fades between views for the kiosk only: the Pi
+draws them in software, which costs about half a CPU core. Other browsers
+viewing the dashboard keep their fades.
 
 Make sure to chmod it to make it executable.
 
