@@ -47,6 +47,9 @@
 
   /* Fonts. Don't add system UI stacks elsewhere; see @font-face above. */
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  /* Emoji glyphs named outright: Firefox on macOS won't fall back from Inter
+     to Apple Color Emoji for some newer emoji (🌧, 🌦, …) and draws hex boxes. */
+  --font-emoji: "Apple Color Emoji", "Noto Color Emoji", "Segoe UI Emoji", var(--font-sans);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -505,6 +508,7 @@ a.wx-link:focus-visible {
   margin-bottom: 20px;
 }
 .wx-hero-icon {
+  font-family: var(--font-emoji);
   font-size: 4.4em;
   line-height: 1;
 }
@@ -559,7 +563,7 @@ a.wx-link:focus-visible {
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.wx-day-icon { font-size: 2.8em; }
+.wx-day-icon { font-family: var(--font-emoji); font-size: 2.8em; }
 .wx-day-range {
   font-size: 1.7em;
   font-variant-numeric: tabular-nums;
