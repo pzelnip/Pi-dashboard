@@ -31,6 +31,7 @@ included) live in [`docs/`](.).
 | `src/public/`         | Static frontend (HTML/CSS/JS) served by the kiosk        |
 | `src/config.json`     | Dashboard config (rotation, weather, NHL, RSS, calendar) |
 | `update-dashboard.sh` | Poll + pull + restart script (run by cron)               |
+| `restart-kiosk.sh`    | Nightly service + Chromium restart (run by cron)         |
 | `update.log`          | Output of the cron-driven update script                  |
 
 ---
@@ -133,7 +134,32 @@ Edit with `crontab -e`:
 
 ```cron
 */30 * * * * /home/pi/temp/sandbox/Pi-dashboard/update-dashboard.sh >> /home/pi/temp/sandbox/Pi-dashboard/update.log 2>&1
+0 3 * * * /home/pi/temp/sandbox/Pi-dashboard/restart-kiosk.sh >> /home/pi/temp/sandbox/Pi-dashboard/update.log 2>&1
 ```
+
+### Nightly kiosk restart
+
+The second line runs [`restart-kiosk.sh`](../restart-kiosk.sh) at 3 AM: it
+restarts `dashboard.service`, shuts Chromium down cleanly (SIGTERM, so no
+"didn't shut down correctly" bubble), and relaunches it through
+`~/temp/sandbox/runKiosk.sh`, the same launcher the desktop autostart uses.
+Without it Chromium runs for weeks between reboots and its renderer slowly
+accumulates memory and CPU work on the Pi.
+
+cron runs outside the desktop session, so the script finds the kiosk's Wayland
+socket under `/run/user/<uid>` and sets `XDG_SESSION_TYPE=wayland` itself —
+without that the Chromium wrapper falls back to X11 and exits. It reports
+success only once a page renderer is up and still running ten seconds later.
+Its output goes to `update.log`, so it shows in the debug panel's
+"Update log" view. Run it by hand to test (the screen blinks while Chromium
+restarts):
+
+```bash
+/home/pi/temp/sandbox/Pi-dashboard/restart-kiosk.sh
+```
+
+Override the launcher path with `KIOSK_LAUNCHER=/path/to/launcher` if it
+lives elsewhere.
 
 ---
 
