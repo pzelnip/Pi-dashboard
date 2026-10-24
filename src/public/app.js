@@ -1645,6 +1645,10 @@ function onWeatherViewShown(active) {
 let rssPage = 0;
 let rssTotalPages = 1;
 let rssRotationMs = 30 * 1000;
+// rotation.fade: false (set in the Pi's config.local.json) swaps views
+// instantly. The Pi draws every frame of a fade in software, and at ~20 view
+// swaps a minute the fades alone cost about half a CPU core.
+let fadesEnabled = true;
 let rssFadeTimer = null;
 let rssRotator = null;
 
@@ -1746,6 +1750,11 @@ function renderRSS(payload) {
       }).join("")
     }</ul>`;
   };
+
+  if (!fadesEnabled) {
+    writeContent();
+    return;
+  }
 
   // Cross-fade: dim the panel body + header, swap content, fade back in.
   if (rssFadeTimer) clearTimeout(rssFadeTimer);
@@ -1852,6 +1861,10 @@ async function start() {
     // Default nhlPanelSeconds to weatherPanelSeconds if not explicitly set.
     const nhlSecs = cfg?.rotation?.nhlPanelSeconds ?? cfg?.rotation?.weatherPanelSeconds;
     if (typeof nhlSecs === "number" && nhlSecs > 0) nhlRotationMs = nhlSecs * 1000;
+    if (cfg?.rotation?.fade === false) {
+      fadesEnabled = false;
+      document.body.classList.add("no-fade");
+    }
     calendarEnabled = !!cfg?.calendar?.enabled;
     countdowns = Array.isArray(cfg?.countdowns) ? cfg.countdowns : [];
     applyBackground(cfg?.background);

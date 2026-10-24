@@ -1088,6 +1088,17 @@ a.wx-link:focus-visible {
   opacity: 0;
 }
 
+/* rotation.fade: false — instant view swaps (see fadesEnabled in app.js).
+   RSS also skips the .fading dance in JS; this just drops the transitions. */
+body.no-fade #weather .view,
+body.no-fade #nhl .view,
+body.no-fade #rss #rss-title,
+body.no-fade #rss #rss-dots,
+body.no-fade #rss #rss-nav,
+body.no-fade #rss .panel-body {
+  transition: none;
+}
+
 /* Each story is a self-contained card with a coloured left accent bar and a
    faint accent "streak" fading in from the left — a restyle of the older flat
    list into the mockup's card treatment. The accent hue is driven by story

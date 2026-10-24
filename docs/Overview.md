@@ -461,6 +461,7 @@ in) merged with `src/config.local.json` (gitignored personal overrides; see
 | `rotation.rssSeconds` | RSS feed cadence (seconds). |
 | `rotation.weatherPanelSeconds` | Weather panel view cadence (seconds). |
 | `rotation.nhlPanelSeconds` | NHL panel view cadence (seconds). Falls back to `weatherPanelSeconds`. |
+| `rotation.fade` | Cross-fade between views (default `true`). Set `false` for instant swaps; the Pi sets it in `config.local.json` because it draws fades in software, which costs about half a CPU core at the default cadences. |
 | `background.image` | Path to an image file on the dashboard host (absolute, `~`-relative, or relative to `src/`). Blank/missing/unresolvable = flat dark background. |
 | `background.dim` | Darkness of the scrim over the background image, 0–0.95 (default 0.45). |
 | `background.blur` | Frosted-glass blur behind the panels, 0–60 px (default 18). `0` = translucent panels, no blur. |
