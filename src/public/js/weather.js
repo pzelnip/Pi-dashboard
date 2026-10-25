@@ -61,13 +61,19 @@ function renderWeatherView(el, data) {
   el.classList.remove("error");
 
   const cur = data.current || {};
+  const skyClasses = wxSkyClass(cur.weather_code, cur.is_day);
+  // Keep the existing weather-scene layer when the sky hasn't changed: a new
+  // one re-randomizes every raindrop and star, which visibly jumps.
+  const oldFx = el.querySelector(".wx-sky > .wx-fx");
+  const keepFx = oldFx && el.dataset.sky === skyClasses ? oldFx : null;
+  el.dataset.sky = skyClasses;
   // Atmospheric backdrop keyed to the current condition + day/night. Reset the
   // previous sky class first so the panel doesn't accumulate them across refreshes.
   el.classList.remove(
     "wx-sky-clear", "wx-sky-clouds", "wx-sky-fog", "wx-sky-rain",
     "wx-sky-snow", "wx-sky-storm", "wx-night"
   );
-  wxSkyClass(cur.weather_code, cur.is_day).split(" ").forEach(c => el.classList.add(c));
+  skyClasses.split(" ").forEach(c => el.classList.add(c));
   const curUnits = (data.units && data.units.current) || {};
   const [curDesc, curIcon] = wxLabel(cur.weather_code);
   const tempUnit = curUnits.temperature_2m || "°C";
@@ -182,14 +188,30 @@ function renderWeatherView(el, data) {
   sky.className = "wx-sky";
   sky.setAttribute("aria-hidden", "true");
   sky.appendChild(document.createElement("span")); // glow orb
-  if (fxOn.weather) sky.appendChild(buildWeatherFx(wxSkyClass(cur.weather_code, cur.is_day)));
+  if (fxOn.weather) sky.appendChild(keepFx || buildWeatherFx(skyClasses));
 
   el.replaceChildren(sky, wrapper);
 }
 
-// Last /api/weather response as JSON. An unchanged response means nothing to
-// redraw (and redrawing would re-randomize the weather scene). Cleared on
-// error so recovery redraws.
+// What the weather view actually shows. Open-Meteo's current.time moves every
+// 15 minutes and temperatures carry a decimal the screen rounds away, so
+// comparing whole responses would call almost every refresh a change.
+function weatherDisplayKey(data) {
+  const cur = data.current || {};
+  const daily = data.daily || {};
+  const units = (data.units && data.units.current) || {};
+  return JSON.stringify([
+    data.label, cur.weather_code, cur.is_day,
+    fmtNum(cur.temperature_2m), fmtNum(cur.wind_speed_10m), fmtNum(cur.relative_humidity_2m),
+    units.temperature_2m, units.wind_speed_10m,
+    daily.time, daily.weather_code,
+    (daily.temperature_2m_max || []).map(v => fmtNum(v)),
+    (daily.temperature_2m_min || []).map(v => fmtNum(v)),
+  ]);
+}
+
+// weatherDisplayKey of what's on screen; an unchanged key means nothing to
+// redraw. Cleared on error so recovery redraws.
 let _lastWeatherPayload = null;
 
 async function refreshWeather() {
@@ -199,7 +221,7 @@ async function refreshWeather() {
       _lastWeatherPayload = null;
       showError("weather", data.error, ".view-weather");
     } else {
-      const payload = JSON.stringify(data);
+      const payload = weatherDisplayKey(data);
       if (payload === _lastWeatherPayload) {
         setUpdated("weather");
         return;
