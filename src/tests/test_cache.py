@@ -2,6 +2,7 @@
 
 import io
 import json
+import threading
 import time
 import unittest
 import urllib.error
@@ -35,6 +36,7 @@ class FetchCachedTests(unittest.TestCase):
         # Isolate cache state per test.
         with cache._cache_lock:
             cache._cache.clear()
+            cache._failures.clear()
         # Capture the failure log instead of printing it into the test output.
         self.log = patch("sys.stderr", new_callable=io.StringIO).start()
         self.addCleanup(patch.stopall)
@@ -42,6 +44,7 @@ class FetchCachedTests(unittest.TestCase):
     def tearDown(self):
         with cache._cache_lock:
             cache._cache.clear()
+            cache._failures.clear()
 
     def test_first_call_fetches_and_caches(self):
         with patch("urllib.request.urlopen", return_value=_FakeResponse(b"hello")) as mock_open:
@@ -171,6 +174,76 @@ class FetchCachedTests(unittest.TestCase):
         self.assertIn("HTTP 429", str(ctx.exception))
         self.assertIn("Daily API request limit exceeded", str(ctx.exception))
         self.assertIn("HTTP 429", self.log.getvalue())
+
+    def test_failure_backs_off_without_refetching(self):
+        url = "https://example.com/down"
+        with patch("urllib.request.urlopen", side_effect=ConnectionError("boom")) as mock_open:
+            with self.assertRaises(ConnectionError):
+                cache.fetch_cached(url, ttl_seconds=60)
+            # Within the backoff the same error comes straight back.
+            with self.assertRaisesRegex(RuntimeError, "boom"):
+                cache.fetch_cached(url, ttl_seconds=60)
+
+        self.assertEqual(mock_open.call_count, 1)
+
+    def test_backoff_serves_stale_without_refetching(self):
+        url = "https://example.com/a"
+        with cache._cache_lock:
+            cache._cache[url] = (time.time() - 10, b"stale")
+
+        with patch("urllib.request.urlopen", side_effect=ConnectionError("boom")) as mock_open:
+            first = cache.fetch_cached(url, ttl_seconds=60)
+            second = cache.fetch_cached(url, ttl_seconds=60)
+
+        self.assertEqual((first, second), (b"stale", b"stale"))
+        self.assertEqual(mock_open.call_count, 1)
+
+    def test_retries_once_backoff_expires(self):
+        url = "https://example.com/a"
+        with cache._cache_lock:
+            cache._failures[url] = (time.time() - 1, "boom")
+
+        with patch("urllib.request.urlopen", return_value=_FakeResponse(b"back")) as mock_open:
+            result = cache.fetch_cached(url, ttl_seconds=60)
+
+        self.assertEqual(result, b"back")
+        self.assertEqual(mock_open.call_count, 1)
+        self.assertNotIn(url, cache._failures)
+
+    def test_concurrent_misses_share_one_fetch(self):
+        release = threading.Event()
+
+        def slow_open(*args, **kwargs):
+            release.wait(5)
+            return _FakeResponse(b"once")
+
+        with patch("urllib.request.urlopen", side_effect=slow_open) as mock_open:
+            results = []
+            threads = [
+                threading.Thread(target=lambda: results.append(
+                    cache.fetch_cached("https://example.com/a", ttl_seconds=60)))
+                for _ in range(4)
+            ]
+            for t in threads:
+                t.start()
+            time.sleep(0.05)  # let every thread reach the fetch
+            release.set()
+            for t in threads:
+                t.join(5)
+
+        self.assertEqual(results, [b"once"] * 4)
+        self.assertEqual(mock_open.call_count, 1)
+
+
+class FetchManyTests(unittest.TestCase):
+    def test_runs_concurrently_and_keeps_order(self):
+        barrier = threading.Barrier(3, timeout=5)
+
+        def work(n):
+            barrier.wait()  # deadlocks (and times out) unless all three run at once
+            return n * 10
+
+        self.assertEqual(cache.fetch_many(work, [1, 2, 3]), [10, 20, 30])
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ import hashlib
 import sys
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from cache import fetch_cached
+from cache import fetch_cached, fetch_many
 
 
 def _ics_unfold(text: str) -> list[str]:
@@ -158,12 +158,19 @@ def _validate_ics(raw: bytes) -> None:
 
 def fetch_calendar(urls: list[str]) -> list[dict]:
     today = dt.date.today()
-    all_events: list[dict] = []
-    for idx, url in enumerate(urls):
+
+    def fetch_one(indexed):
+        idx, url = indexed
         try:
-            raw = fetch_cached(url, ttl_seconds=300, validate=_validate_ics)
+            return fetch_cached(url, ttl_seconds=300, validate=_validate_ics)
         except Exception as e:
             sys.stderr.write(f"[calendar] fetch failed for url #{idx} ({_redact_url(url)}): {e}\n")
+            return None
+
+    all_events: list[dict] = []
+    # Fetched concurrently so one slow calendar doesn't hold up the others.
+    for idx, raw in enumerate(fetch_many(fetch_one, enumerate(urls))):
+        if raw is None:
             continue
         text = raw.decode("utf-8", errors="replace")
         for ev in parse_ics(text):

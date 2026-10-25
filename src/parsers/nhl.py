@@ -10,6 +10,7 @@ will reintroduce a real bug.
 import datetime as dt
 import json
 import os
+import threading
 from urllib.parse import quote_plus
 
 from cache import fetch_cached
@@ -315,16 +316,70 @@ def _absolute_nhl_url(path: str) -> str:
     return path
 
 
+SCHEDULE_URL = "https://api-web.nhle.com/v1/schedule/{}"
+
+# TTL for a /schedule page by where it sits relative to today. The page holding
+# today is shorter than the client's 30s poll so live-game state changes
+# (period clock, score) reach the kiosk on every poll without re-fetching.
+# Pages of finished games never change; future pages change rarely.
+SCHEDULE_TTL_LIVE = 20
+SCHEDULE_TTL_FUTURE = 60 * 60
+SCHEDULE_TTL_PAST = 6 * 60 * 60
+
+# url -> (raw body, parsed JSON). A poll reads the same page for several days,
+# so each fetched body is parsed once. Bodies are compared by identity:
+# fetch_cached hands back the same bytes object until it refetches.
+_pages: dict[str, tuple[bytes, dict]] = {}
+_pages_lock = threading.Lock()
+
+
+def _schedule_page(anchor: str, ttl: int) -> dict:
+    url = SCHEDULE_URL.format(anchor)
+    raw = fetch_cached(url, ttl_seconds=ttl, validate=json.loads)
+    with _pages_lock:
+        hit = _pages.get(url)
+    if hit and hit[0] is raw:
+        return hit[1]
+    data = json.loads(raw)
+    with _pages_lock:
+        if len(_pages) >= 16:
+            _pages.clear()
+        _pages[url] = (raw, data)
+    return data
+
+
 def fetch_nhl(date: str | None, favorites: list[str]) -> list[dict]:
     # Use the Pi's local date when no explicit date is passed. The NHL API's
     # /schedule/now endpoint lags the calendar rollover, so we anchor on the
     # server clock instead.
     target_date = date or dt.date.today().isoformat()
-    url = f"https://api-web.nhle.com/v1/schedule/{target_date}"
-    # 20s TTL is shorter than the client's 30s poll so live-game state changes
-    # (period clock, score) reach the kiosk on every poll without re-fetching.
-    raw = fetch_cached(url, ttl_seconds=20, validate=json.loads)
-    data = json.loads(raw)
+    return _games_for_day(_schedule_page(target_date, SCHEDULE_TTL_LIVE), target_date, favorites)
+
+
+def games_on(day: dt.date, favorites: list[str], today: dt.date | None = None) -> list[dict]:
+    """Games on *day*, read from a week page anchored on yesterday ± whole weeks.
+
+    Each /schedule/<date> page covers that date and the six after it. Putting
+    every lookup on yesterday's week grid means one page answers yesterday
+    through today+5, the page before it covers the off-season look-back, and
+    the page after finishes the look-ahead: a poll costs one upstream page
+    (three at most in the off-season) rather than one per day.
+    """
+    if today is None:
+        today = dt.date.today()
+    yesterday = today - dt.timedelta(days=1)
+    weeks = (day - yesterday).days // 7
+    anchor = yesterday + dt.timedelta(weeks=weeks)
+    if weeks == 0:
+        ttl = SCHEDULE_TTL_LIVE
+    elif weeks < 0:
+        ttl = SCHEDULE_TTL_PAST
+    else:
+        ttl = SCHEDULE_TTL_FUTURE
+    return _games_for_day(_schedule_page(anchor.isoformat(), ttl), day.isoformat(), favorites)
+
+
+def _games_for_day(data: dict, target_date: str, favorites: list[str]) -> list[dict]:
     weeks = data.get("gameWeek", [])
 
     fav_set = set(favorites or [])
@@ -406,28 +461,6 @@ OFF_SEASON_LOOKBACK_DAYS = int(os.getenv("NHL_OFF_SEASON_LOOKBACK_DAYS", "7"))
 # schedule gap (e.g. All-Star break, a day or two off), not the off-season.
 OFF_SEASON_LOOKAHEAD_DAYS = int(os.getenv("NHL_OFF_SEASON_LOOKAHEAD_DAYS", "7"))
 
-# Small cache to avoid refetching the same days across requests, used by both
-# the off-season look-back and the upcoming-games look-ahead. Keyed by
-# (iso_date, tuple(sorted(favorites))). Only days that *have* games are cached:
-# a date with a scheduled game is stable enough to reuse across requests on the
-# same day, while empty days could still gain a game and fall back to
-# fetch_cached's own TTL.
-_off_season_cache: dict[tuple[str, tuple[str, ...]], list[dict]] = {}
-
-
-def _cached_fetch_nhl(iso: str, favorites: list[str]) -> list[dict]:
-    """fetch_nhl wrapper with a small cross-request cache for game days."""
-    cache_key = (iso, tuple(sorted(favorites)))
-    if cache_key in _off_season_cache:
-        return _off_season_cache[cache_key]
-    games = fetch_nhl(iso, favorites)
-    if games:
-        if len(_off_season_cache) >= 32:
-            _off_season_cache.clear()
-        _off_season_cache[cache_key] = games
-    return games
-
-
 def has_upcoming_games(
     favorites: list[str],
     today: dt.date | None = None,
@@ -442,8 +475,7 @@ def has_upcoming_games(
     if today is None:
         today = dt.date.today()
     for days_ahead in range(1, OFF_SEASON_LOOKAHEAD_DAYS + 1):
-        future_iso = (today + dt.timedelta(days=days_ahead)).isoformat()
-        if _cached_fetch_nhl(future_iso, favorites):
+        if games_on(today + dt.timedelta(days=days_ahead), favorites, today):
             return True
     return False
 
@@ -488,10 +520,10 @@ def find_off_season_games(
         return None
     max_lookback = max(2, OFF_SEASON_LOOKBACK_DAYS)
     for days_back in range(2, max_lookback + 1):
-        past_iso = (today - dt.timedelta(days=days_back)).isoformat()
-        if past_games := _cached_fetch_nhl(past_iso, favorites):
+        past_day = today - dt.timedelta(days=days_back)
+        if past_games := games_on(past_day, favorites, today):
             return {
-                "date": past_iso,
+                "date": past_day.isoformat(),
                 "games": past_games,
                 "cupWinner": extract_cup_winner(past_games),
             }
@@ -521,11 +553,66 @@ def find_opening_night(
     tomorrow_iso = (today + dt.timedelta(days=1)).isoformat()
     if season_start not in (today_iso, tomorrow_iso):
         return None
-    opener_games = fetch_nhl(season_start, favorites)
+    opener_games = games_on(dt.date.fromisoformat(season_start), favorites, today)
     if not opener_games:
         return None
     return {
         "date": season_start,
         "games": opener_games,
         "isTomorrow": season_start == tomorrow_iso,
+    }
+
+
+def nhl_overview(
+    favorites: list[str],
+    season_start: str | None = None,
+    today: dt.date | None = None,
+) -> dict:
+    """The /api/nhl envelope: today's and yesterday's games plus the
+    off-season, deep-off-season and opening-night states.
+
+    *season_start* (``nhl.seasonStart`` in config) is only a fallback for the
+    schedule's own ``regularSeasonStartDate``, which already names the next
+    season's opener during the off-season.
+    """
+    if today is None:
+        today = dt.date.today()
+    yesterday = today - dt.timedelta(days=1)
+    today_games = games_on(today, favorites, today)
+    yesterday_games = games_on(yesterday, favorites, today)
+    has_live = any(g["state"] in ("LIVE", "CRIT") for g in today_games)
+
+    # Off-season detection: if both today and yesterday have no games, look
+    # back up to 7 days for the last game played.
+    off_season = find_off_season_games(today_games, yesterday_games, favorites, today)
+
+    # Deep off-season: no games today/yesterday, no recent games to show, *and*
+    # nothing scheduled in the near future. The frontend repurposes the NHL
+    # panel for weather/clock/countdown cycling. A short mid-season gap with a
+    # game on the horizon is not deep off-season — leave the panel in its
+    # normal "No games today" state instead.
+    deep_off = (
+        not today_games
+        and not yesterday_games
+        and off_season is None
+        and not has_upcoming_games(favorites, today)
+    )
+
+    # Opening-night preview: as the season opener arrives, the panel should
+    # drop the off-season countdown and show the real slate. On opening day
+    # today's games load normally; on the eve `today` is still empty, so
+    # surface tomorrow's opening slate here (the display would otherwise sit
+    # on "No games today").
+    current_page = _schedule_page(yesterday.isoformat(), SCHEDULE_TTL_LIVE)
+    season_start = current_page.get("regularSeasonStartDate") or season_start
+    opening_night = find_opening_night(today_games, favorites, season_start, today)
+
+    return {
+        "today": {"date": today.isoformat(), "games": today_games},
+        "yesterday": {"date": yesterday.isoformat(), "games": yesterday_games},
+        "hasLiveToday": has_live,
+        "offSeason": off_season,
+        "deepOffSeason": deep_off,
+        "seasonStart": season_start,
+        "openingNight": opening_night,
     }

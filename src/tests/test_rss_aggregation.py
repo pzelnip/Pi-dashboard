@@ -51,6 +51,13 @@ class ParsePublishedDateTests(unittest.TestCase):
 
 
 class FetchRssAggregatedTests(unittest.TestCase):
+    def setUp(self):
+        # Feeds are fetched concurrently; run them in order instead, so each
+        # test's side_effect list lines up with its feeds.
+        patcher = patch("parsers.rss.fetch_many", lambda fn, items: [fn(i) for i in items])
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     # Most of these tests use fixed 2020 dates and aren't about staleness, so
     # they switch off the hidden-feed exclusion (covered by its own tests).
     def _aggregate(self, feeds, **kwargs):

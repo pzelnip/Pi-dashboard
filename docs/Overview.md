@@ -59,8 +59,9 @@ Source: `src/parsers/nhl.py`, rendering in `src/public/app.js` (`renderNHL`,
   mid-season gap with a game on the horizon keeps the normal panel rather than
   flipping to weather/clock.
 - During the deep off-season the panel also cycles a "Puck Drop" hero
-  countdown when `nhl.seasonStart` is configured (an ISO date, e.g.
-  `2026-09-29`): an arena-styled view (pure-CSS rink lighting, no image
+  countdown to the next season's opener. The date comes from the NHL
+  schedule's own `regularSeasonStartDate`, with `nhl.seasonStart` (an ISO
+  date, e.g. `2026-09-29`) as a fallback: an arena-styled view (pure-CSS rink lighting, no image
   assets) with a live days/hours/mins/secs counter and a "Until the 2026-27
   NHL Season" caption whose year range is derived from the start date. The
   seconds tick only while the view is on-screen. If the date is unset — or
@@ -354,10 +355,16 @@ background and solid panels.
 ### Stale-data fallback
 
 Every upstream fetch (NHL, weather, RSS, calendar) goes through `fetch_cached`
-in `src/cache.py` with a per-URL TTL (NHL: 20 s, weather: 600 s, RSS: 900 s,
+in `src/cache.py` with a per-URL TTL (NHL: 20 s for the week holding today,
+1 h for later weeks, 6 h for past weeks; weather: 600 s; RSS: 900 s;
 calendar: 300 s). On upstream failure, the cached body is returned even if
 expired — the dashboard keeps showing the last good data instead of an empty
 panel.
+
+A failed URL isn't retried for 60 s: requests in that window get the stale
+body (or the same error) immediately rather than each waiting out the 10 s
+timeout. Concurrent requests for the same URL share one upstream fetch, and
+the RSS feeds and calendars are fetched in parallel.
 
 When even the cache is empty, the API returns
 `{ "error": "<message>" }` with HTTP 200 and the panel renders an inline
@@ -508,7 +515,7 @@ in) merged with `src/config.local.json` (gitignored personal overrides; see
 | `weather.latitude` / `weather.longitude` | Open-Meteo coordinates and Windy.com link target. |
 | `weather.label` | Display string next to the weather panel header. |
 | `nhl.favorites` | Array of team abbreviations; star + sort-to-top. |
-| `nhl.seasonStart` | ISO date of the next season's first game; drives the deep-off-season "days until the NHL season" countdown. Unset/past = view hidden. |
+| `nhl.seasonStart` | Fallback ISO date of the next season's first game, used only when the NHL schedule doesn't supply `regularSeasonStartDate`; drives the deep-off-season "days until the NHL season" countdown. Unset/past = view hidden. |
 | `countdowns` | Array of `{date, title, icon?}` for the countdown view; optional `icon` sets a per-event emoji (defaults to ⏳). Defined in `config.local.json` and managed via the debug panel UI. |
 | `calendar.urls` | Array of public `.ics` URLs (typically only in `config.local.json`). |
 | `rss` | Array of `{name, url}`; all rotate. |

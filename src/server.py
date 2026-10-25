@@ -34,13 +34,7 @@ from config import (
     save_local_config,
 )
 from parsers.calendar import fetch_calendar
-from parsers.nhl import (
-    fetch_nhl,
-    find_off_season_games,
-    find_opening_night,
-    extract_cup_winner,
-    has_upcoming_games,
-)
+from parsers.nhl import fetch_nhl, nhl_overview
 from parsers.rss import fetch_rss, fetch_rss_aggregated, mark_stale_feeds
 from parsers.weather import fetch_weather
 from sysinfo import system_health
@@ -365,56 +359,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                         }
                     )
                 else:
-                    today_iso = dt.date.today().isoformat()
-                    yesterday_iso = (dt.date.today() - dt.timedelta(days=1)).isoformat()
-                    today_games = fetch_nhl(today_iso, favorites)
-                    yesterday_games = fetch_nhl(yesterday_iso, favorites)
-                    has_live = any(g["state"] in ("LIVE", "CRIT") for g in today_games)
-
-                    # Off-season detection: if both today and yesterday have
-                    # no games, look back up to 7 days for the last game played.
-                    off_season = find_off_season_games(
-                        today_games, yesterday_games, favorites
-                    )
-
-                    # Deep off-season: no games today/yesterday, no recent games
-                    # to show, *and* nothing scheduled in the near future. The
-                    # frontend repurposes the NHL panel for weather/clock/
-                    # countdown cycling. A short mid-season gap with a game on
-                    # the horizon is not deep off-season — leave the panel in
-                    # its normal "No games today" state instead.
-                    deep_off = (
-                        not today_games
-                        and not yesterday_games
-                        and off_season is None
-                        and not has_upcoming_games(favorites)
-                    )
-
-                    # Opening-night preview: as the season opener arrives, the
-                    # panel should drop the off-season countdown and show the
-                    # real slate. On opening day today's games load normally; on
-                    # the eve `today` is still empty, so surface tomorrow's
-                    # opening slate here (the display would otherwise sit on
-                    # "No games today").
                     season_start = cfg.get("nhl", {}).get("seasonStart") or None
-                    opening_night = find_opening_night(
-                        today_games, favorites, season_start
-                    )
-
-                    self._send_json(
-                        {
-                            "today": {"date": today_iso, "games": today_games},
-                            "yesterday": {
-                                "date": yesterday_iso,
-                                "games": yesterday_games,
-                            },
-                            "hasLiveToday": has_live,
-                            "offSeason": off_season,
-                            "deepOffSeason": deep_off,
-                            "seasonStart": season_start,
-                            "openingNight": opening_night,
-                        }
-                    )
+                    self._send_json(nhl_overview(favorites, season_start))
             except Exception as e:
                 self._send_error_json(str(e))
             return

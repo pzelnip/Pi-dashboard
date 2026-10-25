@@ -4,8 +4,9 @@ import re
 import xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
 import datetime as dt
+import threading
 
-from cache import fetch_cached
+from cache import fetch_cached, fetch_many
 
 ATOM_NS = "{http://www.w3.org/2005/Atom}"
 MEDIA_NS = "{http://search.yahoo.com/mrss/}"
@@ -130,9 +131,25 @@ def parse_rss(xml_bytes: bytes, limit: int = 4) -> tuple[str, list[dict]]:
     return feed_image, items[:limit] if limit else items
 
 
+# url -> (raw body, parse_rss result). The RSS view polls every rotation, but
+# a feed's body only changes when its cache entry refreshes, so each body is
+# parsed once. Bodies are compared by identity: fetch_cached hands back the
+# same bytes object until it refetches.
+_parsed: dict[str, tuple[bytes, tuple[str, list[dict]]]] = {}
+_parsed_lock = threading.Lock()
+
+
 def fetch_rss(url: str, limit: int = 4) -> tuple[str, list[dict]]:
     raw = fetch_cached(url, ttl_seconds=900, validate=ET.fromstring)
-    return parse_rss(raw, limit=limit)
+    with _parsed_lock:
+        hit = _parsed.get(url)
+    if hit and hit[0] is raw:
+        feed_image, items = hit[1]
+    else:
+        feed_image, items = parse_rss(raw, limit=0)
+        with _parsed_lock:
+            _parsed[url] = (raw, (feed_image, items))
+    return feed_image, items[:limit] if limit else items
 
 
 def _parse_published_date(published: str) -> dt.datetime:
@@ -205,13 +222,19 @@ def fetch_rss_aggregated(
         hide_days = STALE_HIDE_DAYS
     if now is None:
         now = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
-    # 1. Fetch all available articles from every feed.
-    all_articles: list[dict] = []
-    for feed_cfg in feeds:
+    # 1. Fetch all available articles from every feed, concurrently so one
+    # slow upstream doesn't stack its timeout on top of the others'.
+    def fetch_feed(feed_cfg):
         try:
-            feed_image, items = fetch_rss(feed_cfg["url"], limit=0)
+            return fetch_rss(feed_cfg["url"], limit=0)
         except Exception:
+            return None
+
+    all_articles: list[dict] = []
+    for feed_cfg, fetched in zip(feeds, fetch_many(fetch_feed, feeds)):
+        if fetched is None:
             continue
+        feed_image, items = fetched
         name = feed_cfg.get("name", feed_cfg["url"])
         for item in items:
             d = _parse_published_date(item.get("published", ""))

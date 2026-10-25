@@ -1,6 +1,7 @@
 """Tests for RSS 2.0 and Atom parsing."""
 
 import unittest
+from unittest.mock import patch
 
 from tests.helpers import fixture_bytes
 
@@ -81,6 +82,34 @@ class ParseRssTests(unittest.TestCase):
 
         self.assertEqual(items, [])
         self.assertEqual(feed_image, "")
+
+
+
+class FetchRssMemoTests(unittest.TestCase):
+    URL = "https://example.com/feed.xml"
+
+    def setUp(self):
+        rss._parsed.clear()
+        self.addCleanup(rss._parsed.clear)
+
+    def test_same_body_is_parsed_once(self):
+        raw = fixture_bytes("rss20.xml")
+        with patch.object(rss, "fetch_cached", return_value=raw), \
+                patch.object(rss, "parse_rss", wraps=rss.parse_rss) as parse:
+            first = rss.fetch_rss(self.URL, limit=0)
+            second = rss.fetch_rss(self.URL, limit=2)
+
+        self.assertEqual(parse.call_count, 1)
+        self.assertEqual(second[1], first[1][:2])
+
+    def test_new_body_is_reparsed(self):
+        with patch.object(rss, "fetch_cached", side_effect=[
+                fixture_bytes("rss20.xml"), fixture_bytes("atom.xml")]), \
+                patch.object(rss, "parse_rss", wraps=rss.parse_rss) as parse:
+            rss.fetch_rss(self.URL)
+            rss.fetch_rss(self.URL)
+
+        self.assertEqual(parse.call_count, 2)
 
 
 if __name__ == "__main__":

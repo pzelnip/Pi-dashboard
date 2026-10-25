@@ -8,6 +8,10 @@ Callers pass a `validate` callable (e.g. `json.loads`) so a 200 response with
 an unusable body — a CDN error page, a captive portal, an empty body — is
 treated like a failure instead of being cached and served as the fallback.
 Every failure is logged to stderr (journalctl on the Pi) with what came back.
+
+A failed URL isn't retried for `FAILURE_BACKOFF_SECONDS`: callers get the stale
+body (or the same error) straight away instead of each waiting out the timeout
+on an upstream that is down. Concurrent misses on one URL share a single fetch.
 """
 
 import hashlib
@@ -17,12 +21,24 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
+from concurrent.futures import ThreadPoolExecutor
 
 USER_AGENT = "Mozilla/5.0 (compatible; pi-dashboard/1.0)"
 
+FAILURE_BACKOFF_SECONDS = 60
+
 _cache: dict[str, tuple[float, bytes]] = {}
 _cache_lock = threading.Lock()
+# url -> (retry no earlier than, error message of the last failure)
+_failures: dict[str, tuple[float, str]] = {}
+# One lock per URL, held across the upstream fetch, so concurrent misses wait
+# for the first fetch rather than all going upstream.
+_url_locks: dict[str, threading.Lock] = {}
+
+# Shared by callers that fetch several URLs per request (RSS feeds, calendars),
+# so one slow upstream doesn't hold up the rest.
+_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="fetch")
 
 _SNIPPET_CHARS = 120
 
@@ -49,6 +65,11 @@ def _log(msg: str) -> None:
     sys.stderr.write(f"[cache] {msg}\n")
 
 
+def fetch_many(fn: Callable, items: Iterable) -> list:
+    """`[fn(item) for item in items]`, run concurrently. Results keep input order."""
+    return list(_pool.map(fn, items))
+
+
 def fetch_cached(
     url: str, ttl_seconds: int, validate: Callable[[bytes], object] | None = None
 ) -> bytes:
@@ -57,12 +78,28 @@ def fetch_cached(
     `validate` is called with the body and should raise if it is unusable;
     such bodies are never cached.
     """
-    now = time.time()
     with _cache_lock:
         hit = _cache.get(url)
-        if hit and hit[0] > now:
+        if hit and hit[0] > time.time():
             return hit[1]
+        url_lock = _url_locks.setdefault(url, threading.Lock())
 
+    with url_lock:
+        # Another request may have refreshed (or failed) this URL while we waited.
+        now = time.time()
+        with _cache_lock:
+            hit = _cache.get(url)
+            if hit and hit[0] > now:
+                return hit[1]
+            failure = _failures.get(url)
+        if failure and failure[0] > now:
+            if hit:
+                return hit[1]
+            raise RuntimeError(failure[1])
+        return _fetch(url, ttl_seconds, validate, hit, now)
+
+
+def _fetch(url, ttl_seconds, validate, hit, now) -> bytes:
     headers = {"User-Agent": USER_AGENT, "Accept": "*/*"}
     req = urllib.request.Request(url, headers=headers)
     try:
@@ -83,6 +120,8 @@ def fetch_cached(
                     f"upstream returned unusable response ({_describe(status, content_type, body)}): {e}"
                 ) from e
     except Exception as e:
+        with _cache_lock:
+            _failures[url] = (now + FAILURE_BACKOFF_SECONDS, str(e))
         # On failure, return any cached body we still have (even if expired).
         # The frontend stays useful when upstream APIs blip.
         if hit:
@@ -99,5 +138,10 @@ def fetch_cached(
         cutoff = now - 86400
         for u in [u for u, (exp, _) in _cache.items() if exp < cutoff]:
             del _cache[u]
+        for u in [u for u, (retry_at, _) in _failures.items() if retry_at < now]:
+            del _failures[u]
+        for u in [u for u in _url_locks if u not in _cache and u not in _failures and u != url]:
+            del _url_locks[u]
+        _failures.pop(url, None)
         _cache[url] = (now + ttl_seconds, body)
     return body

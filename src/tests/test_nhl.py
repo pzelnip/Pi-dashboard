@@ -810,86 +810,76 @@ class ExtractCupWinnerTests(unittest.TestCase):
         self.assertIsNone(nhl.extract_cup_winner(games))
 
 
+def _schedule(days: dict) -> "callable":
+    """A games_on stand-in serving a fixed {date: games} schedule."""
+    return lambda day, favorites, today=None: days.get(day, [])
+
+
+def _game(state="FINAL", home="EDM"):
+    return {"state": state, "home": {"abbrev": home}}
+
+
 class OffSeasonTests(unittest.TestCase):
     """Tests for find_off_season_games off-season detection."""
 
-    def setUp(self):
-        nhl._off_season_cache.clear()
-
     def test_returns_none_when_today_has_games(self):
-        today_games = [{"state": "FINAL", "home": {"abbrev": "EDM"}}]
-        result = nhl.find_off_season_games(today_games, [], [])
+        result = nhl.find_off_season_games([_game()], [], [])
         self.assertIsNone(result)
 
     def test_returns_none_when_yesterday_has_games(self):
-        yesterday_games = [{"state": "FINAL", "home": {"abbrev": "EDM"}}]
-        result = nhl.find_off_season_games([], yesterday_games, [])
+        result = nhl.find_off_season_games([], [_game()], [])
         self.assertIsNone(result)
 
-    @patch("parsers.nhl.fetch_nhl")
-    def test_returns_none_when_game_scheduled_tomorrow(self, mock_fetch):
-        tomorrow_games = [{"state": "FUT", "home": {"abbrev": "EDM"}}]
-        # First look-ahead day (tomorrow) has a game -> still in-season.
-        mock_fetch.side_effect = [tomorrow_games]
+    def test_returns_none_when_game_scheduled_tomorrow(self):
         today = dt.date(2026, 4, 10)
-
-        result = nhl.find_off_season_games([], [], [], today=today)
+        schedule = {
+            today + dt.timedelta(days=1): [_game("FUT")],
+            today - dt.timedelta(days=3): [_game()],
+        }
+        with patch.object(nhl, "games_on", side_effect=_schedule(schedule)):
+            result = nhl.find_off_season_games([], [], [], today=today)
 
         self.assertIsNone(result)
-        self.assertEqual(mock_fetch.call_count, 1)
 
-    @patch("parsers.nhl.fetch_nhl")
-    def test_returns_none_when_game_scheduled_later_this_week(self, mock_fetch):
-        future_games = [{"state": "FUT", "home": {"abbrev": "VAN"}}]
-        # Days 1-2 ahead empty, day 3 ahead has a game -> still in-season.
-        mock_fetch.side_effect = [[], [], future_games]
+    def test_returns_none_when_game_scheduled_later_this_week(self):
         today = dt.date(2026, 4, 10)
-
-        result = nhl.find_off_season_games([], [], [], today=today)
+        schedule = {today + dt.timedelta(days=7): [_game("FUT", "VAN")]}
+        with patch.object(nhl, "games_on", side_effect=_schedule(schedule)):
+            result = nhl.find_off_season_games([], [], [], today=today)
 
         self.assertIsNone(result)
-        self.assertEqual(mock_fetch.call_count, 3)
 
-    @patch("parsers.nhl.fetch_nhl")
-    def test_finds_games_3_days_back(self, mock_fetch):
-        fake_games = [{"state": "FINAL", "home": {"abbrev": "TOR"}}]
-        # 7 empty look-ahead days, then days_back=2 empty, days_back=3 has games.
-        mock_fetch.side_effect = [[] for _ in range(7)] + [[], fake_games]
+    def test_finds_games_3_days_back(self):
         today = dt.date(2026, 7, 10)
+        fake_games = [_game(home="TOR")]
+        with patch.object(nhl, "games_on", side_effect=_schedule({dt.date(2026, 7, 7): fake_games})):
+            result = nhl.find_off_season_games([], [], [], today=today)
 
-        result = nhl.find_off_season_games([], [], [], today=today)
-
-        self.assertIsNotNone(result)
         self.assertEqual(result["date"], "2026-07-07")
         self.assertEqual(result["games"], fake_games)
         self.assertIn("cupWinner", result)
 
-    @patch("parsers.nhl.fetch_nhl")
-    def test_returns_none_when_no_games_within_7_days(self, mock_fetch):
-        mock_fetch.return_value = []
+    def test_returns_none_when_no_games_within_7_days(self):
         today = dt.date(2026, 7, 10)
-
-        result = nhl.find_off_season_games([], [], [], today=today)
+        # Eight days back is past the look-back window.
+        schedule = {today - dt.timedelta(days=8): [_game()]}
+        with patch.object(nhl, "games_on", side_effect=_schedule(schedule)):
+            result = nhl.find_off_season_games([], [], [], today=today)
 
         self.assertIsNone(result)
-        # 7 look-ahead days (1-7) + 6 look-back days (2-7) = 13 calls.
-        self.assertEqual(mock_fetch.call_count, 13)
 
-    @patch("parsers.nhl.fetch_nhl")
-    def test_stops_at_first_day_with_games(self, mock_fetch):
-        fake_games = [{"state": "FINAL", "home": {"abbrev": "VAN"}}]
-        # 7 empty look-ahead days, then days_back 2, 3 empty, 4 has games.
-        mock_fetch.side_effect = [[] for _ in range(7)] + [[], [], fake_games]
+    def test_returns_most_recent_day_with_games(self):
         today = dt.date(2026, 7, 10)
-
-        result = nhl.find_off_season_games([], [], [], today=today)
+        schedule = {
+            dt.date(2026, 7, 6): [_game(home="VAN")],
+            dt.date(2026, 7, 4): [_game(home="TOR")],
+        }
+        with patch.object(nhl, "games_on", side_effect=_schedule(schedule)):
+            result = nhl.find_off_season_games([], [], [], today=today)
 
         self.assertEqual(result["date"], "2026-07-06")
-        # 7 look-ahead + 3 look-back (days_back 2, 3, 4) = 10 calls.
-        self.assertEqual(mock_fetch.call_count, 10)
 
-    @patch("parsers.nhl.fetch_nhl")
-    def test_includes_cup_winner_from_final_games(self, mock_fetch):
+    def test_includes_cup_winner_from_final_games(self):
         cup_final_games = [{
             "state": "FINAL",
             "home": {"abbrev": "FLA", "fullName": "Florida Panthers"},
@@ -898,15 +888,12 @@ class OffSeasonTests(unittest.TestCase):
                        "topSeedAbbrev": "FLA", "topSeedWins": 4,
                        "bottomSeedAbbrev": "EDM", "bottomSeedWins": 3},
         }]
-        # 7 empty look-ahead days, then the cup final on the first look-back day.
-        mock_fetch.side_effect = [[] for _ in range(7)] + [cup_final_games]
         today = dt.date(2026, 7, 10)
+        schedule = {dt.date(2026, 7, 8): cup_final_games}
+        with patch.object(nhl, "games_on", side_effect=_schedule(schedule)):
+            result = nhl.find_off_season_games([], [], [], today=today)
 
-        result = nhl.find_off_season_games([], [], [], today=today)
-
-        self.assertIsNotNone(result["cupWinner"])
-        self.assertEqual(result["cupWinner"]["abbrev"], "FLA")
-        self.assertEqual(result["cupWinner"]["team"], "Florida Panthers")
+        self.assertEqual(result["cupWinner"], {"team": "Florida Panthers", "abbrev": "FLA"})
 
     def test_day_after_clinch_surfaces_cup_winner_from_yesterday(self):
         cup_final_games = [{
@@ -926,10 +913,9 @@ class OffSeasonTests(unittest.TestCase):
         self.assertEqual(result["cupWinner"], {"team": "Carolina Hurricanes", "abbrev": "CAR"})
 
     def test_day_after_returns_none_when_yesterday_not_cup_final(self):
-        yesterday_games = [{"state": "FINAL", "home": {"abbrev": "EDM"}}]
         today = dt.date(2026, 1, 15)
 
-        result = nhl.find_off_season_games([], yesterday_games, [], today=today)
+        result = nhl.find_off_season_games([], [_game()], [], today=today)
 
         self.assertIsNone(result)
 
@@ -937,65 +923,31 @@ class OffSeasonTests(unittest.TestCase):
 class HasUpcomingGamesTests(unittest.TestCase):
     """Tests for has_upcoming_games look-ahead used to gate off-season modes."""
 
-    def setUp(self):
-        nhl._off_season_cache.clear()
-
-    @patch("parsers.nhl.fetch_nhl")
-    def test_true_when_game_tomorrow(self, mock_fetch):
-        tomorrow_games = [{"state": "FUT", "home": {"abbrev": "EDM"}}]
-        mock_fetch.side_effect = [tomorrow_games]
+    def test_true_when_game_tomorrow(self):
         today = dt.date(2026, 4, 10)
+        schedule = {dt.date(2026, 4, 11): [_game("FUT")]}
+        with patch.object(nhl, "games_on", side_effect=_schedule(schedule)):
+            self.assertTrue(nhl.has_upcoming_games([], today=today))
 
-        result = nhl.has_upcoming_games([], today=today)
-
-        self.assertTrue(result)
-        self.assertEqual(mock_fetch.call_count, 1)
-
-    @patch("parsers.nhl.fetch_nhl")
-    def test_true_when_game_later_this_week(self, mock_fetch):
-        future_games = [{"state": "FUT", "home": {"abbrev": "VAN"}}]
-        mock_fetch.side_effect = [[], [], future_games]
+    def test_true_when_game_at_end_of_window(self):
         today = dt.date(2026, 4, 10)
+        schedule = {dt.date(2026, 4, 17): [_game("FUT")]}
+        with patch.object(nhl, "games_on", side_effect=_schedule(schedule)):
+            self.assertTrue(nhl.has_upcoming_games([], today=today))
 
-        result = nhl.has_upcoming_games([], today=today)
-
-        self.assertTrue(result)
-        self.assertEqual(mock_fetch.call_count, 3)
-
-    @patch("parsers.nhl.fetch_nhl")
-    def test_false_when_nothing_scheduled(self, mock_fetch):
-        mock_fetch.return_value = []
+    def test_false_when_nothing_scheduled_in_window(self):
         today = dt.date(2026, 7, 10)
-
-        result = nhl.has_upcoming_games([], today=today)
-
-        self.assertFalse(result)
-        # Scans all 7 look-ahead days.
-        self.assertEqual(mock_fetch.call_count, 7)
+        schedule = {dt.date(2026, 7, 18): [_game("FUT")]}
+        with patch.object(nhl, "games_on", side_effect=_schedule(schedule)):
+            self.assertFalse(nhl.has_upcoming_games([], today=today))
 
     @patch("parsers.nhl.OFF_SEASON_LOOKAHEAD_DAYS", 0)
-    @patch("parsers.nhl.fetch_nhl")
-    def test_lookahead_disabled_when_set_to_zero(self, mock_fetch):
-        today = dt.date(2026, 7, 10)
-
-        result = nhl.has_upcoming_games([], today=today)
+    def test_lookahead_disabled_when_set_to_zero(self):
+        with patch.object(nhl, "games_on") as mock_games_on:
+            result = nhl.has_upcoming_games([], today=dt.date(2026, 7, 10))
 
         self.assertFalse(result)
-        self.assertEqual(mock_fetch.call_count, 0)
-
-    @patch("parsers.nhl.fetch_nhl")
-    def test_caches_game_day_across_calls(self, mock_fetch):
-        tomorrow_games = [{"state": "FUT", "home": {"abbrev": "EDM"}}]
-        mock_fetch.side_effect = [tomorrow_games]
-        today = dt.date(2026, 4, 10)
-
-        first = nhl.has_upcoming_games([], today=today)
-        second = nhl.has_upcoming_games([], today=today)
-
-        self.assertTrue(first)
-        self.assertTrue(second)
-        # The second call reuses the cached game day instead of refetching.
-        self.assertEqual(mock_fetch.call_count, 1)
+        mock_games_on.assert_not_called()
 
 
 class OpeningNightTests(unittest.TestCase):
@@ -1011,46 +963,155 @@ class OpeningNightTests(unittest.TestCase):
     def test_returns_none_when_today_has_games(self):
         # Opening day itself: today's games load normally, no preview needed.
         today_games = [{"state": "LIVE", "home": {"abbrev": "EDM"}}]
-        with patch("parsers.nhl.fetch_nhl") as mock_fetch:
+        with patch.object(nhl, "games_on") as mock_games_on:
             result = nhl.find_opening_night(
                 today_games, [], "2026-09-29", today=dt.date(2026, 9, 29)
             )
         self.assertIsNone(result)
-        mock_fetch.assert_not_called()
+        mock_games_on.assert_not_called()
 
-    @patch("parsers.nhl.fetch_nhl")
-    def test_previews_opener_on_the_eve(self, mock_fetch):
+    def test_previews_opener_on_the_eve(self):
         opener = self._opener()
-        mock_fetch.return_value = opener
-        result = nhl.find_opening_night([], [], "2026-09-29", today=dt.date(2026, 9, 28))
-        self.assertIsNotNone(result)
+        today = dt.date(2026, 9, 28)
+        with patch.object(nhl, "games_on", return_value=opener) as mock_games_on:
+            result = nhl.find_opening_night([], [], "2026-09-29", today=today)
         self.assertEqual(result["date"], "2026-09-29")
         self.assertEqual(result["games"], opener)
         self.assertTrue(result["isTomorrow"])
-        mock_fetch.assert_called_once_with("2026-09-29", [])
+        mock_games_on.assert_called_once_with(dt.date(2026, 9, 29), [], today)
 
-    @patch("parsers.nhl.fetch_nhl")
-    def test_previews_opener_when_today_is_opening_day_but_empty(self, mock_fetch):
+    def test_previews_opener_when_today_is_opening_day_but_empty(self):
         # Opening day with an empty today slate (e.g. schedule not yet loaded):
         # still surface it, flagged as not-tomorrow.
-        opener = self._opener()
-        mock_fetch.return_value = opener
-        result = nhl.find_opening_night([], [], "2026-09-29", today=dt.date(2026, 9, 29))
+        with patch.object(nhl, "games_on", return_value=self._opener()):
+            result = nhl.find_opening_night([], [], "2026-09-29", today=dt.date(2026, 9, 29))
         self.assertIsNotNone(result)
         self.assertFalse(result["isTomorrow"])
 
-    @patch("parsers.nhl.fetch_nhl")
-    def test_returns_none_when_opener_more_than_a_day_out(self, mock_fetch):
-        result = nhl.find_opening_night([], [], "2026-09-29", today=dt.date(2026, 9, 27))
+    def test_returns_none_when_opener_more_than_a_day_out(self):
+        with patch.object(nhl, "games_on") as mock_games_on:
+            result = nhl.find_opening_night([], [], "2026-09-29", today=dt.date(2026, 9, 27))
         self.assertIsNone(result)
-        mock_fetch.assert_not_called()
+        mock_games_on.assert_not_called()
 
-    @patch("parsers.nhl.fetch_nhl")
-    def test_returns_none_when_opener_slate_is_empty(self, mock_fetch):
+    def test_returns_none_when_opener_slate_is_empty(self):
         # Date matches but the upstream slate has no games yet — no preview.
-        mock_fetch.return_value = []
-        result = nhl.find_opening_night([], [], "2026-09-29", today=dt.date(2026, 9, 28))
+        with patch.object(nhl, "games_on", return_value=[]):
+            result = nhl.find_opening_night([], [], "2026-09-29", today=dt.date(2026, 9, 28))
         self.assertIsNone(result)
+
+
+def _week_page(anchor: dt.date, games_by_day: dict, **meta) -> bytes:
+    """A /schedule/<anchor> body: seven gameWeek days starting at *anchor*."""
+    days = [anchor + dt.timedelta(days=i) for i in range(7)]
+    return json.dumps({
+        **meta,
+        "gameWeek": [
+            {"date": d.isoformat(), "games": [
+                {"id": n, "gameState": state,
+                 "homeTeam": {"abbrev": "EDM"}, "awayTeam": {"abbrev": "VAN"}}
+                for n, state in enumerate(games_by_day.get(d, []))
+            ]}
+            for d in days
+        ],
+    }).encode()
+
+
+class SchedulePagesTests(unittest.TestCase):
+    """games_on / nhl_overview: which upstream week pages a poll reads."""
+
+    TODAY = dt.date(2026, 7, 10)
+
+    def setUp(self):
+        nhl._pages.clear()
+        self.addCleanup(nhl._pages.clear)
+        self.games_by_day = {}
+        self.meta = {}
+        self.fetched = []  # (anchor, ttl) per upstream fetch
+
+    def _fetch(self, url, ttl_seconds, validate=None):
+        anchor = dt.date.fromisoformat(url.rsplit("/", 1)[1])
+        self.fetched.append((anchor, ttl_seconds))
+        return _week_page(anchor, self.games_by_day, **self.meta)
+
+    def _overview(self, **kwargs):
+        with patch.object(nhl, "fetch_cached", side_effect=self._fetch):
+            return nhl.nhl_overview([], today=self.TODAY, **kwargs)
+
+    def test_in_season_poll_reads_one_page(self):
+        self.games_by_day = {self.TODAY: ["LIVE"], self.TODAY - dt.timedelta(days=1): ["OFF"]}
+
+        result = self._overview()
+
+        self.assertEqual(len(result["today"]["games"]), 1)
+        self.assertEqual(len(result["yesterday"]["games"]), 1)
+        self.assertTrue(result["hasLiveToday"])
+        self.assertFalse(result["deepOffSeason"])
+        yesterday = self.TODAY - dt.timedelta(days=1)
+        self.assertEqual({a for a, _ in self.fetched}, {yesterday})
+
+    def test_deep_off_season_reads_three_pages_with_ttls_by_age(self):
+        result = self._overview()
+
+        self.assertTrue(result["deepOffSeason"])
+        self.assertIsNone(result["offSeason"])
+        yesterday = self.TODAY - dt.timedelta(days=1)
+        self.assertEqual(
+            {(a, ttl) for a, ttl in self.fetched},
+            {
+                (yesterday - dt.timedelta(days=7), nhl.SCHEDULE_TTL_PAST),
+                (yesterday, nhl.SCHEDULE_TTL_LIVE),
+                (yesterday + dt.timedelta(days=7), nhl.SCHEDULE_TTL_FUTURE),
+            },
+        )
+
+    def test_look_back_finds_last_game_on_previous_page(self):
+        self.games_by_day = {self.TODAY - dt.timedelta(days=6): ["OFF"]}
+
+        result = self._overview()
+
+        self.assertEqual(result["offSeason"]["date"], "2026-07-04")
+        self.assertFalse(result["deepOffSeason"])
+
+    def test_game_beyond_current_page_counts_as_upcoming(self):
+        # today+7 is on the page after the current one.
+        self.games_by_day = {self.TODAY + dt.timedelta(days=7): ["FUT"]}
+
+        result = self._overview()
+
+        self.assertFalse(result["deepOffSeason"])
+        self.assertIsNone(result["offSeason"])
+
+    def test_season_start_comes_from_schedule(self):
+        self.meta = {"regularSeasonStartDate": "2026-10-07"}
+
+        result = self._overview(season_start="2026-09-29")
+
+        self.assertEqual(result["seasonStart"], "2026-10-07")
+
+    def test_season_start_falls_back_to_config(self):
+        result = self._overview(season_start="2026-09-29")
+
+        self.assertEqual(result["seasonStart"], "2026-09-29")
+
+    def test_opening_night_eve_previews_tomorrow_from_current_page(self):
+        tomorrow = self.TODAY + dt.timedelta(days=1)
+        self.games_by_day = {tomorrow: ["FUT", "FUT"]}
+        self.meta = {"regularSeasonStartDate": tomorrow.isoformat()}
+
+        result = self._overview()
+
+        self.assertEqual(len(result["openingNight"]["games"]), 2)
+        self.assertTrue(result["openingNight"]["isTomorrow"])
+
+    def test_page_is_parsed_once_per_body(self):
+        raw = _week_page(self.TODAY, {})
+        with patch.object(nhl, "fetch_cached", return_value=raw), \
+                patch.object(nhl.json, "loads", wraps=json.loads) as loads:
+            nhl.fetch_nhl(self.TODAY.isoformat(), [])
+            nhl.fetch_nhl(self.TODAY.isoformat(), [])
+
+        self.assertEqual(loads.call_count, 1)
 
 
 if __name__ == "__main__":
