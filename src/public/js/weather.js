@@ -314,12 +314,12 @@ async function refreshCalendar() {
 
 // ---------- Clock ----------
 
-// Fill one clock span with text, rolling the changed digits when that effect
-// is on (the previous text is carried over from the span being replaced).
-function clockSpan(timeEl, cls, text) {
+// Fill one clock span with text, rolling the changed digits when `roll` is set
+// (the previous text is carried over from the span being replaced).
+function clockSpan(timeEl, cls, text, roll) {
   const span = document.createElement("span");
   span.className = cls;
-  if (fxOn.clockRoll) {
+  if (roll) {
     span.dataset.prev = timeEl.querySelector("." + cls)?.dataset.prev || "";
     renderRollingDigits(span, text);
   } else {
@@ -328,22 +328,26 @@ function clockSpan(timeEl, cls, text) {
   return span;
 }
 
-// Render the time into a clock-time element as three spans — the h:mm digits,
-// smaller :ss seconds, and a smaller accent meridiem (AM/PM) — so CSS can style
-// them independently. The en-US 12-hour format ("8:03 PM") always splits
+// Render the time into a clock-time element: the h:mm digits, then a column
+// holding a smaller accent meridiem (AM/PM) over the seconds (when the
+// clockSeconds effect isn't off), so CSS can style them independently. The en-US 12-hour format ("8:03 PM") always splits
 // cleanly on the space; if a locale ever omits the meridiem the whole string
 // falls into the digits span.
 function renderClockTime(timeEl, now) {
   const [digits, meridiem] = formatTime(now).split(" ");
-  const seconds = ":" + String(now.getSeconds()).padStart(2, "0");
-  const parts = [clockSpan(timeEl, "clk-hm", digits), clockSpan(timeEl, "clk-sec", seconds)];
+  const side = document.createElement("span");
+  side.className = "clk-side";
   if (meridiem) {
     const mer = document.createElement("span");
     mer.className = "clk-mer";
     mer.textContent = meridiem;
-    parts.push(mer);
+    side.append(mer);
   }
-  timeEl.replaceChildren(...parts);
+  if (fxOn.clockSeconds !== "off") {
+    const seconds = String(now.getSeconds()).padStart(2, "0");
+    side.append(clockSpan(timeEl, "clk-sec", seconds, fxOn.clockSeconds === "full"));
+  }
+  timeEl.replaceChildren(clockSpan(timeEl, "clk-hm", digits, fxOn.clockRoll), side);
 }
 
 function ordinalSuffix(n) {
@@ -377,10 +381,15 @@ function renderClock() {
   if (nhlDeepOffSeason) renderNhlClock();
 }
 
-// Re-armed every tick (rather than setInterval) so it stays on the second
-// boundary instead of whatever millisecond the page loaded, and recovers after sleep.
+// Re-armed every tick (rather than setInterval) so it stays on the second (or,
+// without seconds, the minute) boundary instead of whatever moment the page
+// loaded, and recovers after sleep. Re-arming cancels any pending tick, so the
+// clockSeconds effect can switch the cadence.
+let _clockTimer = null;
 function scheduleClockTick() {
-  setTimeout(() => { renderClock(); scheduleClockTick(); }, 1000 - Date.now() % 1000);
+  clearTimeout(_clockTimer);
+  const period = fxOn.clockSeconds === "off" ? 60000 : 1000;
+  _clockTimer = setTimeout(() => { renderClock(); scheduleClockTick(); }, period - Date.now() % period);
 }
 
 // ---------- Countdown ----------

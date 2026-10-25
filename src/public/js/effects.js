@@ -21,13 +21,13 @@
 const FX_PRESETS = {
   full: {
     fade: 400, transition: "rise", liveGlass: true, drift: true, weather: true,
-    stagger: true, goals: true, clockRoll: true, tilt: true,
+    stagger: true, goals: true, clockRoll: true, clockSeconds: "full", tilt: true,
     progress: true, newStories: true, timeOfDay: true, glassPolish: true,
     finals: true, livePulse: true,
   },
   lite: {
     fade: 150, transition: "fade", liveGlass: false, drift: false, weather: false,
-    stagger: false, goals: false, clockRoll: false, tilt: false,
+    stagger: false, goals: false, clockRoll: false, clockSeconds: "off", tilt: false,
     progress: false, newStories: false, timeOfDay: false, glassPolish: false,
     finals: false, livePulse: false,
   },
@@ -35,6 +35,7 @@ const FX_PRESETS = {
 const FX_DEFAULT_PRESET = "full";
 const FX_STORAGE_KEY = "dashboard.fx";
 const FX_TRANSITIONS = ["fade", "rise", "zoom", "blur"];
+const FX_CLOCK_SECONDS = ["off", "simple", "full"];
 
 // An on/off effect that toggles body.fx-<cls>; `after` runs once the flag is
 // set, for effects that need to re-render something.
@@ -85,6 +86,17 @@ const FX_SETTINGS = {
     "A burst and glow on a game card when a live score goes up.", "goals"),
   clockRoll: fxToggle("Rolling clock",
     "Clock digits roll into place when they change.", "clock-roll"),
+  clockSeconds: {
+    label: "Clock seconds",
+    hint: "Seconds under the clock's AM/PM: off, simple (no animation), or full (they roll in). Off ticks the clock once a minute.",
+    input: { type: "select", options: FX_CLOCK_SECONDS },
+    parse: (v) => (FX_CLOCK_SECONDS.includes(v) ? v : null),
+    apply(mode) {
+      document.body.dataset.fxClockSeconds = mode;
+      // Once the clock is running, redraw now and re-arm at the new cadence.
+      if (_clockTimer) { renderClock(); scheduleClockTick(); }
+    },
+  },
   tilt: fxToggle("Panel tilt",
     "Panels tilt toward the pointer with a glossy sheen (mouse only).", "tilt", setupPanelTilt),
   progress: fxToggle("Rotation progress",

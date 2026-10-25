@@ -203,13 +203,16 @@ Source: one or more public iCalendar (`.ics`) URLs (`src/parsers/calendar.py`).
 
 ### Clock view
 
-- Large 12-hour time with smaller seconds + a manually-built date string
+- Large 12-hour time + a manually-built date string
   (`Tuesday, May 6th, 2026`). Always renders en-US locale to avoid silent
   24-hour regressions on the Pi's default system locale.
 - **Styling** — a pure-CSS twilight-gradient hero (same scene treatment as the
   "Puck Drop" season view). The time glows softly with a smaller accent
   meridiem (AM/PM), over a spaced uppercase date caption.
-- Re-renders every second.
+- **Seconds** — shown under the AM/PM, set by the `clockSeconds` effect
+  (`off` / `simple` / `full`; off in `lite`, see
+  [Visual effects](#visual-effects)). Re-renders every second while shown,
+  every minute otherwise.
 - Always present (no config flag).
 
 ### Countdown view
@@ -466,6 +469,7 @@ effect.
   | Staggered entrances | `stagger` | on | off | Game cards, forecast days, calendar events and headlines slide in one after another when a view appears. |
   | Goal celebrations | `goals` | on | off | When a live game's score goes up, its card glows gold, the scoring side's score bumps and a GOAL! badge pops. |
   | Rolling clock | `clockRoll` | on | off | Clock digits roll into place when they change. |
+  | Clock seconds | `clockSeconds` | `full` | `off` | Seconds under the clock's AM/PM: `off`, `simple` (no animation), or `full` (they roll in). With `off` the clock ticks once a minute. |
   | Panel tilt | `tilt` | on | off | Panels lean toward the mouse with a glossy sheen (pointer devices only; the lean needs live glass or drift). |
   | Rotation progress | `progress` | on | off | A thin bar under the rotation dots fills over the view's display time, so the next change is visible coming; restarts when you click the dots or arrows. The selected dot stays solid. |
   | New-story highlights | `newStories` | on | off | Headlines this browser hasn't shown before flare their accent stripe and get a light sweep, and the news icon glows. Seen stories are remembered in `localStorage` (`dashboard.seenStories`, last 600); the first run only records them. |
