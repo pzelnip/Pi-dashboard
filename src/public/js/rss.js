@@ -79,7 +79,7 @@ function renderRSS(payload) {
       payload.items.map(i => {
         const feedImageUrl = safeUrl(i.feedImage);
         const itemLogo = feedImageUrl
-          ? `<img class="rss-item-feed-logo" src="${escapeHtml(feedImageUrl)}" alt="" onerror="this.remove()">`
+          ? `<img class="rss-item-feed-logo" src="${escapeHtml(feedImageUrl)}" alt="" decoding="async" onerror="this.remove()">`
           : "";
         // Stale feed (30+ days since newest article): a glaring warning
         // entry stands in for the feed's oldest story (already dropped
@@ -113,7 +113,7 @@ function renderRSS(payload) {
         <li class="rss-item${i.aged ? " rss-item-aged" : rssAgeClass(i.ageHours)}${isNew ? " fx-new-story" : ""}">
           <a href="${escapeHtml(itemLink)}" target="_blank" rel="noopener"${tooltip ? ` title="${tooltip}"` : ""}>
             ${itemImage
-              ? `<img class="rss-thumb" src="${escapeHtml(itemImage)}" alt="" loading="lazy" onerror="this.remove()">`
+              ? `<img class="rss-thumb" src="${escapeHtml(itemImage)}" alt="" loading="lazy" decoding="async" onerror="this.remove()">`
               : ""}
             <span class="rss-text">
               <span class="rss-title">

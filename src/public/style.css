@@ -584,7 +584,6 @@ a.wx-link:focus-visible {
   border-radius: 12px;
   overflow: hidden;
   background: linear-gradient(160deg, #24425f 0%, #16222e 55%, #10151b 100%);
-  transition: background 800ms ease;
 }
 /* Soft sun/moon glow orb, upper-right. Per-sky colour set via --wx-orb. */
 .wx-sky > span {
