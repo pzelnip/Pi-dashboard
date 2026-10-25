@@ -1375,8 +1375,10 @@ function renderWeather(data) {
 
   const dayLabel = (isoDate, i) => {
     if (i === 0) return "Today";
-    const d = new Date(isoDate);
-    return d.toLocaleDateString([], { weekday: "short" });
+    // Noon local: a bare "YYYY-MM-DD" parses as UTC midnight, which is the
+    // previous evening west of Greenwich.
+    const d = new Date(isoDate + "T12:00");
+    return d.toLocaleDateString("en-US", { weekday: "short" });
   };
 
   // Wrap the weather view content in an <a> so the entire view is clickable
@@ -1619,6 +1621,12 @@ function renderClock() {
   if (timeEl) renderClockTime(timeEl, now);
   if (dateEl) dateEl.textContent = date;
   if (nhlDeepOffSeason) renderNhlClock();
+}
+
+// Re-armed every tick (rather than setInterval) so it stays on the minute
+// boundary instead of whatever second the page loaded, and recovers after sleep.
+function scheduleClockTick() {
+  setTimeout(() => { renderClock(); scheduleClockTick(); }, 60000 - Date.now() % 60000);
 }
 
 // ---------- Countdown ----------
@@ -2319,8 +2327,8 @@ async function start() {
     renderCountdown(); setInterval(renderCountdown, 60 * 60 * 1000);
   }
 
-  // Clock ticks every minute; render immediately so it's ready when rotation lands on it.
-  renderClock(); setInterval(renderClock, 60 * 1000);
+  // Clock ticks on each minute boundary; render immediately so it's ready when rotation lands on it.
+  renderClock(); scheduleClockTick();
 
   // "Puck Drop" countdown ticks every second while its view is on-screen.
   setInterval(tickNhlSeason, 1000);

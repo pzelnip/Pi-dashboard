@@ -548,7 +548,6 @@ a.wx-link:focus-visible {
   background: rgba(9, 11, 14, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 14px;
-  backdrop-filter: blur(2px);
 }
 .wx-day {
   display: flex;
@@ -2204,6 +2203,11 @@ body.has-bg:is(.fx-live-glass, .fx-drift) .panel {
   background: rgba(16, 19, 23, 0.46);
   -webkit-backdrop-filter: blur(var(--bg-blur, 18px)) saturate(135%);
   backdrop-filter: blur(var(--bg-blur, 18px)) saturate(135%);
+}
+/* The forecast strip's own light frosting (also in the NHL off-season weather
+   copy). Live blur like the panels above, so it rides on the same toggle. */
+body.fx-live-glass .wx-daily {
+  backdrop-filter: blur(2px);
 }
 
 /* ---- Drifting wallpaper (.fx-drift) ----
