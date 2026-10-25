@@ -80,7 +80,8 @@ CLAUDE.md.
 
 ## Dependencies
 
-None beyond the Python 3 standard library. Tested with Python 3.10+.
+None beyond the Python 3 standard library. The project pins Python 3.15
+(`requires-python` in `pyproject.toml`), which is what CI and the Pi run.
 
 The UI font, [Inter](https://rsms.me/inter/) 4.1, is bundled in
 `src/public/fonts/` under the SIL Open Font License (`Inter-OFL.txt`), so the

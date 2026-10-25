@@ -7,9 +7,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      # Same interpreter as the Pi: uv picks it from requires-python in
+      # pyproject.toml, so a version bump there moves CI too.
+      - uses: astral-sh/setup-uv@v6
       - name: Run unittest suite
-        run: python3 -m unittest discover -v
+        run: uv run python -m unittest discover -v
         working-directory: src
