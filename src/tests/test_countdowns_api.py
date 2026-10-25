@@ -103,7 +103,7 @@ class UpdateCountdownsTests(unittest.TestCase):
     def test_concurrent_updates_keep_both_changes(self):
         # Each change waits until the other has had a chance to start; without
         # the lock spanning read-modify-write, one append would be lost.
-        started = threading.Barrier(2, timeout=0.2)
+        started = threading.Barrier(2, timeout=0.05)
 
         def append(title):
             def change(cds):

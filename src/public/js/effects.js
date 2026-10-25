@@ -99,7 +99,7 @@ const FX_SETTINGS = {
   finals: fxToggle("Final-score settle",
     "When a live game ends, the winner's row lights up and the FINAL pill settles in.", "finals"),
   livePulse: fxToggle("Live pulse",
-    "The red dot on LIVE games pulses.", "live-pulse"),
+    "The red dot on LIVE games pulses, and so does the live game's pill in game details.", "live-pulse"),
 };
 
 let fxConfig = null;  // /api/config payload, kept so a saved change can re-resolve

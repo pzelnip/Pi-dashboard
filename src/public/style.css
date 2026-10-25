@@ -1978,10 +1978,6 @@ a.wx-link:focus-visible {
   opacity: 1;
   box-shadow: 0 0 0 3px rgba(79, 195, 247, 0.22);
 }
-.gd-series-pill.is-current.is-live {
-  animation: series-pill-glow 1.6s ease-in-out infinite;
-}
-
 /* ---- Meta row (start time + game type, centered single line) ---- */
 .gd-meta-row {
   display: flex;
@@ -2578,6 +2574,10 @@ body.fx-finals .game.fx-final-settle .status-pill.final {
 body.fx-live-pulse .status-pill.live::before {
   animation: fx-live-pulse 1.6s ease-in-out infinite;
 }
+/* The game-details series row: the live game's pill glows. */
+body.fx-live-pulse .gd-series-pill.is-current.is-live {
+  animation: series-pill-glow 1.6s ease-in-out infinite;
+}
 @keyframes fx-live-pulse {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.35; }
@@ -2585,6 +2585,7 @@ body.fx-live-pulse .status-pill.live::before {
 
 @media (prefers-reduced-motion: reduce) {
   body.fx-live-pulse .status-pill.live::before,
+  body.fx-live-pulse .gd-series-pill.is-current.is-live,
   body.fx-new-stories .rss-item.fx-new-story::before,
   body.fx-new-stories .rss-item.fx-new-story::after,
   body.fx-new-stories #rss-title.fx-news-arrived > :first-child,

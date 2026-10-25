@@ -472,7 +472,7 @@ effect.
   | Time-of-day tint | `timeOfDay` | on | off | A colour wash over the wallpaper that drifts through the day (deep-blue night, warm dawn, cool morning, neutral midday, golden afternoon, orange sunset, purple dusk), recomputed every 5 minutes. |
   | Glass polish | `glassPolish` | on | off | Static: a lit top edge, a soft top-down gradient and a faint cool glow on each panel. |
   | Final-score settle | `finals` | on | off | When a game goes from live to final, its card glows green, the winner's row brightens and the FINAL pill settles in. Never fires for games already final on page load. |
-  | Live pulse | `livePulse` | on | off | The red dot on LIVE pills pulses. Off in lite because a continuous animation keeps the Pi redrawing for the whole game. |
+  | Live pulse | `livePulse` | on | off | The red dot on LIVE pills pulses, as does the live game's pill in the game-details series row. Off in lite because a continuous animation keeps the Pi redrawing for the whole game. |
 
   Toggles take `1`/`0`, `on`/`off` or `true`/`false` in the URL (e.g.
   `?drift=0`). Continuous effects (drift, weather scenes, goal glow) also

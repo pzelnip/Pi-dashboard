@@ -19,7 +19,9 @@ class _ServerTestCase(unittest.TestCase):
     def setUpClass(cls):
         cls.httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.DashboardHandler)
         cls.base = f"http://127.0.0.1:{cls.httpd.server_address[1]}"
-        threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
+        # A short poll interval: shutdown() otherwise waits up to 0.5s per class.
+        threading.Thread(target=cls.httpd.serve_forever, kwargs={"poll_interval": 0.05},
+                         daemon=True).start()
 
     @classmethod
     def tearDownClass(cls):
