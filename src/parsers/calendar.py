@@ -162,7 +162,8 @@ def fetch_calendar(urls: list[str]) -> list[dict]:
     def fetch_one(indexed):
         idx, url = indexed
         try:
-            return fetch_cached(url, ttl_seconds=300, validate=_validate_ics)
+            return fetch_cached(url, ttl_seconds=300, validate=_validate_ics,
+                                stale_while_revalidate=True)
         except Exception as e:
             sys.stderr.write(f"[calendar] fetch failed for url #{idx} ({_redact_url(url)}): {e}\n")
             return None

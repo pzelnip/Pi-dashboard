@@ -128,7 +128,7 @@ async function start() {
 
   refreshNHL(); setInterval(refreshNHL, REFRESH_NHL_MS);
   refreshWeather(); setInterval(refreshWeather, REFRESH_WEATHER_MS);
-  refreshRSS();  // rotation timer takes over from here; each rotation fetches.
+  refreshRSS(); setInterval(refreshRSS, REFRESH_RSS_MS);  // rotating needs no request
 
   if (calendarEnabled) {
     refreshCalendar(); setInterval(refreshCalendar, 5 * 60 * 1000);

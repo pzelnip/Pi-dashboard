@@ -140,7 +140,7 @@ _parsed_lock = threading.Lock()
 
 
 def fetch_rss(url: str, limit: int = 4) -> tuple[str, list[dict]]:
-    raw = fetch_cached(url, ttl_seconds=900, validate=ET.fromstring)
+    raw = fetch_cached(url, ttl_seconds=900, validate=ET.fromstring, stale_while_revalidate=True)
     with _parsed_lock:
         hit = _parsed.get(url)
     if hit and hit[0] is raw:

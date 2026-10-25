@@ -248,7 +248,9 @@ Source: `src/parsers/rss.py`, rendering in `src/public/js/rss.js` (`renderRSS`).
 - Configured via `rss` in `config.json` — array of `{name, url}`. All feeds
   are merged into one "News" stream.
 - Cadence: `rotation.rssSeconds` (default 30 seconds).
-- Each rotation **fetches** the next page (4 items) of the merged stream.
+- `/api/rss` returns every page of the merged stream at once; the browser
+  re-fetches it every 5 minutes (and on wake), and each rotation shows the
+  next page (4 items) from what it already has, without a request.
 - Cross-fades the panel body and header on swap (~200 ms).
 - Per-feed logo: extracted from `<channel><image><url>` (RSS 2.0),
   `<media:thumbnail>`, or Atom `<logo>` / `<icon>`. Falls back to a built-in
@@ -364,7 +366,9 @@ panel.
 A failed URL isn't retried for 60 s: requests in that window get the stale
 body (or the same error) immediately rather than each waiting out the 10 s
 timeout. Concurrent requests for the same URL share one upstream fetch, and
-the RSS feeds and calendars are fetched in parallel.
+the RSS feeds and calendars are fetched in parallel. For RSS and calendars an
+expired entry is served immediately while it refreshes in the background, so
+those requests never wait on an upstream once it has been fetched once.
 
 When even the cache is empty, the API returns
 `{ "error": "<message>" }` with HTTP 200 and the panel renders an inline

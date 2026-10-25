@@ -12,6 +12,11 @@ Every failure is logged to stderr (journalctl on the Pi) with what came back.
 A failed URL isn't retried for `FAILURE_BACKOFF_SECONDS`: callers get the stale
 body (or the same error) straight away instead of each waiting out the timeout
 on an upstream that is down. Concurrent misses on one URL share a single fetch.
+
+Callers whose data can lag a refresh (RSS, calendars) pass
+`stale_while_revalidate=True`: an expired body comes back at once and the
+refetch runs in the background, so their requests only ever wait on an
+upstream for a URL that has never been fetched.
 """
 
 import hashlib
@@ -71,12 +76,16 @@ def fetch_many(fn: Callable, items: Iterable) -> list:
 
 
 def fetch_cached(
-    url: str, ttl_seconds: int, validate: Callable[[bytes], object] | None = None
+    url: str,
+    ttl_seconds: int,
+    validate: Callable[[bytes], object] | None = None,
+    stale_while_revalidate: bool = False,
 ) -> bytes:
     """Fetch `url`, caching the body for `ttl_seconds`.
 
     `validate` is called with the body and should raise if it is unusable;
-    such bodies are never cached.
+    such bodies are never cached. With `stale_while_revalidate`, an expired
+    body is returned immediately and refreshed in the background.
     """
     with _cache_lock:
         hit = _cache.get(url)
@@ -84,19 +93,40 @@ def fetch_cached(
             return hit[1]
         url_lock = _url_locks.setdefault(url, threading.Lock())
 
+    if stale_while_revalidate and hit:
+        _pool.submit(_refresh_in_background, url, ttl_seconds, validate, url_lock)
+        return hit[1]
+
     with url_lock:
-        # Another request may have refreshed (or failed) this URL while we waited.
-        now = time.time()
-        with _cache_lock:
-            hit = _cache.get(url)
-            if hit and hit[0] > now:
-                return hit[1]
-            failure = _failures.get(url)
-        if failure and failure[0] > now:
-            if hit:
-                return hit[1]
-            raise RuntimeError(failure[1])
-        return _fetch(url, ttl_seconds, validate, hit, now)
+        return _fetch_locked(url, ttl_seconds, validate)
+
+
+def _refresh_in_background(url, ttl_seconds, validate, url_lock) -> None:
+    # Skip if a refresh (or a blocking fetch) of this URL is already running.
+    if not url_lock.acquire(blocking=False):
+        return
+    try:
+        _fetch_locked(url, ttl_seconds, validate)
+    except Exception:
+        pass  # already logged by _fetch; the stale body stays in place
+    finally:
+        url_lock.release()
+
+
+def _fetch_locked(url, ttl_seconds, validate) -> bytes:
+    """The fetch proper; the caller holds the URL's lock."""
+    # Another request may have refreshed (or failed) this URL while we waited.
+    now = time.time()
+    with _cache_lock:
+        hit = _cache.get(url)
+        if hit and hit[0] > now:
+            return hit[1]
+        failure = _failures.get(url)
+    if failure and failure[0] > now:
+        if hit:
+            return hit[1]
+        raise RuntimeError(failure[1])
+    return _fetch(url, ttl_seconds, validate, hit, now)
 
 
 def _fetch(url, ttl_seconds, validate, hit, now) -> bytes:

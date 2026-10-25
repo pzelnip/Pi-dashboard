@@ -2,8 +2,14 @@
 
 // ---------- RSS ----------
 
+// /api/rss returns every page at once: refreshRSS re-fetches it on this
+// cadence, and rotating just shows another slice of rssItems.
+const REFRESH_RSS_MS = 5 * 60 * 1000;
+let rssItems = null;     // null until the first response arrives
+let rssPageSize = 4;
 let rssPage = 0;
-let rssTotalPages = 1;
+let rssShownKey = null;  // JSON of the items on screen; skips no-op redraws
+let rssRequestSeq = 0;   // drops a response that a newer request overtook
 let rssRotationMs = 30 * 1000;
 // Cross-fade length between views, in ms (the RSS fade-out/in is half that
 // each way). A visual-effects setting: see "Visual effects" below.
@@ -38,18 +44,21 @@ function rssAgeLabel(ageHours) {
   return formatAgo(ageHours * 3600 * 1000);
 }
 
-function renderRSS(payload) {
-  rssTotalPages = payload.totalPages || 1;
-  rssPage = payload.page;
+// Show page rssPage of rssItems, cross-fading unless it's what's already on
+// screen.
+function showRssPage() {
+  if (!rssItems) return;
+  const items = rssItems.slice(rssPage * rssPageSize, (rssPage + 1) * rssPageSize);
+  const key = JSON.stringify(items);
+  if (key === rssShownKey) return;
+  rssShownKey = key;
+  renderRSS({ items });
+}
 
+function renderRSS(payload) {
   const rssPanel = document.getElementById("rss");
   const titleEl = document.getElementById("rss-title");
   const el = bodyEl("rss");
-
-  // RSS uses the rotator with a synthetic "view per page" set so dots/nav match
-  // the count of pages. We don't actually flip CSS classes — the body content
-  // is rewritten on each page swap.
-  rssRotator.setViews(Array.from({length: rssTotalPages}, (_, i) => String(i)));
 
   const writeContent = () => {
     titleEl.innerHTML = `${window.DEFAULT_RSS_ICON}<span>News</span>`;
@@ -136,23 +145,34 @@ function renderRSS(payload) {
 }
 
 async function refreshRSS() {
+  const seq = ++rssRequestSeq;
   try {
-    const data = await fetchJson(`/api/rss?page=${rssPage}`);
+    const data = await fetchJson("/api/rss");
+    if (seq !== rssRequestSeq) return;
     if (data.error) {
+      rssShownKey = null;
       showError("rss", data.error);
     } else {
-      renderRSS(data);
+      rssItems = data.items || [];
+      rssPageSize = data.pageSize || 4;
+      const totalPages = Math.max(1, Math.ceil(rssItems.length / rssPageSize));
+      // The rotator gets a synthetic "view per page" set so dots/nav match the
+      // page count; we don't flip CSS classes, the body is rewritten instead.
+      // When the count changes, setViews re-shows a page via onRssViewShown.
+      rssRotator.setViews(Array.from({length: totalPages}, (_, i) => String(i)));
+      rssPage = Math.min(rssPage, totalPages - 1);
+      showRssPage();
     }
     setUpdated("rss");
   } catch (e) {
+    if (seq !== rssRequestSeq) return;
+    rssShownKey = null;
     showError("rss", e.message);
   }
 }
 
 function onRssViewShown(active) {
-  // active is a stringified page index; only fetch if it differs from current.
-  const target = Number(active);
-  if (target === rssPage) return;
-  rssPage = target;
-  refreshRSS();
+  // active is a stringified page index into rssItems.
+  rssPage = Number(active);
+  showRssPage();
 }

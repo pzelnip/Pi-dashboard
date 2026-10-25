@@ -235,6 +235,79 @@ class FetchCachedTests(unittest.TestCase):
         self.assertEqual(mock_open.call_count, 1)
 
 
+class StaleWhileRevalidateTests(unittest.TestCase):
+    URL = "https://example.com/feed"
+
+    def setUp(self):
+        with cache._cache_lock:
+            cache._cache.clear()
+            cache._failures.clear()
+        patch("sys.stderr", new_callable=io.StringIO).start()
+        self.addCleanup(patch.stopall)
+
+    def _expire(self, body):
+        with cache._cache_lock:
+            cache._cache[self.URL] = (time.time() - 10, body)
+
+    def _wait_until(self, condition):
+        deadline = time.time() + 5
+        while not condition():
+            self.assertLess(time.time(), deadline, "background refresh never finished")
+            time.sleep(0.005)
+
+    def _refreshed(self):
+        with cache._cache_lock:
+            return cache._cache[self.URL][0] > time.time()
+
+    def test_expired_body_returns_at_once_and_refreshes_in_background(self):
+        self._expire(b"old")
+        release = threading.Event()
+
+        def slow_open(*args, **kwargs):
+            release.wait(5)
+            return _FakeResponse(b"new")
+
+        with patch("urllib.request.urlopen", side_effect=slow_open) as mock_open:
+            result = cache.fetch_cached(self.URL, 60, stale_while_revalidate=True)
+            self.assertEqual(result, b"old")  # didn't wait on the slow upstream
+            release.set()
+            self._wait_until(self._refreshed)
+
+        self.assertEqual(mock_open.call_count, 1)
+        self.assertEqual(cache.fetch_cached(self.URL, 60), b"new")
+
+    def test_concurrent_stale_hits_trigger_one_refresh(self):
+        self._expire(b"old")
+        release = threading.Event()
+
+        def slow_open(*args, **kwargs):
+            release.wait(5)
+            return _FakeResponse(b"new")
+
+        with patch("urllib.request.urlopen", side_effect=slow_open) as mock_open:
+            for _ in range(3):
+                self.assertEqual(cache.fetch_cached(self.URL, 60, stale_while_revalidate=True), b"old")
+            release.set()
+            self._wait_until(self._refreshed)
+
+        self.assertEqual(mock_open.call_count, 1)
+
+    def test_failed_background_refresh_keeps_stale_body(self):
+        self._expire(b"old")
+        with patch("urllib.request.urlopen", side_effect=ConnectionError("boom")):
+            cache.fetch_cached(self.URL, 60, stale_while_revalidate=True)
+            self._wait_until(lambda: self.URL in cache._failures)
+
+        self.assertEqual(cache._cache[self.URL][1], b"old")
+        self.assertIn(self.URL, cache._failures)
+
+    def test_first_fetch_still_blocks(self):
+        with patch("urllib.request.urlopen", return_value=_FakeResponse(b"first")):
+            result = cache.fetch_cached(self.URL, 60, stale_while_revalidate=True)
+
+        self.assertEqual(result, b"first")
+
+
 class FetchManyTests(unittest.TestCase):
     def test_runs_concurrently_and_keeps_order(self):
         barrier = threading.Barrier(3, timeout=5)

@@ -37,7 +37,7 @@ inspect the page in a browser:
 curl -s http://localhost:8080/api/nhl | jq             # {today, yesterday, hasLiveToday}
 curl -s 'http://localhost:8080/api/nhl?date=2026-04-21' | jq  # debug override (yesterday only)
 curl -s http://localhost:8080/api/weather | jq
-curl -s 'http://localhost:8080/api/rss?page=0' | jq    # one page of the merged feeds
+curl -s http://localhost:8080/api/rss | jq            # every page of the merged feeds
 curl -s http://localhost:8080/api/calendar | jq
 curl -s http://localhost:8080/api/config | jq          # rotation intervals + feature flags
 curl -s http://localhost:8080/api/version | jq         # git SHA, for kiosk auto-reload
@@ -73,7 +73,7 @@ Notable knobs the frontend reads from `config.json` via `/api/config`:
 
 Python 3 stdlib server. Three concerns are layered:
 
-1. **Caching layer** (`fetch_cached`): every upstream HTTP fetch goes through this. Each URL has its own TTL (NHL: 20s for the week holding today, longer for past/future weeks; weather: 600s, RSS: 900s, calendar: 300s). On upstream network failure, `fetch_cached` returns the *expired* cached body if any exists — this is what keeps the dashboard useful when an external API blips. Don't bypass this; if you add a new upstream, route it through `fetch_cached` and pick a TTL that respects rate limits. Also pass a `validate` callable (`json.loads`, `ET.fromstring`, …): a 200 whose body fails it is treated as a failure and never cached, so an error page can't become the stale fallback. Every failure is logged to stderr as `[cache] <host>#<hash> …` with the status, content type, size and a body snippet — check `journalctl -u dashboard | grep '\[cache\]'` on the Pi first when a panel shows an upstream error. A failed URL is not retried for `FAILURE_BACKOFF_SECONDS` (stale body or the same error is returned meanwhile), and concurrent misses on one URL share a single fetch. Code that fetches several URLs per request uses `fetch_many` (a shared thread pool) so they run in parallel.
+1. **Caching layer** (`fetch_cached`): every upstream HTTP fetch goes through this. Each URL has its own TTL (NHL: 20s for the week holding today, longer for past/future weeks; weather: 600s, RSS: 900s, calendar: 300s). On upstream network failure, `fetch_cached` returns the *expired* cached body if any exists — this is what keeps the dashboard useful when an external API blips. Don't bypass this; if you add a new upstream, route it through `fetch_cached` and pick a TTL that respects rate limits. Also pass a `validate` callable (`json.loads`, `ET.fromstring`, …): a 200 whose body fails it is treated as a failure and never cached, so an error page can't become the stale fallback. Every failure is logged to stderr as `[cache] <host>#<hash> …` with the status, content type, size and a body snippet — check `journalctl -u dashboard | grep '\[cache\]'` on the Pi first when a panel shows an upstream error. A failed URL is not retried for `FAILURE_BACKOFF_SECONDS` (stale body or the same error is returned meanwhile), and concurrent misses on one URL share a single fetch. Code that fetches several URLs per request uses `fetch_many` (a shared thread pool) so they run in parallel. Callers whose data can lag one refresh (RSS, calendars) pass `stale_while_revalidate=True`: an expired body is returned at once and refetched in the background, so those requests only wait on an upstream the very first time. Don't use it for the live NHL page, where it would delay scores by a poll.
 
 2. **Per-API parsers** (`fetch_nhl`, `fetch_weather`, `parse_rss`, `parse_ics` + `_event_occurs_today`): each takes raw bytes from the cache and produces the JSON shape the frontend expects. The NHL parser maps NHL API states (`LIVE`/`CRIT`/`FUT`/`PRE`/`OFF`/`FINAL`) and computes `statusText` server-side. The RSS parser handles both RSS 2.0 (`<item>`) and Atom (`<entry>`) — both branches share `_build_item`.
 
@@ -105,7 +105,7 @@ The key abstraction is `createRotator({...})` — every rotating panel is an ins
 
 - Owns the active-view index, rotation timer, and dots/prev-next controls.
 - `setViews(newViews)` swaps the active set without losing position when the previously-active view is still in the new list. NHL uses this to flip between today-only and today/yesterday based on whether games are live. Weather uses it at startup based on which features are configured. RSS uses it once the feed count is known.
-- `onShow(activeView)` is the only per-panel hook. RSS uses it to fire `refreshRSS` when the rotator advances; weather uses it to hide the city label on non-weather views; NHL has no `onShow` (its views are pre-rendered).
+- `onShow(activeView)` is the only per-panel hook. RSS uses it to render the next page from the items it already holds (`/api/rss` returns every page at once; `refreshRSS` re-fetches every few minutes); weather uses it to hide the city label on non-weather views; NHL has no `onShow` (its views are pre-rendered).
 
 The weather panel is special: it stacks four views (weather, calendar, clock, countdown) inside one panel. The calendar view shares the panel header, which is why `refreshCalendar` calls `setUpdated("weather")`.
 

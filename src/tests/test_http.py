@@ -56,6 +56,16 @@ class RoutingTests(_ServerTestCase):
         self.assertEqual(status, 200)
         self.assertEqual([c["title"] for c in json.loads(body)["countdowns"]], ["A", "B"])
 
+    def test_rss_returns_every_item_in_one_payload(self):
+        cfg = {"rss": [{"name": "A", "url": "https://example.com/a"}]}
+        items = [{"title": f"t{i}", "feedName": "A", "published": ""} for i in range(9)]
+        with patch.object(server, "load_config", return_value=cfg), \
+                patch.object(server, "fetch_rss_aggregated", return_value=items):
+            status, _, body = self._get("/api/rss")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), {"pageSize": 4, "items": items})
+
     def test_unknown_path_falls_through_to_static(self):
         status, _, _ = self._get("/no-such-file.txt")
 
