@@ -324,6 +324,29 @@ class StaleWhileRevalidateTests(unittest.TestCase):
         self.assertEqual(cache._cache[self.URL][1], b"old")
         self.assertIn(self.URL, cache._failures)
 
+    def test_slow_background_refreshes_dont_hold_up_fetch_many(self):
+        # Eight expired URLs whose upstreams hang: their refreshes must not
+        # take the workers that a request's fetch_many is waiting on.
+        release = threading.Event()
+        self.addCleanup(release.set)
+
+        def slow_open(*args, **kwargs):
+            release.wait(5)
+            return _FakeResponse(b"new")
+
+        with patch("urllib.request.urlopen", side_effect=slow_open):
+            for i in range(8):
+                url = f"https://example.com/slow-{i}"
+                with cache._cache_lock:
+                    cache._cache[url] = (time.time() - 10, b"old")
+                cache.fetch_cached(url, 60, stale_while_revalidate=True)
+            done = []
+            t = threading.Thread(target=lambda: done.append(cache.fetch_many(lambda x: x * 2, [1, 2, 3])))
+            t.start()
+            t.join(1)
+
+        self.assertEqual(done, [[2, 4, 6]])
+
     def test_first_fetch_still_blocks(self):
         with patch("urllib.request.urlopen", return_value=_FakeResponse(b"first")):
             result = cache.fetch_cached(self.URL, 60, stale_while_revalidate=True)

@@ -44,6 +44,10 @@ _url_locks: dict[str, threading.Lock] = {}
 # Shared by callers that fetch several URLs per request (RSS feeds, calendars),
 # so one slow upstream doesn't hold up the rest.
 _pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="fetch")
+# Stale-while-revalidate refreshes get their own workers. Feeds fetched
+# together expire together, and their refreshes can each hang for the full
+# timeout; on the shared pool they'd hold up the requests waiting on it.
+_refresh_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="refresh")
 
 _SNIPPET_CHARS = 120
 
@@ -94,7 +98,7 @@ def fetch_cached(
         url_lock = _url_locks.setdefault(url, threading.Lock())
 
     if stale_while_revalidate and hit:
-        _pool.submit(_refresh_in_background, url, ttl_seconds, validate, url_lock)
+        _refresh_pool.submit(_refresh_in_background, url, ttl_seconds, validate, url_lock)
         return hit[1]
 
     with url_lock:
