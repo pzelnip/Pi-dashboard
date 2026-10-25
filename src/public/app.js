@@ -105,6 +105,8 @@ const isPregame = g => g.state === "PRE";
 const isScheduled = g => g.state === "FUT";
 const isFinal = g => !isLive(g) && !isPregame(g) && !isScheduled(g);
 
+const sameList = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
@@ -272,7 +274,17 @@ function createRotator({ dotsEl, navEl, viewsContainer, viewClassPrefix, titleEl
     if (timer) { clearInterval(timer); timer = null; }
   }
 
+  // An unchanged list keeps the controls, timer and progress bar running and
+  // only re-marks the active view, in case its element was just re-created
+  // (NHL re-paging replaces its page elements).
   function setViews(newViews) {
+    if (sameList(newViews, currentViews)) {
+      const active = currentViews[index];
+      viewsContainer?.querySelectorAll(".view").forEach(v => {
+        v.classList.toggle("active", v.classList.contains(`${viewClassPrefix}${active}`));
+      });
+      return;
+    }
     const wasActive = currentViews[index];
     currentViews = newViews.slice();
     const reuseIdx = currentViews.indexOf(wasActive);
@@ -301,6 +313,7 @@ const _nhlGamesByBucket = { today: [], yesterday: [] };
 function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket = null) {
   const el = document.querySelector(containerSelector);
   if (!el) return;
+  const hadError = el.classList.contains("error");
   el.classList.remove("error");
   el.classList.toggle("nhl-empty", !games || !games.length);
   if (!games || !games.length) {
@@ -459,6 +472,8 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
   };
 
   const cards = sorted.map(renderGame);
+  // Same cards as on screen: skip the render-measure-render paging pass.
+  if (bucket && !hadError && sameList(cards, _nhlPageCards[bucket])) return;
   if (bucket) setNhlPages(el, bucket, cards);
   else el.innerHTML = `<div class="games-grid">${cards.join("")}</div>`;
 }
@@ -1102,14 +1117,24 @@ let nhlRotationMs = 10000;
 let nhlRotator = null;
 let nhlDeepOffSeason = false;
 let nhlSeasonStart = null; // ISO "YYYY-MM-DD" of next season's first game, or null if unknown
+// Last /api/nhl response as JSON; most polls return it unchanged, and then
+// there's nothing to re-render. Cleared on error so recovery re-renders.
+let _lastNhlPayload = null;
 
 async function refreshNHL() {
   try {
     const data = await fetchJson("/api/nhl");
     if (data && data.error) {
+      _lastNhlPayload = null;
       showError("nhl", data.error, ".view-nhl-today");
       return;
     }
+    const payload = JSON.stringify(data);
+    if (payload === _lastNhlPayload) {
+      setUpdated("nhl");
+      return;
+    }
+    _lastNhlPayload = payload;
     nhlSeasonStart = data.seasonStart || null;
     renderNHL(data.today?.games, "#nhl .view-nhl-today", "No games today.", "today");
     if (data.yesterday) {
@@ -1178,6 +1203,7 @@ async function refreshNHL() {
     setNhlViews(canRotate ? ["today", "yesterday"] : ["today"]);
     setUpdated("nhl");
   } catch (e) {
+    _lastNhlPayload = null;
     showError("nhl", e.message, ".view-nhl-today");
   }
 }
