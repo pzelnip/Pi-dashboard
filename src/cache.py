@@ -170,7 +170,10 @@ def _fetch(url, ttl_seconds, validate, hit, now) -> bytes:
             del _cache[u]
         for u in [u for u, (retry_at, _) in _failures.items() if retry_at < now]:
             del _failures[u]
-        for u in [u for u in _url_locks if u not in _cache and u not in _failures and u != url]:
+        # A held lock is a fetch in progress (possibly a URL's first, so not in
+        # _cache yet): dropping it would let the next request fetch in parallel.
+        for u in [u for u, lock in _url_locks.items()
+                  if u not in _cache and u not in _failures and u != url and not lock.locked()]:
             del _url_locks[u]
         _failures.pop(url, None)
         _cache[url] = (now + ttl_seconds, body)

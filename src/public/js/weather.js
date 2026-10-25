@@ -187,18 +187,31 @@ function renderWeatherView(el, data) {
   el.replaceChildren(sky, wrapper);
 }
 
+// Last /api/weather response as JSON. An unchanged response means nothing to
+// redraw (and redrawing would re-randomize the weather scene). Cleared on
+// error so recovery redraws.
+let _lastWeatherPayload = null;
+
 async function refreshWeather() {
   try {
     const data = await fetchJson("/api/weather");
     if (data.error) {
+      _lastWeatherPayload = null;
       showError("weather", data.error, ".view-weather");
     } else {
+      const payload = JSON.stringify(data);
+      if (payload === _lastWeatherPayload) {
+        setUpdated("weather");
+        return;
+      }
+      _lastWeatherPayload = payload;
       _lastWeatherData = data;
       renderWeather(data);
       if (nhlDeepOffSeason) renderNhlWeather();
     }
     setUpdated("weather");
   } catch (e) {
+    _lastWeatherPayload = null;
     showError("weather", e.message, ".view-weather");
   }
 }

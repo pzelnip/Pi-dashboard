@@ -235,6 +235,29 @@ class FetchCachedTests(unittest.TestCase):
         self.assertEqual(mock_open.call_count, 1)
 
 
+class UrlLockCleanupTests(unittest.TestCase):
+    def setUp(self):
+        with cache._cache_lock:
+            cache._cache.clear()
+            cache._failures.clear()
+            cache._url_locks.clear()
+
+    def test_cleanup_keeps_lock_of_fetch_in_progress(self):
+        in_flight = threading.Lock()
+        in_flight.acquire()
+        self.addCleanup(in_flight.release)
+        idle = threading.Lock()
+        with cache._cache_lock:
+            cache._url_locks["https://example.com/in-flight"] = in_flight
+            cache._url_locks["https://example.com/idle"] = idle
+
+        with patch("urllib.request.urlopen", return_value=_FakeResponse(b"x")):
+            cache.fetch_cached("https://example.com/other", ttl_seconds=60)
+
+        self.assertIs(cache._url_locks.get("https://example.com/in-flight"), in_flight)
+        self.assertNotIn("https://example.com/idle", cache._url_locks)
+
+
 class StaleWhileRevalidateTests(unittest.TestCase):
     URL = "https://example.com/feed"
 
