@@ -9,9 +9,9 @@ tooling (`update-dashboard.sh`) stays at the repo root, and docs (this file
 included) live in [`docs/`](.).
 
 - **URL:** <http://localhost:8080>
-- **Kiosk command:** `chromium --kiosk 'http://localhost:8080/?fade=150'`
-  (`?fade=150` shortens view cross-fades to 150 ms for the kiosk only, to save
-  CPU; see [pi_setup_notes.md](pi_setup_notes.md))
+- **Kiosk command:** `chromium --kiosk 'http://localhost:8080/?fx=lite'`
+  (`?fx=lite` picks the cheaper visual-effects preset for the kiosk only, to
+  save CPU; see [pi_setup_notes.md](pi_setup_notes.md))
 
 ### Update flow
 

@@ -423,6 +423,9 @@ keyboard shortcut) opens a debug side-sheet showing:
   "not found" line when `background.image` is set but doesn't resolve.
 - **Cache table** — every entry currently held in `fetch_cached` with
   remaining TTL.
+- **Display** — the effective visual-effects settings (e.g. `lite preset ·
+  fade length 150 ms`) and a **settings ›** view to change them for this
+  browser; see [Visual effects](#visual-effects) below.
 - **Service log / Update log** — tail of `journalctl -u dashboard.service`
   and `update.log` respectively (Pi-only; no-op locally).
 - **Force update** button — kicks `update-dashboard.sh --force` on the Pi
@@ -430,6 +433,38 @@ keyboard shortcut) opens a debug side-sheet showing:
   fire so reload happens within ~1 s of the new SHA being live.
 
 Escape closes the overlay (or returns to the field list from a log view).
+
+### Visual effects
+
+Some effects are cheap on a desktop GPU but expensive on the Pi, which draws
+every frame in software. Each browser picks its own effect settings, so the
+kiosk can run lean while a laptop or phone viewing the same server gets every
+effect.
+
+- **Presets:** `full` (default) and `lite`. The Pi's kiosk loads
+  `http://localhost:8080/?fx=lite`.
+- **Effects:**
+
+  | Effect | URL param | full | lite | Notes |
+  | --- | --- | --- | --- | --- |
+  | Fade length | `fade` | 400 ms | 150 ms | Cross-fade between views, `0` = instant; the news fade is half this. Measured on the Pi: 150 ms costs a few points of a core over none, 400 ms roughly 18. |
+
+- **Where a setting comes from** — the first of these that sets it wins:
+  1. the URL (`?fx=lite`, `?fade=150`),
+  2. saved in this browser, from the debug panel's Display view
+     (`localStorage`, key `dashboard.fx`),
+  3. the server config (`effects.preset`, `rotation.fade`),
+  4. the active preset's value.
+
+  The preset itself resolves the same way (URL `fx` → saved → config →
+  `full`). So an explicit setting always beats a preset: `?fx=full` on a
+  server whose config sets `rotation.fade: 0` still gets instant swaps.
+- **Display view** (debug panel → Display → settings ›): shows each
+  setting's current value and where it came from, saves new values to this
+  browser, and **Clear saved** removes them. A value set by the URL can't be
+  overridden there; the view says so.
+- Adding an effect: an entry in `FX_SETTINGS` and a value in each of
+  `FX_PRESETS` in `app.js`. The Display view and URL parameter come with it.
 Arrow keys scroll the sheet body when open.
 
 ### Cache headers
@@ -461,7 +496,8 @@ in) merged with `src/config.local.json` (gitignored personal overrides; see
 | `rotation.rssSeconds` | RSS feed cadence (seconds). |
 | `rotation.weatherPanelSeconds` | Weather panel view cadence (seconds). |
 | `rotation.nhlPanelSeconds` | NHL panel view cadence (seconds). Falls back to `weatherPanelSeconds`. |
-| `rotation.fade` | Cross-fade length between views, in ms (default `400`; `true` = default, `false` or `0` = instant swaps; the RSS fade is half this each way). Applies to **every** browser viewing this server. To change it for one browser only, load the page with `?fade=<ms>` (`?fade=0` for instant), which overrides the config. The Pi's kiosk uses `http://localhost:8080/?fade=150`: it draws fades in software, and measured on the Pi, 150 ms fades cost a few points of a core over none, versus roughly 18 points for the default 400 ms. |
+| `rotation.fade` | Cross-fade length between views in ms for **every** browser viewing this server (`true` = 400, `false`/`0` = instant). Unset = the preset's value. Per-browser overrides: see [Visual effects](#visual-effects). |
+| `effects.preset` | Default visual-effects preset for this server: `full` (default) or `lite`. Per-browser overrides: see [Visual effects](#visual-effects). |
 | `background.image` | Path to an image file on the dashboard host (absolute, `~`-relative, or relative to `src/`). Blank/missing/unresolvable = flat dark background. |
 | `background.dim` | Darkness of the scrim over the background image, 0–0.95 (default 0.45). |
 | `background.blur` | Frosted-glass blur behind the panels, 0–60 px (default 18). `0` = translucent panels, no blur. |

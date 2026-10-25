@@ -332,6 +332,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     "calendar": {"enabled": bool(cal_urls)},
                     "countdowns": cfg.get("countdowns", []) or [],
                     "background": background_settings(cfg),
+                    # Visual-effects defaults (effects.preset); per-browser
+                    # overrides live in the frontend (URL / localStorage).
+                    "effects": cfg.get("effects") or {},
                 }
             )
             return

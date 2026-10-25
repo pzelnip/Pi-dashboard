@@ -1646,13 +1646,8 @@ let rssPage = 0;
 let rssTotalPages = 1;
 let rssRotationMs = 30 * 1000;
 // Cross-fade length between views, in ms (the RSS fade-out/in is half that
-// each way). The Pi draws every frame of a fade in software, and at ~20 view
-// swaps a minute the default fades cost it a sizeable share of a core, so a
-// low-powered client shortens them per browser with ?fade=<ms> in its URL
-// (the kiosk uses ?fade=150, set in runKiosk.sh; 0 = instant) while other
-// viewers of the same server keep the default. See applyFadeSetting().
-const DEFAULT_FADE_MS = 400;
-let fadeMs = DEFAULT_FADE_MS;
+// each way). A visual-effects setting: see "Visual effects" below.
+let fadeMs = 400;
 let rssFadeTimer = null;
 let rssRotator = null;
 
@@ -1856,28 +1851,107 @@ function frostBackground(imageUrl, blurPx) {
   img.src = imageUrl;
 }
 
-// A fade setting as ms, or null if it isn't one: a number of ms (or a numeric
-// string, from the URL), true for the default, false for none.
+// ---------- Visual effects ----------
+
+// Effects that are cheap on a desktop GPU but costly on the Pi, which draws
+// every frame in software. Each effect resolves per browser from the first
+// source that sets it:
+//
+//   URL (?fade=150)  →  saved in this browser (debug panel → Display)
+//                    →  server config  →  the active preset's value
+//
+// The preset itself resolves the same way: ?fx=lite, saved, config
+// effects.preset, else "full". So an explicit setting always beats a preset.
+// The kiosk loads ?fx=lite (runKiosk.sh); everything else defaults to full.
+//
+// To add an effect: give it a value in each preset, an FX_SETTINGS entry, and
+// an apply() that pushes it into the page (usually a CSS var or body class).
+// The debug panel's Display view picks it up automatically.
+const FX_PRESETS = {
+  full: { fade: 400 },
+  lite: { fade: 150 },
+};
+const FX_DEFAULT_PRESET = "full";
+const FX_STORAGE_KEY = "dashboard.fx";
+
+const FX_SETTINGS = {
+  fade: {
+    label: "Fade length",
+    unit: "ms",
+    hint: "Cross-fade between views; 0 = instant. The news fade is half this.",
+    input: { type: "number", min: 0, max: 2000, step: 50 },
+    parse: parseFadeMs,
+    fromConfig: (cfg) => cfg?.rotation?.fade,
+    apply(ms) {
+      fadeMs = ms;
+      const root = document.documentElement.style;
+      root.setProperty("--fade-view", `${ms}ms`);
+      root.setProperty("--fade-rss", `${Math.round(ms / 2)}ms`);
+    },
+  },
+};
+
+let fxConfig = null;  // /api/config payload, kept so a saved change can re-resolve
+let fxState = null;   // { preset: {value, source}, <effect>: {value, source}, … }
+
+// A fade as ms, or null if the value isn't one: a number (or numeric string,
+// from the URL), true for the full preset's length, false for none.
 function parseFadeMs(value) {
-  if (value === true) return DEFAULT_FADE_MS;
+  if (value === true) return FX_PRESETS.full.fade;
   if (value === false) return 0;
   if (value == null || value === "") return null;
   const ms = Number(value);
   return Number.isFinite(ms) && ms >= 0 ? Math.min(Math.round(ms), 2000) : null;
 }
 
-// The URL wins over config: ?fade=<ms>, else rotation.fade, else the default.
-// Durations reach the CSS through --fade-view / --fade-rss.
-function applyFadeSetting(configFade) {
-  const param = new URLSearchParams(location.search).get("fade");
-  fadeMs = parseFadeMs(param) ?? parseFadeMs(configFade) ?? DEFAULT_FADE_MS;
-  const root = document.documentElement.style;
-  root.setProperty("--fade-view", `${fadeMs}ms`);
-  root.setProperty("--fade-rss", `${Math.round(fadeMs / 2)}ms`);
+function parseFxPreset(value) {
+  return typeof value === "string" && Object.hasOwn(FX_PRESETS, value) ? value : null;
+}
+
+// Settings saved in this browser. Storage can be missing or throw (private
+// windows, cleared site data), so every access degrades to "nothing saved".
+function loadSavedFx() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(FX_STORAGE_KEY) || "{}");
+    return saved && typeof saved === "object" ? saved : {};
+  } catch (e) { return {}; }
+}
+
+function saveFx(settings) {
+  try {
+    if (Object.keys(settings).length) localStorage.setItem(FX_STORAGE_KEY, JSON.stringify(settings));
+    else localStorage.removeItem(FX_STORAGE_KEY);
+    return true;
+  } catch (e) { return false; }
+}
+
+function resolveFx(cfg) {
+  const url = new URLSearchParams(location.search);
+  const saved = loadSavedFx();
+  const pick = (parse, sources) => {
+    for (const [source, raw] of sources) {
+      const value = parse(raw);
+      if (value != null) return { value, source };
+    }
+    return null;
+  };
+  const state = {
+    preset: pick(parseFxPreset, [["url", url.get("fx")], ["saved", saved.preset], ["config", cfg?.effects?.preset]])
+      ?? { value: FX_DEFAULT_PRESET, source: "default" },
+  };
+  for (const [key, def] of Object.entries(FX_SETTINGS)) {
+    state[key] = pick(def.parse, [["url", url.get(key)], ["saved", saved[key]], ["config", def.fromConfig(cfg)]])
+      ?? { value: FX_PRESETS[state.preset.value][key], source: "preset" };
+  }
+  return state;
+}
+
+function applyEffects() {
+  fxState = resolveFx(fxConfig);
+  for (const [key, def] of Object.entries(FX_SETTINGS)) def.apply(fxState[key].value);
 }
 
 async function start() {
-  let configFade = null;
   try {
     const cfg = await fetchJson("/api/config");
     const secs = cfg?.rotation?.rssSeconds;
@@ -1887,12 +1961,12 @@ async function start() {
     // Default nhlPanelSeconds to weatherPanelSeconds if not explicitly set.
     const nhlSecs = cfg?.rotation?.nhlPanelSeconds ?? cfg?.rotation?.weatherPanelSeconds;
     if (typeof nhlSecs === "number" && nhlSecs > 0) nhlRotationMs = nhlSecs * 1000;
-    configFade = cfg?.rotation?.fade;
+    fxConfig = cfg;
     calendarEnabled = !!cfg?.calendar?.enabled;
     countdowns = Array.isArray(cfg?.countdowns) ? cfg.countdowns : [];
     applyBackground(cfg?.background);
   } catch (e) { /* fall back to default */ }
-  applyFadeSetting(configFade);
+  applyEffects();
 
   // Build the weather views list based on what's actually configured.
   const weatherViews = ["weather"];
@@ -2076,6 +2150,7 @@ function renderDebugFields(data) {
     <dt>Calendar URLs</dt><dd>${data.calendarUrlCount}</dd>
     <dt>Background</dt><dd>${background}</dd>
     <dt>Cache (${data.cache.length})</dt><dd>${cache}</dd>
+    <dt>Display</dt><dd>${escapeHtml(fxSummary())} <button class="debug-action" data-debug-action="display">settings ›</button></dd>
     <dt>Countdowns</dt><dd><button class="debug-action" data-debug-action="countdowns">manage ›</button></dd>
     <dt>Service log</dt><dd><button class="debug-action" data-debug-action="log-service">view ›</button></dd>
     <dt>Update log</dt><dd><button class="debug-action" data-debug-action="log-update">view ›</button></dd>
@@ -2120,6 +2195,81 @@ function populateUserAgent(container) {
   container.appendChild(link);
 }
 
+// "lite preset · fade 150 ms" — the effective settings, for the field list.
+function fxSummary() {
+  if (!fxState) return "";
+  const parts = [`${fxState.preset.value} preset`];
+  for (const [key, def] of Object.entries(FX_SETTINGS)) {
+    parts.push(`${def.label.toLowerCase()} ${fxState[key].value}${def.unit ? " " + def.unit : ""}`);
+  }
+  return parts.join(" · ");
+}
+
+// Where an effective setting came from, in words.
+function fxSourceText(key, entry) {
+  switch (entry.source) {
+    case "url": return `URL (?${key === "preset" ? "fx" : key}=${entry.value})`;
+    case "saved": return "saved in this browser";
+    case "config": return "server config";
+    case "preset": return `${fxState.preset.value} preset`;
+    default: return "built-in default";
+  }
+}
+
+// The Display view: one row per effect plus the preset. Inputs show what's
+// saved in this browser (blank = not saved); "Now" shows the effective value
+// and its source, since a URL parameter can override the saved one.
+function renderDisplaySettings(message, isError) {
+  const saved = loadSavedFx();
+  const row = (key, label, control, hint) => {
+    const entry = fxState[key];
+    const urlNote = entry.source === "url"
+      ? '<span class="debug-fx-url">The URL sets this, so a saved value won\'t apply here.</span>'
+      : "";
+    return `<div class="debug-fx-row">
+        <label class="debug-fx-label" for="fx-${key}">${escapeHtml(label)}</label>
+        ${control}
+        <span class="debug-fx-now">Now: <strong>${escapeHtml(String(entry.value))}</strong> — ${escapeHtml(fxSourceText(key, entry))}</span>
+        ${hint ? `<span class="debug-fx-hint">${escapeHtml(hint)}</span>` : ""}
+        ${urlNote}
+      </div>`;
+  };
+  const presetOptions = ['<option value="">Not saved</option>']
+    .concat(Object.keys(FX_PRESETS).map(p =>
+      `<option value="${escapeHtml(p)}"${saved.preset === p ? " selected" : ""}>${escapeHtml(p)}</option>`))
+    .join("");
+  const rows = [
+    row("preset", "Preset", `<select id="fx-preset" name="preset">${presetOptions}</select>`,
+      "full = every effect; lite = cheaper effects for low-powered devices like the Pi."),
+  ];
+  for (const [key, def] of Object.entries(FX_SETTINGS)) {
+    const inp = def.input;
+    const value = saved[key] != null ? ` value="${escapeHtml(String(saved[key]))}"` : "";
+    const control = `<input id="fx-${key}" name="${escapeHtml(key)}" type="${inp.type}" min="${inp.min}" max="${inp.max}" step="${inp.step}" placeholder="not saved"${value}>`
+      + (def.unit ? ` <span class="debug-fx-unit">${escapeHtml(def.unit)}</span>` : "");
+    rows.push(row(key, def.label, control, def.hint));
+  }
+  const msg = message
+    ? `<span class="debug-fx-msg${isError ? " error" : ""}">${escapeHtml(message)}</span>`
+    : "";
+  return `
+    <div class="debug-log-header">
+      <button class="debug-back" data-debug-action="back">‹ Back</button>
+      <span class="debug-log-title">Display</span>
+    </div>
+    <p class="debug-fx-intro">Visual effects for <strong>this browser only</strong>. A saved value overrides the
+      server config, and a URL parameter (<code>?fx=lite</code>, <code>?fade=150</code>) overrides both.
+      Leave a field blank to not save it.</p>
+    <form class="debug-fx-form" data-debug-action="display-form">
+      ${rows.join("")}
+      <div class="debug-fx-actions">
+        <button type="submit" class="debug-action">Save</button>
+        <button type="button" class="debug-action" data-debug-action="display-reset">Clear saved</button>
+        ${msg}
+      </div>
+    </form>`;
+}
+
 function renderDebugLog(title, data) {
   const lines = (data.lines || []).map(escapeHtml).join("\n") || "(no output)";
   const note = data.note ? `<p style="color:var(--text-muted)">${escapeHtml(data.note)}</p>` : "";
@@ -2145,7 +2295,7 @@ function setupDebugOverlay() {
   if (!dot || !sheet || !backdrop || !body || !close) return;
 
   let open = false;
-  let mode = "fields";         // "fields" | "log" — controls Escape behavior
+  let mode = "fields";         // "fields" | "log" | "countdowns" | "display" — controls Escape behavior
   let tickTimer = null;        // 1Hz interval that updates uptime + page-age
   let tickCount = 0;           // tickTimer ticks, for the slower system refresh
   const SYSTEM_REFRESH_TICKS = 5;
@@ -2221,6 +2371,50 @@ function setupDebugOverlay() {
         <p style="color: var(--live)">Failed to load: ${escapeHtml(e.message)}</p>
       `;
     }
+  }
+
+  function showDisplay(message, isError) {
+    mode = "display";
+    if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
+    body.innerHTML = renderDisplaySettings(message, isError);
+  }
+
+  function saveDisplay(form) {
+    const settings = {};
+    const preset = form.elements.preset.value;
+    if (preset) settings.preset = preset;
+    for (const [key, def] of Object.entries(FX_SETTINGS)) {
+      const el = form.elements[key];
+      // A number input holding junk ("1e") reports value "" — don't let that
+      // silently clear the saved setting.
+      if (el.validity?.badInput) {
+        showDisplay(`${def.label}: that isn't a valid value.`, true);
+        return;
+      }
+      const raw = el.value.trim();
+      if (raw === "") continue;
+      const value = def.parse(raw);
+      if (value == null) {
+        showDisplay(`${def.label}: "${raw}" isn't a valid value.`, true);
+        return;
+      }
+      settings[key] = value;
+    }
+    if (!saveFx(settings)) {
+      showDisplay("Couldn't save: this browser isn't allowing local storage.", true);
+      return;
+    }
+    applyEffects();
+    showDisplay("Saved.");
+  }
+
+  function resetDisplay() {
+    if (!saveFx({})) {
+      showDisplay("Couldn't clear: this browser isn't allowing local storage.", true);
+      return;
+    }
+    applyEffects();
+    showDisplay("Cleared saved settings.");
   }
 
   async function showCountdowns() {
@@ -2540,6 +2734,8 @@ function setupDebugOverlay() {
     else if (action === "log-update") showLog("update");
     else if (action === "update") startUpdateCountdown();
     else if (action === "countdowns") showCountdowns();
+    else if (action === "display") showDisplay();
+    else if (action === "display-reset") resetDisplay();
     else if (action === "edit-countdown") {
       const d = target.dataset.cdDate;
       const t = target.dataset.cdTitle;
@@ -2578,7 +2774,10 @@ function setupDebugOverlay() {
   // Handle the countdown add/edit form submission
   body.addEventListener("submit", (e) => {
     const form = e.target;
-    if (form.matches("[data-debug-action='add-countdown-form']")) {
+    if (form.matches("[data-debug-action='display-form']")) {
+      e.preventDefault();
+      saveDisplay(form);
+    } else if (form.matches("[data-debug-action='add-countdown-form']")) {
       e.preventDefault();
       const date = form.elements.date.value;
       const title = form.elements.title.value.trim();
@@ -2601,14 +2800,14 @@ function setupDebugOverlay() {
 
   document.addEventListener("keydown", (e) => {
     const tag = (document.activeElement?.tagName || "").toLowerCase();
-    if (tag === "input" || tag === "textarea") return;
+    if (tag === "input" || tag === "textarea" || tag === "select") return;
     if (e.key === "d" || e.key === "D" || e.key === "?") {
       e.preventDefault();
       open ? closeDebug() : openDebug();
     } else if (e.key === "Escape" && open) {
-      // Escape from a log/countdowns view returns to the field list; Escape from
-      // the field list closes the panel entirely.
-      if (mode === "log" || mode === "countdowns") showFields();
+      // Escape from a log/countdowns/display view returns to the field list;
+      // Escape from the field list closes the panel entirely.
+      if (mode === "log" || mode === "countdowns" || mode === "display") showFields();
       else closeDebug();
     } else if (open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
       e.preventDefault();

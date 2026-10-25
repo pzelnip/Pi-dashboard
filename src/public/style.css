@@ -1605,6 +1605,50 @@ a.wx-link:focus-visible {
 }
 .debug-toggle-annual:hover { text-decoration: underline; }
 
+/* Display view: per-browser visual-effects settings. */
+.debug-fx-intro {
+  color: var(--text-muted);
+  font-size: 0.85em;
+  margin: 0 0 12px;
+}
+.debug-fx-intro code { color: var(--text-dim); }
+.debug-fx-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.debug-fx-label { width: 130px; font-weight: 600; white-space: nowrap; }
+.debug-fx-form select,
+.debug-fx-form input {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 0.85em;
+}
+.debug-fx-form input[type="number"] { width: 120px; }
+.debug-fx-unit { color: var(--text-muted); font-size: 0.85em; }
+.debug-fx-now { flex-basis: 100%; padding-left: 140px; font-size: 0.85em; color: var(--text-dim); }
+.debug-fx-hint { flex-basis: 100%; padding-left: 140px; font-size: 0.8em; color: var(--text-muted); }
+.debug-fx-url { flex-basis: 100%; padding-left: 140px; font-size: 0.8em; color: var(--pregame); }
+.debug-fx-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.debug-fx-msg { font-size: 0.85em; color: var(--text-dim); }
+.debug-fx-msg.error { color: var(--live); }
+@media (max-width: 720px) {
+  .debug-fx-now, .debug-fx-hint, .debug-fx-url { padding-left: 0; }
+}
+
 .update-banner {
   display: none;
   padding: 10px 20px;

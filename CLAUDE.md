@@ -60,7 +60,8 @@ When making frontend changes, exercise both the rotation timers and the dots/pre
 
 Notable knobs the frontend reads from `config.json` via `/api/config`:
 
-- `rotation.{rssSeconds, weatherPanelSeconds, nhlPanelSeconds}` — per-panel rotation cadence; `nhlPanelSeconds` defaults to `weatherPanelSeconds` if omitted. `rotation.fade` sets the cross-fade length in ms for every viewer (default 400; `false`/`0` = instant; the RSS fade is half of it), applied as the `--fade-view` / `--fade-rss` CSS vars. The `?fade=<ms>` URL parameter overrides it per browser: the Pi's kiosk loads `?fade=150` (set in `runKiosk.sh`) because software-drawn fades are expensive there, while other browsers viewing the Pi keep the default.
+- `rotation.{rssSeconds, weatherPanelSeconds, nhlPanelSeconds}` — per-panel rotation cadence; `nhlPanelSeconds` defaults to `weatherPanelSeconds` if omitted. `rotation.fade` sets the cross-fade length in ms for every viewer (`false`/`0` = instant; the RSS fade is half of it).
+- `effects.preset` — default visual-effects preset (`full`/`lite`). Visual effects are resolved **per browser** (see "Visual effects" below), so this and `rotation.fade` are only server-wide defaults.
 - `nhl.favorites` — array of team abbreviations (`["EDM", "VAN"]`). Favorited teams sort to the top of their status group and get a ★ next to the team name. Empty/missing means no preference.
 - `nhl.seasonStart` — ISO date (`"2026-09-29"`) of the next season's first game. During the deep off-season the NHL panel adds a "days until the NHL season" countdown view. On the eve of the opener (and opening day itself) the panel drops the countdown and shows the real opening-night slate instead — `find_opening_night` surfaces tomorrow's games when today is still empty. Omit/empty (or a past date) and both behaviours are simply skipped.
 - `countdowns` — list of `{date, title}` objects driving the countdown view in the weather panel.
@@ -92,6 +93,8 @@ Single ES module-free file, three rotating panels (NHL, weather, RSS). The key a
 - `onShow(activeView)` is the only per-panel hook. RSS uses it to fire `refreshRSS` when the rotator advances; weather uses it to hide the city label on non-weather views; NHL has no `onShow` (its views are pre-rendered).
 
 The weather panel is special: it stacks four views (weather, calendar, clock, countdown) inside one panel. The calendar view shares the panel header, which is why `refreshCalendar` calls `setUpdated("weather")`.
+
+**Visual effects** (the "Visual effects" section of `app.js`): anything that costs the Pi frames — fades today, more effects later — is a setting in `FX_SETTINGS` with a value in each `FX_PRESETS` entry (`full`, `lite`). Each resolves per browser from URL param (`?fx=lite`, `?fade=150`) → `localStorage` (`dashboard.fx`, edited in the debug panel's Display view) → server config → the preset's value, and `apply()` pushes it into the page (CSS vars like `--fade-view`). The Pi's kiosk loads `?fx=lite` from `runKiosk.sh`. Add new effects there rather than as ad-hoc flags, and measure them on the Pi (it composites in software, so continuous animations and long transitions are expensive).
 
 CSS classes for the dots/nav controls are `.rot-*` (shared by all three panels). Don't reintroduce panel-specific class names — the controls are intentionally shared.
 

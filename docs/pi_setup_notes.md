@@ -18,13 +18,14 @@ until curl -sf http://localhost:8080/api/version >/dev/null; do
   sleep 1
 done
 
-exec chromium --kiosk --password-store=basic 'http://localhost:8080/?fade=150'
+exec chromium --kiosk --password-store=basic 'http://localhost:8080/?fx=lite'
 ```
 
-`?fade=150` shortens the cross-fades between views to 150 ms for the kiosk
-only (the default is 400 ms; `?fade=0` turns them off). The Pi draws fades in
-software, and short ones cost it far less CPU. Other browsers viewing the
-dashboard keep the default.
+`?fx=lite` picks the cheaper visual-effects preset for the kiosk only (e.g.
+150 ms fades instead of 400 ms). The Pi draws every frame in software, so
+effects cost it far more CPU than a desktop. Other browsers viewing the
+dashboard keep the `full` preset. Individual effects can be overridden too
+(`?fx=lite&fade=0`); see "Visual effects" in `docs/Overview.md`.
 
 Make sure to chmod it to make it executable.
 
