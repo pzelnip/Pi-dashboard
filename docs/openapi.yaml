@@ -9,7 +9,9 @@ info:
     frontend can render directly against a stable, trimmed-down JSON shape.
 
     Conventions:
-      - All endpoints return `application/json` with `Cache-Control: no-store`.
+      - All `/api/*` JSON endpoints send `Cache-Control: no-store`. Static
+        files and `/api/background` send `Cache-Control: no-cache` plus an
+        `ETag`, and answer a matching `If-None-Match` with 304.
       - **Error responses are HTTP 200** with body `{"error": "<message>"}`.
         This is intentional: the frontend renders errors inline without
         clobbering the last-good data already on screen, and `fetch_cached`
@@ -26,7 +28,7 @@ servers:
 
 tags:
   - name: dashboard
-    description: Frontend-facing data endpoints (NHL, weather, RSS, calendar).
+    description: Frontend-facing data endpoints (NHL, weather, RSS, calendar, countdowns).
   - name: meta
     description: Metadata endpoints (version, config, debug, logs).
   - name: ops
@@ -147,8 +149,14 @@ paths:
         upstream (NOT `/schedule/now`, which lags the calendar rollover and would
         return yesterday's slate hours into the user's morning).
 
+        Each upstream page covers seven days, so every date is read from a page
+        anchored on yesterday (± whole weeks): one page answers yesterday
+        through today+5, and the off-season look-back / look-ahead costs at
+        most two more.
+
         Without `date`: returns both `today` and `yesterday` envelopes so the
-        frontend can rotate between them when no live game is in progress.
+        frontend can rotate between them when no live game is in progress, plus
+        the off-season, deep-off-season and opening-night states.
 
         With `date` (debug override): returns only the requested date as `today`,
         with `yesterday: null`.
@@ -192,20 +200,22 @@ paths:
   /api/rss:
     get:
       tags: [dashboard]
-      summary: Top items from a configured RSS or Atom feed
+      summary: Every page of the merged news stream
       description: |
-        Indexes into `config.json -> rss`. Handles both RSS 2.0 (`<item>`) and
-        Atom (`<entry>`). Returns up to 4 items.
-      parameters:
-        - in: query
-          name: feed
-          required: false
-          schema:
-            type: integer
-            default: 0
-          description: |
-            Index into the configured feed list (wraps modulo the count).
-            Defaults to 0.
+        Merges all feeds in `config.json -> rss` (RSS 2.0 `<item>` and Atom
+        `<entry>`) into one stream and returns all of it at once. With N feeds,
+        the 4×N most recent articles are selected (each feed's newest is
+        guaranteed a slot), grouped by feed. The browser pages through `items`
+        `pageSize` at a time and re-fetches every few minutes, so rotating
+        pages needs no request.
+
+        Feeds whose newest article is 30+ days old are dropped; 20+ days puts a
+        `stale` warning item in place of the feed's oldest story; 14+ days
+        marks its items `aged`.
+
+        Feed bodies are cached for 15 minutes and served stale-while-revalidate:
+        an expired feed is returned at once and refreshed in the background.
+        Takes no parameters.
       responses:
         "200":
           description: OK or inline error envelope.
@@ -238,6 +248,99 @@ paths:
                   - $ref: "#/components/schemas/CalendarResponse"
                   - $ref: "#/components/schemas/ErrorEnvelope"
 
+  /api/countdowns:
+    get:
+      tags: [dashboard]
+      summary: The effective countdown list
+      description: |
+        The countdowns from the merged config (a list in `config.local.json`
+        replaces the base one), sorted by date. Used by the debug panel.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [countdowns]
+                properties:
+                  countdowns:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Countdown"
+    post:
+      tags: [dashboard]
+      summary: Add a countdown
+      description: |
+        Adds an entry to the effective list and saves the whole list to
+        `config.local.json`. The read, change and write happen under one lock.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [date, title]
+              properties:
+                date:
+                  type: string
+                  description: "`YYYY-MM-DD`, or `MM-DD` for an annual event."
+                  example: "12-25"
+                title:
+                  type: string
+                  maxLength: 100
+                icon:
+                  type: string
+                  description: Optional emoji for the countdown's divider.
+      responses:
+        "200":
+          $ref: "#/components/responses/CountdownsChanged"
+    put:
+      tags: [dashboard]
+      summary: Edit a countdown
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [oldDate, oldTitle, newDate, newTitle]
+              properties:
+                oldDate:
+                  type: string
+                oldTitle:
+                  type: string
+                newDate:
+                  type: string
+                  description: "`YYYY-MM-DD`, or `MM-DD` for an annual event."
+                newTitle:
+                  type: string
+                  maxLength: 100
+                newIcon:
+                  type: string
+                  description: Empty clears any icon (back to the default ⏳).
+      responses:
+        "200":
+          $ref: "#/components/responses/CountdownsChanged"
+    delete:
+      tags: [dashboard]
+      summary: Delete a countdown
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [date, title]
+              properties:
+                date:
+                  type: string
+                title:
+                  type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/CountdownsChanged"
+
   /api/update:
     post:
       tags: [ops]
@@ -266,7 +369,42 @@ paths:
                   - $ref: "#/components/schemas/ErrorEnvelope"
 
 components:
+  responses:
+    CountdownsChanged:
+      description: The new list, or an inline error (e.g. "countdown not found", "countdown already exists").
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - type: object
+                required: [ok, countdowns]
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  countdowns:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Countdown"
+              - $ref: "#/components/schemas/ErrorEnvelope"
+
   schemas:
+    Countdown:
+      type: object
+      required: [date, title]
+      properties:
+        date:
+          type: string
+          description: "`YYYY-MM-DD`, or `MM-DD` for an annual event (resolves to its next occurrence)."
+          example: "2026-12-25"
+        title:
+          type: string
+          example: "Christmas"
+        icon:
+          type: string
+          description: Optional emoji shown in the countdown's divider.
+          example: "🎄"
+
     ErrorEnvelope:
       type: object
       description: |
@@ -280,7 +418,7 @@ components:
 
     ConfigResponse:
       type: object
-      required: [rotation, calendar, countdowns, background]
+      required: [rotation, calendar, countdowns, background, effects]
       properties:
         rotation:
           type: object
@@ -295,6 +433,12 @@ components:
             nhlPanelSeconds:
               type: integer
               example: 15
+            fade:
+              description: Cross-fade length in ms (`false`/`0` = instant). A default; each browser can override it.
+              oneOf:
+                - type: integer
+                - type: boolean
+              example: 400
         calendar:
           type: object
           required: [enabled]
@@ -306,15 +450,17 @@ components:
           type: array
           description: Items rendered in the countdown view of the weather panel.
           items:
-            type: object
-            properties:
-              date:
-                type: string
-                format: date
-                example: "2026-12-25"
-              title:
-                type: string
-                example: "Christmas"
+            $ref: "#/components/schemas/Countdown"
+        effects:
+          type: object
+          description: |
+            Server-wide visual-effects defaults (`effects` in config). Each
+            browser resolves effects itself, and a URL parameter or saved
+            setting overrides these.
+          properties:
+            preset:
+              type: string
+              enum: [full, lite]
         background:
           type: object
           description: |
@@ -331,7 +477,7 @@ components:
               example: 0.45
             blur:
               type: number
-              description: Frosted-glass blur radius behind the panels, in px, clamped to 0–60. 0 disables `backdrop-filter`.
+              description: Frosted-glass blur radius behind the panels, in px, clamped to 0–60. 0 turns the frosting off.
               example: 18
 
     DebugResponse:
@@ -379,6 +525,37 @@ components:
               ttlRemaining:
                 type: number
                 description: Seconds until the cached entry expires (negative when stale).
+        system:
+          type: object
+          description: Host health; each part is null where it can't be read (e.g. not on Linux).
+          properties:
+            load:
+              type: object
+              nullable: true
+              properties:
+                one:
+                  type: number
+                five:
+                  type: number
+                fifteen:
+                  type: number
+                cpus:
+                  type: integer
+            memory:
+              type: object
+              nullable: true
+              properties:
+                totalMb:
+                  type: integer
+                availableMb:
+                  type: integer
+                swapTotalMb:
+                  type: integer
+                swapUsedMb:
+                  type: integer
+            cpuTempC:
+              type: number
+              nullable: true
 
     LogsResponse:
       type: object
@@ -404,37 +581,71 @@ components:
         today:
           $ref: "#/components/schemas/NhlDayEnvelope"
         yesterday:
-          oneOf:
+          allOf:
             - $ref: "#/components/schemas/NhlDayEnvelope"
-            - type: "null"
+          nullable: true
           description: Null when a `?date=` override is used; otherwise the previous day's slate.
         hasLiveToday:
           type: boolean
           description: True if any of today's games is in `LIVE` or `CRIT` state.
-        seasonStart:
-          oneOf:
-            - type: string
+        offSeason:
+          type: object
+          nullable: true
+          required: [date, games, cupWinner]
+          properties:
+            date:
+              type: string
               format: date
-            - type: "null"
-          description: >-
-            ISO date of the next season's first game from `nhl.seasonStart`, or
-            null when unconfigured. Drives the deep-off-season season countdown.
-        openingNight:
-          oneOf:
-            - type: object
-              required: [date, games, isTomorrow]
+              description: The most recent day with games.
+            games:
+              type: array
+              items:
+                $ref: "#/components/schemas/NhlGame"
+            cupWinner:
+              type: object
+              nullable: true
               properties:
-                date:
+                team:
                   type: string
-                  format: date
-                games:
-                  type: array
-                  items:
-                    $ref: "#/components/schemas/NhlGame"
-                isTomorrow:
-                  type: boolean
-                  description: True on the eve of the opener; false on opening day.
-            - type: "null"
+                  example: "Carolina Hurricanes"
+                abbrev:
+                  type: string
+                  example: "CAR"
+          description: >-
+            Set when today and yesterday are empty, nothing is scheduled in the
+            next 7 days, and there were games in the past week (or yesterday
+            was the Cup-clinching game). The panel alternates those games with
+            a Cup-winner or "see you next season" message. Null otherwise.
+        deepOffSeason:
+          type: boolean
+          description: >-
+            True when there are no games today or yesterday, none in the past
+            week and none in the next 7 days. The panel then cycles weather,
+            clock, countdown and season-countdown views.
+        seasonStart:
+          type: string
+          format: date
+          nullable: true
+          description: >-
+            ISO date of the next season's first game: the NHL schedule's
+            `regularSeasonStartDate` while it's today or later, otherwise the
+            `nhl.seasonStart` config fallback, or null. Drives the
+            deep-off-season season countdown; the frontend ignores past dates.
+        openingNight:
+          type: object
+          nullable: true
+          required: [date, games, isTomorrow]
+          properties:
+            date:
+              type: string
+              format: date
+            games:
+              type: array
+              items:
+                $ref: "#/components/schemas/NhlGame"
+            isTomorrow:
+              type: boolean
+              description: True on the eve of the opener; false on opening day.
           description: >-
             Present only when the opener is today or tomorrow and today's slate
             is empty. Lets the panel preview the opening-night games instead of
@@ -464,7 +675,7 @@ components:
         state:
           type: string
           description: Upstream NHL game state.
-          enum: [FUT, PRE, LIVE, CRIT, OFF, FINAL]
+          enum: ["FUT", "PRE", "LIVE", "CRIT", "OFF", "FINAL"]
         startTime:
           type: string
           format: date-time
@@ -483,6 +694,10 @@ components:
           type: boolean
         venue:
           type: string
+        venueUrl:
+          type: string
+          nullable: true
+          description: Wikipedia page for known arenas, else a Google search; null without a venue.
         venueTimezone:
           type: string
         neutralSite:
@@ -503,6 +718,13 @@ components:
                 type: string
               market:
                 type: string
+              url:
+                type: string
+                nullable: true
+                description: The network's homepage, when known.
+        outcome:
+          type: string
+          description: Last period type of a finished game ("REG", "OT", "SO"); empty otherwise.
         series:
           nullable: true
           type: object
@@ -531,8 +753,6 @@ components:
         seriesUrl:
           type: string
         gameCenterLink:
-          type: string
-        ticketsLink:
           type: string
 
     NhlTeam:
@@ -593,37 +813,53 @@ components:
 
     RssResponse:
       type: object
-      required: [index, total, name, items]
+      required: [pageSize, items]
       properties:
-        index:
+        pageSize:
           type: integer
-          description: Resolved feed index (after wrapping modulo `total`).
-        total:
-          type: integer
-          description: Number of configured feeds.
-        name:
+          description: Items per page; the browser shows `items` this many at a time.
+          example: 4
+        items:
+          type: array
+          description: Every selected item, grouped by feed (groups ordered by their newest item).
+          items:
+            $ref: "#/components/schemas/RssItem"
+
+    RssItem:
+      type: object
+      properties:
+        title:
           type: string
-          description: Configured display name (falls back to feed URL).
+        link:
+          type: string
+          format: uri
+        published:
+          type: string
+          description: Raw upstream `pubDate` (RSS) or `published`/`updated` (Atom).
+        image:
+          type: string
+          description: Best-effort thumbnail (media namespace, image enclosure, or first `<img>` in description).
+        feedName:
+          type: string
+          description: Configured display name of the item's feed.
         feedImage:
           type: string
           description: Channel-level image / Atom logo, when present.
-        items:
-          type: array
-          maxItems: 4
-          items:
-            type: object
-            properties:
-              title:
-                type: string
-              link:
-                type: string
-                format: uri
-              published:
-                type: string
-                description: Raw upstream `pubDate` (RSS) or `published`/`updated` (Atom).
-              image:
-                type: string
-                description: Best-effort thumbnail (media namespace, image enclosure, or first `<img>` in description).
+        ageHours:
+          type: number
+          nullable: true
+          description: Hours since publication, to one decimal; null when the date can't be parsed.
+        aged:
+          type: boolean
+          description: Present (true) when the item's feed hasn't posted in 14+ days.
+        stale:
+          type: boolean
+          description: >-
+            Present (true) on a synthetic warning item standing in for a feed
+            that hasn't posted in 20+ days; its `title` is the warning text.
+        staleDays:
+          type: integer
+          description: On a `stale` item, days since the feed's newest article.
 
     CalendarResponse:
       type: object
