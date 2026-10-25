@@ -235,6 +235,15 @@ function createRotator({ dotsEl, navEl, viewsContainer, viewClassPrefix, titleEl
       dotsEl.querySelectorAll(".rot-dot").forEach((btn, i) => {
         btn.classList.toggle("active", i === index);
       });
+      // Rotation-progress effect: a bar under the dots fills over the rotation
+      // period. Every caller of applyActiveView (re)starts the timer right
+      // after, so restarting the bar here keeps the two in step.
+      dotsEl.classList.remove("rot-run");
+      if (fxOn.progress && currentViews.length > 1) {
+        dotsEl.style.setProperty("--rot-period", `${getRotationMs()}ms`);
+        void dotsEl.offsetWidth;
+        dotsEl.classList.add("rot-run");
+      }
     }
     if (onShow) onShow(active);
   }
@@ -418,8 +427,11 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
     // Tied class only on live games — a final regulation tie isn't a thing
     // in modern NHL (every final has a winner via OT/SO).
     const tiedCls = isLive(g) && tied ? " is-tied" : "";
-    const goalSide = bucket === "today" && isLive(g) ? goalSideFor(g) : null;
-    const stateCls = (isLive(g) ? "is-live" : isFinal(g) ? "is-final" : "") + (goalSide ? ` fx-goal fx-goal-${goalSide}` : "");
+    const events = bucket === "today" ? scoreEventsFor(g, isLive(g), isFinal(g)) : {};
+    const goalSide = events.goal;
+    const stateCls = (isLive(g) ? "is-live" : isFinal(g) ? "is-final" : "")
+      + (goalSide ? ` fx-goal fx-goal-${goalSide}` : "")
+      + (events.justFinal ? " fx-final-settle" : "");
     const r = Number(g.playoffRound);
     const hasRound = Number.isInteger(r) && r >= 1 && r <= 4;
     const roundLabel = hasRound ? escapeHtml(ROUND_LABELS[r]) : "";
@@ -1722,6 +1734,14 @@ function renderRSS(payload) {
       el.innerHTML = '<p style="color: var(--text-muted)">No items.</p>';
       return;
     }
+    // New-story highlights: decided as the page is shown, so "new" means
+    // "first time on this screen".
+    const newStories = takeNewStories(payload.items.filter(i => !i.stale));
+    if (newStories.size) {
+      titleEl.classList.remove("fx-news-arrived");
+      void titleEl.offsetWidth;
+      titleEl.classList.add("fx-news-arrived");
+    }
     el.innerHTML = `<ul class="rss-list">${
       payload.items.map(i => {
         const feedImageUrl = safeUrl(i.feedImage);
@@ -1755,8 +1775,9 @@ function renderRSS(payload) {
               ${isFresh ? `<span class="rss-bolt" aria-hidden="true">⚡</span>` : ""}
             </span>`
           : "";
+        const isNew = newStories.has(storyKey(i));
         return `
-        <li class="rss-item${i.aged ? " rss-item-aged" : rssAgeClass(i.ageHours)}">
+        <li class="rss-item${i.aged ? " rss-item-aged" : rssAgeClass(i.ageHours)}${isNew ? " fx-new-story" : ""}">
           <a href="${escapeHtml(itemLink)}" target="_blank" rel="noopener"${tooltip ? ` title="${tooltip}"` : ""}>
             ${itemImage
               ? `<img class="rss-thumb" src="${escapeHtml(itemImage)}" alt="" loading="lazy" onerror="this.remove()">`
@@ -1900,10 +1921,14 @@ const FX_PRESETS = {
   full: {
     fade: 400, transition: "rise", liveGlass: true, drift: true, weather: true,
     stagger: true, goals: true, clockRoll: true, tilt: true,
+    progress: true, newStories: true, timeOfDay: true, glassPolish: true,
+    finals: true, livePulse: true,
   },
   lite: {
     fade: 150, transition: "fade", liveGlass: false, drift: false, weather: false,
     stagger: false, goals: false, clockRoll: false, tilt: false,
+    progress: false, newStories: false, timeOfDay: false, glassPolish: false,
+    finals: false, livePulse: false,
   },
 };
 const FX_DEFAULT_PRESET = "full";
@@ -1961,6 +1986,19 @@ const FX_SETTINGS = {
     "Clock digits roll into place when they change.", "clock-roll"),
   tilt: fxToggle("Panel tilt",
     "Panels tilt toward the pointer with a glossy sheen (mouse only).", "tilt", setupPanelTilt),
+  progress: fxToggle("Rotation progress",
+    "A thin bar under the dots fills up as the view's time runs out, so you can see the next change coming.", "progress"),
+  newStories: fxToggle("New-story highlights",
+    "Headlines this browser hasn't shown before get a brief glow, and the news icon lights up.", "new-stories"),
+  timeOfDay: fxToggle("Time-of-day tint",
+    "The wallpaper's tint shifts through the day: cool morning, neutral midday, warm evening, deep-blue night.",
+    "tod", updateTimeOfDay),
+  glassPolish: fxToggle("Glass polish",
+    "Panels get a lit top edge, a soft gradient and a faint inner glow.", "glass-polish"),
+  finals: fxToggle("Final-score settle",
+    "When a live game ends, the winner's row lights up and the FINAL pill settles in.", "finals"),
+  livePulse: fxToggle("Live pulse",
+    "The red dot on LIVE games pulses.", "live-pulse"),
 };
 
 let fxConfig = null;  // /api/config payload, kept so a saved change can re-resolve
@@ -2119,18 +2157,94 @@ function renderRollingDigits(el, text) {
   }));
 }
 
-// Goal celebrations: remember each game's score so the next render can tell
-// which side just scored. Keyed by game id; only live games are tracked.
-const _goalScores = {};
-function goalSideFor(g) {
-  if (!fxOn.goals || g.id == null) return null;
-  const prev = _goalScores[g.id];
-  const now = { away: Number(g.away.score) || 0, home: Number(g.home.score) || 0 };
-  _goalScores[g.id] = now;
-  if (!prev) return null;
-  if (now.away > prev.away) return "away";
-  if (now.home > prev.home) return "home";
-  return null;
+// Score events for goal celebrations and the final-score settle: remember
+// each of today's games (score + whether it was live) so the next render can
+// tell what just happened. Keyed by game id. Nothing fires on the first
+// sighting of a game, so a page load never replays old goals or finals.
+const _gameMemory = {};
+function scoreEventsFor(g, live, final) {
+  if ((!fxOn.goals && !fxOn.finals) || g.id == null) return {};
+  const prev = _gameMemory[g.id];
+  const now = { away: Number(g.away.score) || 0, home: Number(g.home.score) || 0, live };
+  _gameMemory[g.id] = now;
+  if (!prev) return {};
+  const events = {};
+  if (fxOn.goals && live) {
+    if (now.away > prev.away) events.goal = "away";
+    else if (now.home > prev.home) events.goal = "home";
+  }
+  if (fxOn.finals && final && prev.live) events.justFinal = true;
+  return events;
+}
+
+// Time-of-day tint: a colour washed over the wallpaper, interpolated between
+// these hour stops (local time, wrapping at midnight) and written to
+// --tod-tint. Updated every few minutes, so the change is never visible.
+const TOD_STOPS = [
+  [0, [20, 40, 110, 0.22]],     // night
+  [5, [40, 50, 120, 0.18]],     // before dawn
+  [7, [255, 150, 120, 0.10]],   // dawn
+  [9, [170, 210, 255, 0.08]],   // cool morning
+  [13, [255, 255, 255, 0]],     // neutral midday
+  [17, [255, 190, 110, 0.10]],  // golden afternoon
+  [19.5, [255, 125, 80, 0.15]], // sunset
+  [21, [90, 60, 140, 0.16]],    // dusk
+  [23, [20, 40, 110, 0.22]],    // night
+  [24, [20, 40, 110, 0.22]],
+];
+function timeOfDayTint(date = new Date()) {
+  const h = date.getHours() + date.getMinutes() / 60;
+  let i = 0;
+  while (i < TOD_STOPS.length - 2 && TOD_STOPS[i + 1][0] <= h) i++;
+  const [h0, c0] = TOD_STOPS[i];
+  const [h1, c1] = TOD_STOPS[i + 1];
+  const t = (h - h0) / (h1 - h0);
+  const c = c0.map((v, k) => v + (c1[k] - v) * t);
+  return `rgba(${Math.round(c[0])}, ${Math.round(c[1])}, ${Math.round(c[2])}, ${c[3].toFixed(3)})`;
+}
+let _todTimer = null;
+function updateTimeOfDay(on) {
+  clearInterval(_todTimer);
+  _todTimer = null;
+  if (!on) return;
+  const set = () => document.documentElement.style.setProperty("--tod-tint", timeOfDayTint());
+  set();
+  _todTimer = setInterval(set, 5 * 60 * 1000);
+}
+
+// New-story highlights: the headlines this browser has already shown, kept in
+// localStorage so a reload (e.g. the kiosk's nightly restart) doesn't make
+// everything "new" again. The very first run seeds the list without
+// highlighting anything.
+const SEEN_STORIES_KEY = "dashboard.seenStories";
+const SEEN_STORIES_MAX = 600;
+let _seenStories = null;
+function storyKey(item) {
+  return item.link || `${item.feedName || ""}|${item.title || ""}`;
+}
+// Returns the set of keys among `items` that are new, and records them all.
+function takeNewStories(items) {
+  if (!fxOn.newStories) return new Set();
+  let firstRun = false;
+  if (!_seenStories) {
+    let stored = null;
+    try { stored = JSON.parse(localStorage.getItem(SEEN_STORIES_KEY) || "null"); } catch (e) { /* treat as none */ }
+    firstRun = !Array.isArray(stored);
+    _seenStories = new Set(Array.isArray(stored) ? stored : []);
+  }
+  const fresh = new Set();
+  for (const item of items) {
+    const key = storyKey(item);
+    if (!_seenStories.has(key)) {
+      if (!firstRun) fresh.add(key);
+      _seenStories.add(key);
+    }
+  }
+  if (_seenStories.size > SEEN_STORIES_MAX) {
+    _seenStories = new Set([..._seenStories].slice(-SEEN_STORIES_MAX));
+  }
+  try { localStorage.setItem(SEEN_STORIES_KEY, JSON.stringify([..._seenStories])); } catch (e) { /* in-memory only */ }
+  return fresh;
 }
 
 async function start() {

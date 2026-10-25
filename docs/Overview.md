@@ -76,7 +76,7 @@ Source: `src/parsers/nhl.py`, rendering in `src/public/app.js` (`renderNHL`,
 For each game the panel shows a card with:
 
 - **Status pill** — colour-coded by state:
-  - `LIVE` / `CRIT`: red `● LIVE` pill (static dot) paired with a quieter
+  - `LIVE` / `CRIT`: red `● LIVE` pill (the dot pulses with the `livePulse` effect, static otherwise) paired with a quieter
     period chip (`1ST` / `2ND` / `OT` / `SO`).
   - `FUT` / `PRE`: scheduled, shows local start time (en-US, 12-hour).
   - `OFF` / `FINAL`: muted "Final", "Final/OT", or "Final/SO".
@@ -456,6 +456,12 @@ effect.
   | Goal celebrations | `goals` | on | off | When a live game's score goes up, its card glows gold, the scoring side's score bumps and a GOAL! badge pops. |
   | Rolling clock | `clockRoll` | on | off | Clock digits roll into place when they change. |
   | Panel tilt | `tilt` | on | off | Panels lean toward the mouse with a glossy sheen (pointer devices only; the lean needs live glass or drift). |
+  | Rotation progress | `progress` | on | off | A thin bar under the rotation dots fills over the view's display time, so the next change is visible coming; restarts when you click the dots or arrows. The selected dot stays solid. |
+  | New-story highlights | `newStories` | on | off | Headlines this browser hasn't shown before flare their accent stripe and get a light sweep, and the news icon glows. Seen stories are remembered in `localStorage` (`dashboard.seenStories`, last 600); the first run only records them. |
+  | Time-of-day tint | `timeOfDay` | on | off | A colour wash over the wallpaper that drifts through the day (deep-blue night, warm dawn, cool morning, neutral midday, golden afternoon, orange sunset, purple dusk), recomputed every 5 minutes. |
+  | Glass polish | `glassPolish` | on | off | Static: a lit top edge, a soft top-down gradient and a faint cool glow on each panel. |
+  | Final-score settle | `finals` | on | off | When a game goes from live to final, its card glows green, the winner's row brightens and the FINAL pill settles in. Never fires for games already final on page load. |
+  | Live pulse | `livePulse` | on | off | The red dot on LIVE pills pulses. Off in lite because a continuous animation keeps the Pi redrawing for the whole game. |
 
   Toggles take `1`/`0`, `on`/`off` or `true`/`false` in the URL (e.g.
   `?drift=0`). Continuous effects (drift, weather scenes, goal glow) also
