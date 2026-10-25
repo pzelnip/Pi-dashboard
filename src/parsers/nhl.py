@@ -573,7 +573,8 @@ def nhl_overview(
 
     *season_start* (``nhl.seasonStart`` in config) is only a fallback for the
     schedule's own ``regularSeasonStartDate``, which already names the next
-    season's opener during the off-season.
+    season's opener during the off-season. The schedule's date wins only while
+    it's today or later.
     """
     if today is None:
         today = dt.date.today()
@@ -604,7 +605,12 @@ def nhl_overview(
     # surface tomorrow's opening slate here (the display would otherwise sit
     # on "No games today").
     current_page = _schedule_page(yesterday.isoformat(), SCHEDULE_TTL_LIVE)
-    season_start = current_page.get("regularSeasonStartDate") or season_start
+    # Only trust the schedule's date while it's still ahead: a past date (the
+    # finished season's opener) would hide the countdown instead of falling
+    # back to the configured one. ISO dates compare correctly as strings.
+    upstream_start = current_page.get("regularSeasonStartDate")
+    if upstream_start and upstream_start >= today.isoformat():
+        season_start = upstream_start
     opening_night = find_opening_night(today_games, favorites, season_start, today)
 
     return {

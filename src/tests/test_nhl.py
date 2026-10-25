@@ -1089,6 +1089,14 @@ class SchedulePagesTests(unittest.TestCase):
 
         self.assertEqual(result["seasonStart"], "2026-10-07")
 
+    def test_past_schedule_season_start_falls_back_to_config(self):
+        # The finished season's opener must not beat the configured next one.
+        self.meta = {"regularSeasonStartDate": "2025-10-07"}
+
+        result = self._overview(season_start="2026-09-29")
+
+        self.assertEqual(result["seasonStart"], "2026-09-29")
+
     def test_season_start_falls_back_to_config(self):
         result = self._overview(season_start="2026-09-29")
 

@@ -37,8 +37,7 @@ inspect the page in a browser:
 curl -s http://localhost:8080/api/nhl | jq             # {today, yesterday, hasLiveToday}
 curl -s 'http://localhost:8080/api/nhl?date=2026-04-21' | jq  # debug override (yesterday only)
 curl -s http://localhost:8080/api/weather | jq
-curl -s 'http://localhost:8080/api/rss?feed=0' | jq    # RSS 2.0 path
-curl -s 'http://localhost:8080/api/rss?feed=2' | jq    # Atom path (Simon Willison)
+curl -s 'http://localhost:8080/api/rss?page=0' | jq    # one page of the merged feeds
 curl -s http://localhost:8080/api/calendar | jq
 curl -s http://localhost:8080/api/config | jq          # rotation intervals + feature flags
 curl -s http://localhost:8080/api/version | jq         # git SHA, for kiosk auto-reload
