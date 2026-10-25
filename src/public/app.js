@@ -1645,13 +1645,14 @@ function onWeatherViewShown(active) {
 let rssPage = 0;
 let rssTotalPages = 1;
 let rssRotationMs = 30 * 1000;
-// Instant view swaps instead of cross-fades. The Pi draws every frame of a
-// fade in software, and at ~20 view swaps a minute the fades alone cost about
-// half a CPU core. The kiosk opts out per browser with ?fade=0 in its URL
-// (runKiosk.sh), so other viewers of the same server keep their fades;
-// rotation.fade: false in config turns them off for everyone, and ?fade=1
-// overrides that. See applyFadeSetting().
-let fadesEnabled = true;
+// Cross-fade length between views, in ms (the RSS fade-out/in is half that
+// each way). The Pi draws every frame of a fade in software, and at ~20 view
+// swaps a minute the default fades cost it a sizeable share of a core, so a
+// low-powered client shortens them per browser with ?fade=<ms> in its URL
+// (the kiosk uses ?fade=150, set in runKiosk.sh; 0 = instant) while other
+// viewers of the same server keep the default. See applyFadeSetting().
+const DEFAULT_FADE_MS = 400;
+let fadeMs = DEFAULT_FADE_MS;
 let rssFadeTimer = null;
 let rssRotator = null;
 
@@ -1754,7 +1755,8 @@ function renderRSS(payload) {
     }</ul>`;
   };
 
-  if (!fadesEnabled) {
+  const rssFadeMs = Math.round(fadeMs / 2);
+  if (rssFadeMs === 0) {
     writeContent();
     return;
   }
@@ -1766,7 +1768,7 @@ function renderRSS(payload) {
     writeContent();
     requestAnimationFrame(() => rssPanel.classList.remove("fading"));
     rssFadeTimer = null;
-  }, 200);
+  }, rssFadeMs);
 }
 
 async function refreshRSS() {
@@ -1854,15 +1856,28 @@ function frostBackground(imageUrl, blurPx) {
   img.src = imageUrl;
 }
 
-// The URL wins over config: ?fade=0 / ?fade=1, else rotation.fade.
+// A fade setting as ms, or null if it isn't one: a number of ms (or a numeric
+// string, from the URL), true for the default, false for none.
+function parseFadeMs(value) {
+  if (value === true) return DEFAULT_FADE_MS;
+  if (value === false) return 0;
+  if (value == null || value === "") return null;
+  const ms = Number(value);
+  return Number.isFinite(ms) && ms >= 0 ? Math.min(Math.round(ms), 2000) : null;
+}
+
+// The URL wins over config: ?fade=<ms>, else rotation.fade, else the default.
+// Durations reach the CSS through --fade-view / --fade-rss.
 function applyFadeSetting(configFade) {
   const param = new URLSearchParams(location.search).get("fade");
-  fadesEnabled = param === "0" ? false : param === "1" ? true : configFade;
-  document.body.classList.toggle("no-fade", !fadesEnabled);
+  fadeMs = parseFadeMs(param) ?? parseFadeMs(configFade) ?? DEFAULT_FADE_MS;
+  const root = document.documentElement.style;
+  root.setProperty("--fade-view", `${fadeMs}ms`);
+  root.setProperty("--fade-rss", `${Math.round(fadeMs / 2)}ms`);
 }
 
 async function start() {
-  let configFade = true;
+  let configFade = null;
   try {
     const cfg = await fetchJson("/api/config");
     const secs = cfg?.rotation?.rssSeconds;
@@ -1872,7 +1887,7 @@ async function start() {
     // Default nhlPanelSeconds to weatherPanelSeconds if not explicitly set.
     const nhlSecs = cfg?.rotation?.nhlPanelSeconds ?? cfg?.rotation?.weatherPanelSeconds;
     if (typeof nhlSecs === "number" && nhlSecs > 0) nhlRotationMs = nhlSecs * 1000;
-    configFade = cfg?.rotation?.fade !== false;
+    configFade = cfg?.rotation?.fade;
     calendarEnabled = !!cfg?.calendar?.enabled;
     countdowns = Array.isArray(cfg?.countdowns) ? cfg.countdowns : [];
     applyBackground(cfg?.background);

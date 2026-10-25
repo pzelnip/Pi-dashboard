@@ -461,7 +461,7 @@ in) merged with `src/config.local.json` (gitignored personal overrides; see
 | `rotation.rssSeconds` | RSS feed cadence (seconds). |
 | `rotation.weatherPanelSeconds` | Weather panel view cadence (seconds). |
 | `rotation.nhlPanelSeconds` | NHL panel view cadence (seconds). Falls back to `weatherPanelSeconds`. |
-| `rotation.fade` | Cross-fade between views (default `true`). `false` swaps views instantly for **every** browser viewing this server. To turn fades off for one browser only, load the page with `?fade=0` (or force them on with `?fade=1`); the Pi's kiosk uses `http://localhost:8080/?fade=0` because it draws fades in software, which costs it about half a CPU core at the default cadences. |
+| `rotation.fade` | Cross-fade length between views, in ms (default `400`; `true` = default, `false` or `0` = instant swaps; the RSS fade is half this each way). Applies to **every** browser viewing this server. To change it for one browser only, load the page with `?fade=<ms>` (`?fade=0` for instant), which overrides the config. The Pi's kiosk uses `http://localhost:8080/?fade=150`: it draws fades in software, and measured on the Pi, 150 ms fades cost a few points of a core over none, versus roughly 18 points for the default 400 ms. |
 | `background.image` | Path to an image file on the dashboard host (absolute, `~`-relative, or relative to `src/`). Blank/missing/unresolvable = flat dark background. |
 | `background.dim` | Darkness of the scrim over the background image, 0–0.95 (default 0.45). |
 | `background.blur` | Frosted-glass blur behind the panels, 0–60 px (default 18). `0` = translucent panels, no blur. |
