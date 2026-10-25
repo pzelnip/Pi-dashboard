@@ -314,22 +314,29 @@ async function refreshCalendar() {
 
 // ---------- Clock ----------
 
-// Render the time into a clock-time element as two spans — the h:mm digits and
-// a smaller accent meridiem (AM/PM) — so CSS can style them independently. The
-// en-US 12-hour format ("8:03 PM") always splits cleanly on the space; if a
-// locale ever omits the meridiem the whole string falls into the digits span.
+// Fill one clock span with text, rolling the changed digits when that effect
+// is on (the previous text is carried over from the span being replaced).
+function clockSpan(timeEl, cls, text) {
+  const span = document.createElement("span");
+  span.className = cls;
+  if (fxOn.clockRoll) {
+    span.dataset.prev = timeEl.querySelector("." + cls)?.dataset.prev || "";
+    renderRollingDigits(span, text);
+  } else {
+    span.textContent = text;
+  }
+  return span;
+}
+
+// Render the time into a clock-time element as three spans — the h:mm digits,
+// smaller :ss seconds, and a smaller accent meridiem (AM/PM) — so CSS can style
+// them independently. The en-US 12-hour format ("8:03 PM") always splits
+// cleanly on the space; if a locale ever omits the meridiem the whole string
+// falls into the digits span.
 function renderClockTime(timeEl, now) {
   const [digits, meridiem] = formatTime(now).split(" ");
-  const prevHm = timeEl.querySelector(".clk-hm");
-  const hm = document.createElement("span");
-  hm.className = "clk-hm";
-  if (fxOn.clockRoll) {
-    hm.dataset.prev = prevHm?.dataset.prev || "";
-    renderRollingDigits(hm, digits);
-  } else {
-    hm.textContent = digits;
-  }
-  const parts = [hm];
+  const seconds = ":" + String(now.getSeconds()).padStart(2, "0");
+  const parts = [clockSpan(timeEl, "clk-hm", digits), clockSpan(timeEl, "clk-sec", seconds)];
   if (meridiem) {
     const mer = document.createElement("span");
     mer.className = "clk-mer";
@@ -370,10 +377,10 @@ function renderClock() {
   if (nhlDeepOffSeason) renderNhlClock();
 }
 
-// Re-armed every tick (rather than setInterval) so it stays on the minute
-// boundary instead of whatever second the page loaded, and recovers after sleep.
+// Re-armed every tick (rather than setInterval) so it stays on the second
+// boundary instead of whatever millisecond the page loaded, and recovers after sleep.
 function scheduleClockTick() {
-  setTimeout(() => { renderClock(); scheduleClockTick(); }, 60000 - Date.now() % 60000);
+  setTimeout(() => { renderClock(); scheduleClockTick(); }, 1000 - Date.now() % 1000);
 }
 
 // ---------- Countdown ----------

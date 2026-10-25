@@ -203,13 +203,13 @@ Source: one or more public iCalendar (`.ics`) URLs (`src/parsers/calendar.py`).
 
 ### Clock view
 
-- Large 12-hour time + a manually-built date string
+- Large 12-hour time with smaller seconds + a manually-built date string
   (`Tuesday, May 6th, 2026`). Always renders en-US locale to avoid silent
   24-hour regressions on the Pi's default system locale.
 - **Styling** — a pure-CSS twilight-gradient hero (same scene treatment as the
   "Puck Drop" season view). The time glows softly with a smaller accent
   meridiem (AM/PM), over a spaced uppercase date caption.
-- Re-renders every minute.
+- Re-renders every second.
 - Always present (no config flag).
 
 ### Countdown view

@@ -674,6 +674,11 @@ a.wx-link:focus-visible {
   color: #eaf2ff;
   text-shadow: 0 0 34px rgba(120, 180, 255, 0.35);
 }
+.clk-sec {
+  font-size: 0.4em;
+  color: var(--text-dim);
+  margin-left: -0.15em;
+}
 .clk-mer {
   font-size: 0.26em;
   font-weight: 600;
