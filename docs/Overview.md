@@ -448,12 +448,25 @@ effect.
   | Effect | URL param | full | lite | Notes |
   | --- | --- | --- | --- | --- |
   | Fade length | `fade` | 400 ms | 150 ms | Cross-fade between views, `0` = instant; the news fade is half this. Measured on the Pi: 150 ms costs a few points of a core over none, 400 ms roughly 18. |
+  | View transition | `transition` | `rise` | `fade` | How views swap: `fade`, `rise` (fade + lift), `zoom`, or `blur`. Uses the fade length. |
+  | Live glass | `liveGlass` | on | off | Panels blur the wallpaper live (`backdrop-filter`) instead of the pre-blurred copy. Very expensive on the Pi. |
+  | Drifting wallpaper | `drift` | on | off | The wallpaper slowly pans and zooms (90 s cycle); uses live glass so the panels follow it. |
+  | Weather scenes | `weather` | on | off | Animated layer in the weather backdrop keyed to conditions: sun rays, drifting clouds, rain, storm rain with lightning, snow, fog bands, twinkling stars at night. Paused while the weather view is hidden. |
+  | Staggered entrances | `stagger` | on | off | Game cards, forecast days, calendar events and headlines slide in one after another when a view appears. |
+  | Goal celebrations | `goals` | on | off | When a live game's score goes up, its card glows gold, the scoring side's score bumps and a GOAL! badge pops. |
+  | Rolling clock | `clockRoll` | on | off | Clock digits roll into place when they change. |
+  | Panel tilt | `tilt` | on | off | Panels lean toward the mouse with a glossy sheen (pointer devices only; the lean needs live glass or drift). |
+
+  Toggles take `1`/`0`, `on`/`off` or `true`/`false` in the URL (e.g.
+  `?drift=0`). Continuous effects (drift, weather scenes, goal glow) also
+  stop for viewers whose OS asks for reduced motion.
 
 - **Where a setting comes from** — the first of these that sets it wins:
   1. the URL (`?fx=lite`, `?fade=150`),
   2. saved in this browser, from the debug panel's Display view
      (`localStorage`, key `dashboard.fx`),
-  3. the server config (`effects.preset`, `rotation.fade`),
+  3. the server config (`effects.preset`, `effects.<effect>` such as
+     `effects.drift: false`, and `rotation.fade` for the fade length),
   4. the active preset's value.
 
   The preset itself resolves the same way (URL `fx` → saved → config →
@@ -498,6 +511,7 @@ in) merged with `src/config.local.json` (gitignored personal overrides; see
 | `rotation.nhlPanelSeconds` | NHL panel view cadence (seconds). Falls back to `weatherPanelSeconds`. |
 | `rotation.fade` | Cross-fade length between views in ms for **every** browser viewing this server (`true` = 400, `false`/`0` = instant). Unset = the preset's value. Per-browser overrides: see [Visual effects](#visual-effects). |
 | `effects.preset` | Default visual-effects preset for this server: `full` (default) or `lite`. Per-browser overrides: see [Visual effects](#visual-effects). |
+| `effects.<effect>` | Server-wide default for one effect, e.g. `effects.weather: false` or `effects.transition: "zoom"` (names as in the [Visual effects](#visual-effects) table). |
 | `background.image` | Path to an image file on the dashboard host (absolute, `~`-relative, or relative to `src/`). Blank/missing/unresolvable = flat dark background. |
 | `background.dim` | Darkness of the scrim over the background image, 0–0.95 (default 0.45). |
 | `background.blur` | Frosted-glass blur behind the panels, 0–60 px (default 18). `0` = translucent panels, no blur. |

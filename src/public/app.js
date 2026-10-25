@@ -215,7 +215,17 @@ function createRotator({ dotsEl, navEl, viewsContainer, viewClassPrefix, titleEl
     const active = currentViews[index];
     if (viewsContainer) {
       viewsContainer.querySelectorAll(".view").forEach(v => {
-        v.classList.toggle("active", v.classList.contains(`${viewClassPrefix}${active}`));
+        const isActive = v.classList.contains(`${viewClassPrefix}${active}`);
+        // Staggered-entrance effect: .fx-enter replays the CSS entrance on the
+        // view's cards, then comes off so later re-renders don't replay it.
+        if (fxOn.stagger && isActive && !v.classList.contains("active")) {
+          v.classList.remove("fx-enter");
+          void v.offsetWidth;
+          v.classList.add("fx-enter");
+          clearTimeout(v._fxEnterTimer);
+          v._fxEnterTimer = setTimeout(() => v.classList.remove("fx-enter"), 1200);
+        }
+        v.classList.toggle("active", isActive);
       });
     }
     if (titleEl && titles) {
@@ -408,7 +418,8 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
     // Tied class only on live games — a final regulation tie isn't a thing
     // in modern NHL (every final has a winner via OT/SO).
     const tiedCls = isLive(g) && tied ? " is-tied" : "";
-    const stateCls = isLive(g) ? "is-live" : isFinal(g) ? "is-final" : "";
+    const goalSide = bucket === "today" && isLive(g) ? goalSideFor(g) : null;
+    const stateCls = (isLive(g) ? "is-live" : isFinal(g) ? "is-final" : "") + (goalSide ? ` fx-goal fx-goal-${goalSide}` : "");
     const r = Number(g.playoffRound);
     const hasRound = Number.isInteger(r) && r >= 1 && r <= 4;
     const roundLabel = hasRound ? escapeHtml(ROUND_LABELS[r]) : "";
@@ -431,6 +442,7 @@ function renderNHL(games, containerSelector, emptyMessage = "No games.", bucket 
           ${row(g.home, homeCls, g.home.isFavorite, "home", homeGlyph)}
         </div>
       </div>
+      ${goalSide ? `<span class="fx-goal-badge" aria-hidden="true">GOAL!</span>` : ""}
     </div>`;
   };
 
@@ -458,11 +470,16 @@ function setNhlPages(el, bucket, cards) {
   // fit the view's height.
   el.innerHTML = `<div class="games-grid">${cards.join("")}</div>`;
   if (PHONE_LAYOUT.matches || el.scrollHeight <= el.clientHeight) return;
-  // Rects are in zoomed px but clientHeight isn't; convert to layout px.
-  const viewTop = el.getBoundingClientRect().top / fitZoom;
+  // Rects are in on-screen px but clientHeight isn't; convert to layout px.
+  // The view's own rect/offsetHeight ratio covers both the page fit zoom and
+  // any transform on the view itself (e.g. the "zoom" view transition, which
+  // scales views that aren't showing).
+  const viewRect = el.getBoundingClientRect();
+  const scale = (el.offsetHeight && viewRect.height / el.offsetHeight) || fitZoom;
+  const viewTop = viewRect.top / scale;
   const rects = [...el.querySelectorAll(".game")].map(c => {
     const r = c.getBoundingClientRect();
-    return { top: r.top / fitZoom, bottom: r.bottom / fitZoom };
+    return { top: r.top / scale, bottom: r.bottom / scale };
   });
   const pages = [];
   let pageTop = viewTop;
@@ -1445,6 +1462,7 @@ function renderWeather(data) {
   sky.className = "wx-sky";
   sky.setAttribute("aria-hidden", "true");
   sky.appendChild(document.createElement("span")); // glow orb
+  if (fxOn.weather) sky.appendChild(buildWeatherFx(wxSkyClass(cur.weather_code, cur.is_day)));
 
   el.replaceChildren(sky, wrapper);
 }
@@ -1547,9 +1565,15 @@ async function refreshCalendar() {
 // locale ever omits the meridiem the whole string falls into the digits span.
 function renderClockTime(timeEl, now) {
   const [digits, meridiem] = formatTime(now).split(" ");
+  const prevHm = timeEl.querySelector(".clk-hm");
   const hm = document.createElement("span");
   hm.className = "clk-hm";
-  hm.textContent = digits;
+  if (fxOn.clockRoll) {
+    hm.dataset.prev = prevHm?.dataset.prev || "";
+    renderRollingDigits(hm, digits);
+  } else {
+    hm.textContent = digits;
+  }
   const parts = [hm];
   if (meridiem) {
     const mer = document.createElement("span");
@@ -1804,6 +1828,9 @@ function applyBackground(bg) {
   const imageUrl = `/api/background?t=${Date.now()}`;
   root.style.setProperty("--bg-image", `url("${imageUrl}")`);
   if (typeof bg.dim === "number") root.style.setProperty("--bg-dim", String(bg.dim));
+  // Read by the live-glass effect's backdrop-filter; the default look uses the
+  // pre-blurred copy from frostBackground() instead.
+  if (typeof bg.blur === "number") root.style.setProperty("--bg-blur", `${bg.blur}px`);
   document.body.classList.add("has-bg");
   // blur: 0 means "translucent panels, no frosting" — the panels just show
   // the photo through their tint.
@@ -1867,12 +1894,35 @@ function frostBackground(imageUrl, blurPx) {
 // To add an effect: give it a value in each preset, an FX_SETTINGS entry, and
 // an apply() that pushes it into the page (usually a CSS var or body class).
 // The debug panel's Display view picks it up automatically.
+// lite keeps every optional effect off: the Pi composites in software, and
+// even small continuous animations cost it a sizeable share of a core.
 const FX_PRESETS = {
-  full: { fade: 400 },
-  lite: { fade: 150 },
+  full: {
+    fade: 400, transition: "rise", liveGlass: true, drift: true, weather: true,
+    stagger: true, goals: true, clockRoll: true, tilt: true,
+  },
+  lite: {
+    fade: 150, transition: "fade", liveGlass: false, drift: false, weather: false,
+    stagger: false, goals: false, clockRoll: false, tilt: false,
+  },
 };
 const FX_DEFAULT_PRESET = "full";
 const FX_STORAGE_KEY = "dashboard.fx";
+const FX_TRANSITIONS = ["fade", "rise", "zoom", "blur"];
+
+// An on/off effect that toggles body.fx-<cls>; `after` runs once the flag is
+// set, for effects that need to re-render something.
+function fxToggle(label, hint, cls, after) {
+  return {
+    label, hint,
+    input: { type: "toggle" },
+    parse: parseFxBool,
+    apply(on) {
+      document.body.classList.toggle(`fx-${cls}`, on);
+      if (after) after(on);
+    },
+  };
+}
 
 const FX_SETTINGS = {
   fade: {
@@ -1889,10 +1939,41 @@ const FX_SETTINGS = {
       root.setProperty("--fade-rss", `${Math.round(ms / 2)}ms`);
     },
   },
+  transition: {
+    label: "View transition",
+    hint: "How views swap: fade, rise (fade + lift), zoom, or blur. Takes the fade length.",
+    input: { type: "select", options: FX_TRANSITIONS },
+    parse: (v) => (FX_TRANSITIONS.includes(v) ? v : null),
+    apply(style) { document.body.dataset.fxTransition = style; },
+  },
+  liveGlass: fxToggle("Live glass",
+    "Panels blur the wallpaper live (backdrop-filter) instead of a pre-blurred copy.", "live-glass"),
+  drift: fxToggle("Drifting wallpaper",
+    "The wallpaper slowly pans and zooms. Uses live glass so the panels follow it.", "drift"),
+  weather: fxToggle("Weather scenes",
+    "Animated rain, snow, stars, clouds, fog and lightning behind the weather.", "weather",
+    () => { if (_lastWeatherData) { renderWeather(_lastWeatherData); renderNhlWeather(); } }),
+  stagger: fxToggle("Staggered entrances",
+    "Cards, forecast days and headlines slide in one after another when a view appears.", "stagger"),
+  goals: fxToggle("Goal celebrations",
+    "A burst and glow on a game card when a live score goes up.", "goals"),
+  clockRoll: fxToggle("Rolling clock",
+    "Clock digits roll into place when they change.", "clock-roll"),
+  tilt: fxToggle("Panel tilt",
+    "Panels tilt toward the pointer with a glossy sheen (mouse only).", "tilt", setupPanelTilt),
 };
 
 let fxConfig = null;  // /api/config payload, kept so a saved change can re-resolve
 let fxState = null;   // { preset: {value, source}, <effect>: {value, source}, … }
+const fxOn = {};      // effect key -> current value, for code that checks a flag
+
+function parseFxBool(value) {
+  if (value === true || value === false) return value;
+  const v = String(value ?? "").toLowerCase();
+  if (["1", "on", "true", "yes"].includes(v)) return true;
+  if (["0", "off", "false", "no"].includes(v)) return false;
+  return null;
+}
 
 // A fade as ms, or null if the value isn't one: a number (or numeric string,
 // from the URL), true for the full preset's length, false for none.
@@ -1940,7 +2021,8 @@ function resolveFx(cfg) {
       ?? { value: FX_DEFAULT_PRESET, source: "default" },
   };
   for (const [key, def] of Object.entries(FX_SETTINGS)) {
-    state[key] = pick(def.parse, [["url", url.get(key)], ["saved", saved[key]], ["config", def.fromConfig(cfg)]])
+    const fromConfig = def.fromConfig ? def.fromConfig(cfg) : cfg?.effects?.[key];
+    state[key] = pick(def.parse, [["url", url.get(key)], ["saved", saved[key]], ["config", fromConfig]])
       ?? { value: FX_PRESETS[state.preset.value][key], source: "preset" };
   }
   return state;
@@ -1948,7 +2030,107 @@ function resolveFx(cfg) {
 
 function applyEffects() {
   fxState = resolveFx(fxConfig);
+  for (const key of Object.keys(FX_SETTINGS)) fxOn[key] = fxState[key].value;
   for (const [key, def] of Object.entries(FX_SETTINGS)) def.apply(fxState[key].value);
+}
+
+// ---- Effect helpers ----
+
+// Panel tilt: panels lean a few degrees toward the pointer, and a soft sheen
+// follows it. Pointer devices only; listeners stay attached once added and
+// simply do nothing while the effect is off.
+let _tiltReady = false;
+function setupPanelTilt(on) {
+  if (!on || _tiltReady || !matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+  _tiltReady = true;
+  document.querySelectorAll(".panel").forEach(panel => {
+    panel.addEventListener("pointermove", (e) => {
+      if (!fxOn.tilt) return;
+      const r = panel.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width;
+      const y = (e.clientY - r.top) / r.height;
+      panel.style.setProperty("--tilt-x", `${((0.5 - y) * 4).toFixed(2)}deg`);
+      panel.style.setProperty("--tilt-y", `${((x - 0.5) * 4).toFixed(2)}deg`);
+      panel.style.setProperty("--sheen-x", `${(x * 100).toFixed(1)}%`);
+      panel.style.setProperty("--sheen-y", `${(y * 100).toFixed(1)}%`);
+      panel.classList.add("fx-tilting");
+    });
+    panel.addEventListener("pointerleave", () => {
+      panel.classList.remove("fx-tilting");
+      panel.style.setProperty("--tilt-x", "0deg");
+      panel.style.setProperty("--tilt-y", "0deg");
+    });
+  });
+}
+
+// Weather scene layer for the .wx-sky backdrop: a handful of absolutely
+// positioned spans the CSS animates (rain streaks, flakes, stars, clouds, fog
+// bands, a lightning flash). Randomised per render so it doesn't look tiled.
+function buildWeatherFx(skyClasses) {
+  const layer = document.createElement("div");
+  layer.className = "wx-fx";
+  layer.setAttribute("aria-hidden", "true");
+  const has = c => skyClasses.includes(c);
+  const night = has("wx-night");
+  const rand = (min, max) => (min + Math.random() * (max - min)).toFixed(2);
+  const add = (cls, count, style) => {
+    for (let i = 0; i < count; i++) {
+      const s = document.createElement("span");
+      s.className = cls;
+      s.setAttribute("style", style(i));
+      layer.appendChild(s);
+    }
+  };
+  if (has("wx-sky-rain") || has("wx-sky-storm")) {
+    add("fx-rain", has("wx-sky-storm") ? 70 : 50, () =>
+      `left:${rand(-5, 115)}%;--d:${rand(0.55, 0.95)}s;animation-delay:-${rand(0, 1)}s;--l:${rand(18, 34)}px;opacity:${rand(0.4, 0.85)}`);
+  }
+  if (has("wx-sky-storm")) add("fx-lightning", 1, () => `--d:${rand(7, 11)}s`);
+  if (has("wx-sky-snow")) {
+    add("fx-snow", 45, () =>
+      `left:${rand(-5, 105)}%;--d:${rand(6, 12)}s;animation-delay:-${rand(0, 12)}s;--s:${rand(3, 7)}px;--sway:${rand(-30, 30)}px;opacity:${rand(0.5, 0.95)}`);
+  }
+  if (has("wx-sky-clouds") || has("wx-sky-rain") || has("wx-sky-storm") || has("wx-sky-snow")) {
+    add("fx-cloud", 4, i =>
+      `top:${rand(-12, 40)}%;--w:${rand(300, 520)}px;--d:${rand(60, 110)}s;animation-delay:-${rand(0, 110)}s;opacity:${rand(0.22, 0.42)}`);
+  }
+  if (has("wx-sky-fog")) {
+    add("fx-fog", 3, i => `top:${20 + i * 25}%;--d:${rand(40, 70)}s;animation-delay:-${rand(0, 70)}s`);
+  }
+  if (night && (has("wx-sky-clear") || has("wx-sky-clouds"))) {
+    // Mostly in the open sky above the forecast strip, where they show.
+    add("fx-star", 55, i =>
+      `left:${rand(0, 100)}%;top:${i < 45 ? rand(0, 42) : rand(42, 100)}%;--d:${rand(2.5, 6)}s;animation-delay:-${rand(0, 6)}s;--s:${rand(1, 2.8)}px`);
+  }
+  if (!night && has("wx-sky-clear")) add("fx-rays", 1, () => "");
+  return layer;
+}
+
+// Clock digits that roll in when they change. The previous string rides on a
+// data attribute so only the digits that actually changed animate.
+function renderRollingDigits(el, text) {
+  const prev = el.dataset.prev || "";
+  el.dataset.prev = text;
+  el.replaceChildren(...[...text].map((ch, i) => {
+    const s = document.createElement("span");
+    s.className = "fx-digit" + (prev && prev[i] !== ch ? " fx-roll" : "");
+    s.textContent = ch;
+    return s;
+  }));
+}
+
+// Goal celebrations: remember each game's score so the next render can tell
+// which side just scored. Keyed by game id; only live games are tracked.
+const _goalScores = {};
+function goalSideFor(g) {
+  if (!fxOn.goals || g.id == null) return null;
+  const prev = _goalScores[g.id];
+  const now = { away: Number(g.away.score) || 0, home: Number(g.home.score) || 0 };
+  _goalScores[g.id] = now;
+  if (!prev) return null;
+  if (now.away > prev.away) return "away";
+  if (now.home > prev.home) return "home";
+  return null;
 }
 
 async function start() {
@@ -2198,17 +2380,44 @@ function populateUserAgent(container) {
 // "lite preset · fade 150 ms" — the effective settings, for the field list.
 function fxSummary() {
   if (!fxState) return "";
-  const parts = [`${fxState.preset.value} preset`];
-  for (const [key, def] of Object.entries(FX_SETTINGS)) {
-    parts.push(`${def.label.toLowerCase()} ${fxState[key].value}${def.unit ? " " + def.unit : ""}`);
+  const toggles = Object.entries(FX_SETTINGS).filter(([, def]) => def.input.type === "toggle");
+  const on = toggles.filter(([key]) => fxState[key].value).length;
+  return [
+    `${fxState.preset.value} preset`,
+    `${fxState.transition.value} ${fxState.fade.value} ms`,
+    `${on} of ${toggles.length} effects on`,
+  ].join(" · ");
+}
+
+// The form control for one setting; `saved` is this browser's saved value.
+// Every control has a blank "not saved" state so a field can defer to the
+// URL/config/preset.
+function fxControl(key, def, saved) {
+  const inp = def.input;
+  const id = `fx-${escapeHtml(key)}`;
+  const name = escapeHtml(key);
+  if (inp.type === "number") {
+    const value = saved != null ? ` value="${escapeHtml(String(saved))}"` : "";
+    return `<input id="${id}" name="${name}" type="number" min="${inp.min}" max="${inp.max}" step="${inp.step}" placeholder="not saved"${value}>`
+      + (def.unit ? ` <span class="debug-fx-unit">${escapeHtml(def.unit)}</span>` : "");
   }
-  return parts.join(" · ");
+  const options = inp.type === "toggle"
+    ? [["on", saved === true], ["off", saved === false]]
+    : inp.options.map(o => [o, saved === o]);
+  return `<select id="${id}" name="${name}"><option value="">Not saved</option>${
+    options.map(([v, sel]) => `<option value="${escapeHtml(v)}"${sel ? " selected" : ""}>${escapeHtml(v)}</option>`).join("")
+  }</select>`;
+}
+
+// Display text for an effective value (toggles read on/off, not true/false).
+function fxValueText(key, value) {
+  return FX_SETTINGS[key]?.input.type === "toggle" ? (value ? "on" : "off") : String(value);
 }
 
 // Where an effective setting came from, in words.
 function fxSourceText(key, entry) {
   switch (entry.source) {
-    case "url": return `URL (?${key === "preset" ? "fx" : key}=${entry.value})`;
+    case "url": return `URL (?${key === "preset" ? "fx" : key}=${new URLSearchParams(location.search).get(key === "preset" ? "fx" : key)})`;
     case "saved": return "saved in this browser";
     case "config": return "server config";
     case "preset": return `${fxState.preset.value} preset`;
@@ -2229,7 +2438,7 @@ function renderDisplaySettings(message, isError) {
     return `<div class="debug-fx-row">
         <label class="debug-fx-label" for="fx-${key}">${escapeHtml(label)}</label>
         ${control}
-        <span class="debug-fx-now">Now: <strong>${escapeHtml(String(entry.value))}</strong> — ${escapeHtml(fxSourceText(key, entry))}</span>
+        <span class="debug-fx-now">Now: <strong>${escapeHtml(fxValueText(key, entry.value))}</strong> — ${escapeHtml(fxSourceText(key, entry))}</span>
         ${hint ? `<span class="debug-fx-hint">${escapeHtml(hint)}</span>` : ""}
         ${urlNote}
       </div>`;
@@ -2243,11 +2452,7 @@ function renderDisplaySettings(message, isError) {
       "full = every effect; lite = cheaper effects for low-powered devices like the Pi."),
   ];
   for (const [key, def] of Object.entries(FX_SETTINGS)) {
-    const inp = def.input;
-    const value = saved[key] != null ? ` value="${escapeHtml(String(saved[key]))}"` : "";
-    const control = `<input id="fx-${key}" name="${escapeHtml(key)}" type="${inp.type}" min="${inp.min}" max="${inp.max}" step="${inp.step}" placeholder="not saved"${value}>`
-      + (def.unit ? ` <span class="debug-fx-unit">${escapeHtml(def.unit)}</span>` : "");
-    rows.push(row(key, def.label, control, def.hint));
+    rows.push(row(key, def.label, fxControl(key, def, saved[key]), def.hint));
   }
   const msg = message
     ? `<span class="debug-fx-msg${isError ? " error" : ""}">${escapeHtml(message)}</span>`

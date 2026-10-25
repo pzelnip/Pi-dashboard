@@ -1620,7 +1620,7 @@ a.wx-link:focus-visible {
   padding: 10px 0;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
-.debug-fx-label { width: 130px; font-weight: 600; white-space: nowrap; }
+.debug-fx-label { width: 170px; font-weight: 600; white-space: nowrap; }
 .debug-fx-form select,
 .debug-fx-form input {
   background: var(--bg);
@@ -1633,9 +1633,9 @@ a.wx-link:focus-visible {
 }
 .debug-fx-form input[type="number"] { width: 120px; }
 .debug-fx-unit { color: var(--text-muted); font-size: 0.85em; }
-.debug-fx-now { flex-basis: 100%; padding-left: 140px; font-size: 0.85em; color: var(--text-dim); }
-.debug-fx-hint { flex-basis: 100%; padding-left: 140px; font-size: 0.8em; color: var(--text-muted); }
-.debug-fx-url { flex-basis: 100%; padding-left: 140px; font-size: 0.8em; color: var(--pregame); }
+.debug-fx-now { flex-basis: 100%; padding-left: 180px; font-size: 0.85em; color: var(--text-dim); }
+.debug-fx-hint { flex-basis: 100%; padding-left: 180px; font-size: 0.8em; color: var(--text-muted); }
+.debug-fx-url { flex-basis: 100%; padding-left: 180px; font-size: 0.8em; color: var(--pregame); }
 .debug-fx-actions {
   display: flex;
   align-items: center;
@@ -2161,4 +2161,279 @@ a.wx-link:focus-visible {
   .gd-actions {
     grid-template-columns: 1fr;
   }
+}
+
+/* ==========================================================================
+   Optional visual effects
+   --------------------------------------------------------------------------
+   Every rule here is gated on a body class or attribute that applyEffects()
+   in app.js sets from the visual-effects settings (full / lite presets, URL,
+   saved, config). The lite preset — the Pi's kiosk — turns all of these off,
+   so none of this costs it anything. Measure on the Pi before letting any of
+   it into lite: the Pi composites in software, so continuous animation is
+   expensive there.
+   ========================================================================== */
+
+/* ---- View transition styles (data-fx-transition) ----
+   The fade itself still comes from the base .view/.fading rules; these add a
+   transform or blur that rides the same duration. */
+body:is([data-fx-transition="rise"], [data-fx-transition="zoom"], [data-fx-transition="blur"]) :is(#weather, #nhl) .view {
+  transition:
+    opacity var(--fade-view, 400ms) ease-in-out,
+    transform var(--fade-view, 400ms) cubic-bezier(0.2, 0.7, 0.2, 1),
+    filter var(--fade-view, 400ms) ease-in-out;
+}
+body:is([data-fx-transition="rise"], [data-fx-transition="zoom"], [data-fx-transition="blur"]) #rss .panel-body {
+  transition:
+    opacity var(--fade-rss, 200ms) ease-in-out,
+    transform var(--fade-rss, 200ms) cubic-bezier(0.2, 0.7, 0.2, 1),
+    filter var(--fade-rss, 200ms) ease-in-out;
+}
+body[data-fx-transition="rise"] :is(#weather, #nhl) .view:not(.active) { transform: translateY(18px); }
+body[data-fx-transition="rise"] #rss.fading .panel-body { transform: translateY(12px); }
+body[data-fx-transition="zoom"] :is(#weather, #nhl) .view:not(.active) { transform: scale(0.95); }
+body[data-fx-transition="zoom"] #rss.fading .panel-body { transform: scale(0.97); }
+body[data-fx-transition="blur"] :is(#weather, #nhl) .view:not(.active) { filter: blur(10px); }
+body[data-fx-transition="blur"] #rss.fading .panel-body { filter: blur(8px); }
+
+/* ---- Live glass (.fx-live-glass) ----
+   The original frosted look: blur whatever is behind the panel, live. Cheap on
+   a GPU, ruinous on the Pi. Drift needs it too, since a moving wallpaper
+   would slide out from under the pre-blurred copies. */
+body.has-bg:is(.fx-live-glass, .fx-drift) .panel {
+  background: rgba(16, 19, 23, 0.46);
+  -webkit-backdrop-filter: blur(var(--bg-blur, 18px)) saturate(135%);
+  backdrop-filter: blur(var(--bg-blur, 18px)) saturate(135%);
+}
+
+/* ---- Drifting wallpaper (.fx-drift) ----
+   The photo moves to a fixed layer behind everything and slowly pans and
+   zooms. The body goes transparent so the layer shows through. */
+body.has-bg.fx-drift {
+  background: transparent;
+}
+body.has-bg.fx-drift::before {
+  content: "";
+  position: fixed;
+  inset: -6%;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgba(0, 0, 0, var(--bg-dim, 0.45)), rgba(0, 0, 0, var(--bg-dim, 0.45))),
+    var(--bg-image);
+  background-size: cover;
+  background-position: center;
+  animation: fx-drift 90s ease-in-out infinite alternate;
+  will-change: transform;
+}
+@keyframes fx-drift {
+  0%   { transform: scale(1) translate(0, 0); }
+  50%  { transform: scale(1.06) translate(-1.5%, 1%); }
+  100% { transform: scale(1.1) translate(1.5%, -1%); }
+}
+
+/* ---- Weather scenes (.wx-fx, built by buildWeatherFx) ---- */
+.wx-fx {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.wx-fx > span { position: absolute; display: block; }
+/* Hidden views keep their DOM; don't spend frames animating them. */
+.view:not(.active) .wx-fx > span { animation-play-state: paused; }
+
+.fx-rain {
+  top: -40px;
+  width: 2px;
+  height: var(--l, 24px);
+  border-radius: 1px;
+  background: linear-gradient(to bottom, transparent, rgba(200, 222, 255, 0.95));
+  animation: fx-rain var(--d, 0.8s) linear infinite;
+}
+@keyframes fx-rain {
+  from { transform: translate(0, 0) rotate(10deg); }
+  to   { transform: translate(-100px, 620px) rotate(10deg); }
+}
+
+.fx-lightning {
+  inset: 0;
+  background: rgba(225, 232, 255, 0.9);
+  opacity: 0;
+  animation: fx-lightning var(--d, 9s) linear infinite;
+}
+@keyframes fx-lightning {
+  0%, 88%, 89.5%, 91.5%, 100% { opacity: 0; }
+  88.6% { opacity: 0.55; }
+  90.5% { opacity: 0.3; }
+}
+
+.fx-snow {
+  top: -12px;
+  width: var(--s, 5px);
+  height: var(--s, 5px);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.7);
+  animation: fx-snow var(--d, 9s) linear infinite;
+}
+@keyframes fx-snow {
+  0%   { transform: translate(0, 0); }
+  50%  { transform: translate(var(--sway, 20px), 300px); }
+  100% { transform: translate(0, 620px); }
+}
+
+.fx-cloud {
+  left: 0;
+  width: var(--w, 360px);
+  height: calc(var(--w, 360px) * 0.42);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(235, 240, 250, 0.95), rgba(235, 240, 250, 0.4) 55%, transparent);
+  animation: fx-cloud var(--d, 80s) linear infinite;
+}
+@keyframes fx-cloud {
+  from { transform: translateX(-520px); }
+  to   { transform: translateX(1150px); }
+}
+
+.fx-fog {
+  left: -50%;
+  width: 200%;
+  height: 38%;
+  background: radial-gradient(ellipse at center, rgba(222, 228, 238, 0.38), transparent 70%);
+  animation: fx-fog var(--d, 55s) ease-in-out infinite alternate;
+}
+@keyframes fx-fog {
+  from { transform: translateX(-14%); }
+  to   { transform: translateX(14%); }
+}
+
+.fx-star {
+  width: var(--s, 2px);
+  height: var(--s, 2px);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.85);
+  animation: fx-twinkle var(--d, 4s) ease-in-out infinite;
+}
+@keyframes fx-twinkle {
+  0%, 100% { opacity: 0.15; }
+  50%      { opacity: 1; }
+}
+
+/* Slow-turning sun rays, centred on the glow orb in the sky's top-right. */
+.fx-rays {
+  top: -250px;
+  right: -230px;
+  width: 640px;
+  height: 640px;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 228, 160, 0.2) 0deg 5deg, transparent 5deg 16deg);
+  -webkit-mask-image: radial-gradient(circle, #000 12%, transparent 62%);
+  mask-image: radial-gradient(circle, #000 12%, transparent 62%);
+  animation: fx-spin 140s linear infinite;
+}
+@keyframes fx-spin { to { transform: rotate(360deg); } }
+
+/* ---- Staggered entrances (.fx-stagger) ----
+   .fx-enter goes on a view for a moment as it becomes active (see
+   applyActiveView); RSS items replay on their own because each page is
+   freshly written. */
+@keyframes fx-rise-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: none; }
+}
+body.fx-stagger .view.fx-enter :is(.games-grid > .game, .wx-day, .cal-event),
+body.fx-stagger #rss .rss-item {
+  animation: fx-rise-in 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+body.fx-stagger :is(.view.fx-enter :is(.games-grid > .game, .wx-day, .cal-event), #rss .rss-item):nth-child(2) { animation-delay: 60ms; }
+body.fx-stagger :is(.view.fx-enter :is(.games-grid > .game, .wx-day, .cal-event), #rss .rss-item):nth-child(3) { animation-delay: 120ms; }
+body.fx-stagger :is(.view.fx-enter :is(.games-grid > .game, .wx-day, .cal-event), #rss .rss-item):nth-child(4) { animation-delay: 180ms; }
+body.fx-stagger :is(.view.fx-enter :is(.games-grid > .game, .wx-day, .cal-event), #rss .rss-item):nth-child(5) { animation-delay: 240ms; }
+body.fx-stagger :is(.view.fx-enter :is(.games-grid > .game, .wx-day, .cal-event), #rss .rss-item):nth-child(6) { animation-delay: 300ms; }
+body.fx-stagger :is(.view.fx-enter :is(.games-grid > .game, .wx-day, .cal-event), #rss .rss-item):nth-child(n+7) { animation-delay: 360ms; }
+
+/* ---- Goal celebrations (.fx-goals; cards get .fx-goal-<side>) ---- */
+body.fx-goals .game.fx-goal {
+  animation: fx-goal-glow 1.6s ease-out 2;
+}
+@keyframes fx-goal-glow {
+  0%   { box-shadow: 0 0 0 0 rgba(255, 196, 60, 0); }
+  25%  { box-shadow: 0 0 0 4px rgba(255, 196, 60, 0.75), 0 0 42px rgba(255, 170, 40, 0.55); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 196, 60, 0); }
+}
+body.fx-goals .game.fx-goal-away .game-team.away .team-score,
+body.fx-goals .game.fx-goal-home .game-team.home .team-score {
+  display: inline-block;
+  animation: fx-score-bump 0.8s cubic-bezier(0.3, 1.6, 0.5, 1) 2;
+}
+@keyframes fx-score-bump {
+  0%, 100% { transform: scale(1); color: inherit; }
+  40%      { transform: scale(1.45); color: #ffd54a; }
+}
+.fx-goal-badge {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: 2;
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: var(--fs-meta);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #241800;
+  background: linear-gradient(180deg, #ffe07a, #ffb300);
+  box-shadow: 0 4px 18px rgba(255, 179, 0, 0.5);
+  pointer-events: none;
+  animation: fx-goal-pop 4.5s ease-out forwards;
+}
+@keyframes fx-goal-pop {
+  0%   { opacity: 0; transform: scale(0.3) rotate(-8deg); }
+  8%   { opacity: 1; transform: scale(1.2) rotate(3deg); }
+  16%  { transform: scale(1) rotate(0); }
+  80%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-6px); }
+}
+
+/* ---- Rolling clock digits (.fx-clock-roll) ---- */
+.fx-digit { display: inline-block; }
+body.fx-clock-roll .fx-roll {
+  animation: fx-digit-roll 650ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes fx-digit-roll {
+  from { opacity: 0; transform: translateY(-55%); filter: blur(4px); }
+  to   { opacity: 1; transform: none; filter: none; }
+}
+
+/* ---- Panel tilt + sheen (.fx-tilt; .fx-tilting while the pointer is over a
+   panel). The tilt itself only applies with live glass, drift or no
+   wallpaper: the default pre-blurred panels use a viewport-fixed background,
+   which a transform would knock out of line with the photo. The sheen works
+   everywhere. ---- */
+body.fx-tilt .panel {
+  position: relative;
+  transition: transform 450ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+body.fx-tilt:is(.fx-live-glass, .fx-drift, :not(.has-bg)) .panel.fx-tilting {
+  transform: perspective(1400px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
+  transition: transform 120ms linear;
+}
+body.fx-tilt .panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 300ms ease;
+  background: radial-gradient(520px circle at var(--sheen-x, 50%) var(--sheen-y, 50%), rgba(255, 255, 255, 0.08), transparent 45%);
+}
+body.fx-tilt .panel.fx-tilting::after { opacity: 1; }
+
+/* Respect a viewer's "reduce motion" setting for the continuous effects. */
+@media (prefers-reduced-motion: reduce) {
+  body.has-bg.fx-drift::before,
+  .wx-fx > span,
+  body.fx-goals .game.fx-goal,
+  .fx-goal-badge { animation: none; }
+  body.fx-tilt .panel.fx-tilting { transform: none; }
 }
