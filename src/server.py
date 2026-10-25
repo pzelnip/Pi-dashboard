@@ -176,15 +176,25 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self._send_file(full)
 
     def _send_file(self, full: str):
+        # no-cache + ETag: the browser keeps a copy but revalidates it on every
+        # load, so edits still show on the next reload without a restart, while
+        # an unchanged file costs a 304 instead of a re-read and re-send.
+        st = os.stat(full)
+        etag = f'"{st.st_mtime_ns:x}-{st.st_size:x}"'
+        if etag in (self.headers.get("If-None-Match") or ""):
+            self.send_response(304)
+            self.send_header("ETag", etag)
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            return
         ctype, _ = mimetypes.guess_type(full)
         with open(full, "rb") as f:
             body = f.read()
         self.send_response(200)
         self.send_header("Content-Type", ctype or "application/octet-stream")
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store, must-revalidate")
-        self.send_header("Pragma", "no-cache")
-        self.send_header("Expires", "0")
+        self.send_header("ETag", etag)
+        self.send_header("Cache-Control", "no-cache")
         self.end_headers()
         self.wfile.write(body)
 

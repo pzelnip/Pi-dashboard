@@ -1878,9 +1878,9 @@ let calendarEnabled = false;
 function applyBackground(bg) {
   if (!bg || !bg.enabled) return;
   const root = document.documentElement;
-  // Cache-bust per page load: the file can be swapped out on the Pi without
-  // the URL ever changing, and the kiosk reloads on every deploy anyway.
-  const imageUrl = `/api/background?t=${Date.now()}`;
+  // No cache-buster: the server sends an ETag and the browser revalidates on
+  // every load, so a swapped-out file still shows up after a reload.
+  const imageUrl = "/api/background";
   root.style.setProperty("--bg-image", `url("${imageUrl}")`);
   if (typeof bg.dim === "number") root.style.setProperty("--bg-dim", String(bg.dim));
   // Read by the live-glass effect's backdrop-filter; the default look uses the

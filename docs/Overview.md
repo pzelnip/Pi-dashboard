@@ -495,9 +495,11 @@ Arrow keys scroll the sheet body when open.
 
 ### Cache headers
 
-- All static assets are served with `Cache-Control: no-store`. Editing a
-  file under `src/public/` and reloading the browser is enough — no bundler,
-  no service worker.
+- All static assets (and the background image) are served with
+  `Cache-Control: no-cache` and an `ETag` built from the file's mtime and
+  size. The browser revalidates on every load and gets a `304 Not Modified`
+  when nothing changed, so editing a file under `src/public/` and reloading
+  is still enough — no bundler, no service worker.
 - `config.json` is re-read on every request inside `load_config()` (with
   recursive merge from `config.local.json` if present), so config changes
   also take effect on reload without restarting Python.

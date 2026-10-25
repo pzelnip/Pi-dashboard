@@ -17,7 +17,7 @@ python3 src/server.py             # serves on :8080
 DASHBOARD_PORT=8765 python3 src/server.py   # alternate port (use this for ad-hoc testing if 8080 is taken)
 ```
 
-Edit any file under `src/public/` or `src/server.py` and reload the browser — the server reads `src/config.json` per request and serves static files with `Cache-Control: no-store`, so no restart is needed for content changes. Restart Python only if you edit Python.
+Edit any file under `src/public/` or `src/server.py` and reload the browser — the server reads `src/config.json` per request and serves static files with `Cache-Control: no-cache` and an mtime-based `ETag` (the browser revalidates on every load and gets a 304 when nothing changed), so no restart is needed for content changes. Restart Python only if you edit Python.
 
 Server-side unit tests live in `src/tests/` and use stdlib `unittest` only:
 

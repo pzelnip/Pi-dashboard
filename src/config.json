@@ -48,7 +48,7 @@
     "nhlPanelSeconds": 10
   },
   "background": {
-    "image": "ForestMountains.png",
+    "image": "ForestMountains.jpg",
     "dim": 0.45,
     "blur": 18
   }
