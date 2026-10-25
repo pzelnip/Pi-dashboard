@@ -955,8 +955,14 @@ a.wx-link:focus-visible {
   inset: 0;
   opacity: 0;
   pointer-events: none;
-  /* --fade-view: set by applyFadeSetting() from ?fade= / rotation.fade. */
+  /* --fade-view: set by applyEffects() from ?fade= / rotation.fade. */
   transition: opacity var(--fade-view, 400ms) ease-in-out;
+  /* Keep each view on its own layer. Without it, every cross-fade promotes
+     the two views mid-swap and rasterizes them in software, which stalled a
+     frame for ~185ms (median) on the Pi; promoted up front it's ~115ms, with
+     less CPU and no measurable memory or CMA cost. Promoting only the two
+     views a frame before the swap was tried and didn't help (~200ms). */
+  will-change: opacity;
 }
 #weather .view.active,
 #nhl .view.active {
