@@ -27,21 +27,8 @@
         <div class="view view-nhl-yesterday">Loading…</div>
         <div class="view view-nhl-offseason"></div>
         <div class="view view-nhl-weather"></div>
-        <div class="view view-nhl-clock">
-          <div class="clk-scene" aria-hidden="true"></div>
-          <div class="clk-inner">
-            <div class="clock-time"></div>
-            <div class="clock-date"></div>
-          </div>
-        </div>
-        <div class="view view-nhl-countdown">
-          <div class="cd-scene" aria-hidden="true"></div>
-          <div class="cd-inner">
-            <div class="countdown-number"></div>
-            <div class="countdown-label"></div>
-            <div class="cd-divider" aria-hidden="true"><span></span><span class="cd-divider-icon">⏳</span><span></span></div>
-          </div>
-        </div>
+        <div class="view view-nhl-clock" data-template="clock"></div>
+        <div class="view view-nhl-countdown" data-template="countdown"></div>
         <div class="view view-nhl-season">
           <div class="puck-scene" aria-hidden="true"></div>
           <div class="puck-countdown">
@@ -77,21 +64,8 @@
       <div class="panel-body" data-body="weather">
         <div class="view view-weather active">Loading…</div>
         <div class="view view-calendar">Loading…</div>
-        <div class="view view-clock">
-          <div class="clk-scene" aria-hidden="true"></div>
-          <div class="clk-inner">
-            <div class="clock-time"></div>
-            <div class="clock-date"></div>
-          </div>
-        </div>
-        <div class="view view-countdown">
-          <div class="cd-scene" aria-hidden="true"></div>
-          <div class="cd-inner">
-            <div class="countdown-number"></div>
-            <div class="countdown-label"></div>
-            <div class="cd-divider" aria-hidden="true"><span></span><span class="cd-divider-icon">⏳</span><span></span></div>
-          </div>
-        </div>
+        <div class="view view-clock" data-template="clock"></div>
+        <div class="view view-countdown" data-template="countdown"></div>
       </div>
     </section>
 
@@ -128,6 +102,32 @@
     <div id="game-body">Loading…</div>
   </aside>
 
-  <script src="app.js"></script>
+  <!-- Markup shared by views in both the NHL and weather panels; main.js
+       clones these into every element with a matching data-template. -->
+  <template id="tpl-clock">
+    <div class="clk-scene" aria-hidden="true"></div>
+    <div class="clk-inner">
+      <div class="clock-time"></div>
+      <div class="clock-date"></div>
+    </div>
+  </template>
+  <template id="tpl-countdown">
+    <div class="cd-scene" aria-hidden="true"></div>
+    <div class="cd-inner">
+      <div class="countdown-number"></div>
+      <div class="countdown-label"></div>
+      <div class="cd-divider" aria-hidden="true"><span></span><span class="cd-divider-icon">⏳</span><span></span></div>
+    </div>
+  </template>
+
+  <!-- Classic scripts sharing one global scope, in dependency order; start()
+       runs at the end of main.js. game-details.js and debug.js load on demand. -->
+  <script src="js/util.js"></script>
+  <script src="js/rotator.js"></script>
+  <script src="js/nhl.js"></script>
+  <script src="js/weather.js"></script>
+  <script src="js/rss.js"></script>
+  <script src="js/effects.js"></script>
+  <script src="js/main.js"></script>
 </body>
 </html>

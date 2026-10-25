@@ -39,7 +39,7 @@
   --fs-secondary: 0.9em;
   --fs-meta: 0.72em;
 
-  /* 1% of the layout viewport. app.js overrides these when it zooms the page
+  /* 1% of the layout viewport. js/util.js overrides these when it zooms the page
      to fit (see applyFitZoom), because real vw/vh ignore that zoom. Use
      calc(N * var(--vh)) rather than Nvh in desktop rules. */
   --vw: 1vw;
@@ -99,7 +99,7 @@ html, body {
 .panel-wide { grid-column: 1 / -1; }
 
 /* ---------- Background image / frosted panels ----------
- * Opt-in: app.js adds .has-bg to <body> and sets --bg-image/--bg-dim from
+ * Opt-in: js/main.js adds .has-bg to <body> and sets --bg-image/--bg-dim from
  * /api/config; when blur > 0 it also adds .has-bg-blur once the frosted copy
  * (--bg-image-frosted) is ready. Without a
  * configured background none of this applies and the flat dark theme stands.
@@ -125,7 +125,7 @@ body.has-bg .panel {
   box-shadow: 0 10px 34px rgba(0, 0, 0, 0.38);
 }
 
-/* Frosting without backdrop-filter: app.js pre-blurs the wallpaper once into
+/* Frosting without backdrop-filter: js/main.js pre-blurs the wallpaper once into
  * --bg-image-frosted, and each panel paints it viewport-fixed so it lines up
  * with the photo behind. Layers top-down: the panel tint, the same scrim the
  * body uses, then the blurred photo. */
@@ -2166,7 +2166,7 @@ a.wx-link:focus-visible {
    Optional visual effects
    --------------------------------------------------------------------------
    Every rule here is gated on a body class or attribute that applyEffects()
-   in app.js sets from the visual-effects settings (full / lite presets, URL,
+   in js/effects.js sets from the visual-effects settings (full / lite presets, URL,
    saved, config). The lite preset — the Pi's kiosk — turns all of these off,
    so none of this costs it anything. Measure on the Pi before letting any of
    it into lite: the Pi composites in software, so continuous animation is

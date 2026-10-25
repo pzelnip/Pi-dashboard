@@ -15,7 +15,7 @@ fallback so the kiosk stays useful when an external API blips.
 
 ## NHL Panel
 
-Source: `src/parsers/nhl.py`, rendering in `src/public/app.js` (`renderNHL`,
+Source: `src/parsers/nhl.py`, rendering in `src/public/js/nhl.js` (`renderNHL`,
 `renderGameDetails`).
 
 ### Today vs Yesterday rotation
@@ -243,7 +243,7 @@ entries, managed via the debug panel UI).
 
 ## RSS Panel
 
-Source: `src/parsers/rss.py`, rendering in `src/public/app.js` (`renderRSS`).
+Source: `src/parsers/rss.py`, rendering in `src/public/js/rss.js` (`renderRSS`).
 
 - Configured via `rss` in `config.json` — array of `{name, url}`. All feeds
   are merged into one "News" stream.
@@ -327,7 +327,7 @@ background and solid panels.
   `src/config.py`) and streams the file from `/api/background`. It lives
   outside `public/`, so it is not a checked-in asset and can be swapped on the
   Pi without touching the repo.
-- `/api/config` reports `background.{enabled, dim, blur}`; `app.js`
+- `/api/config` reports `background.{enabled, dim, blur}`; `js/main.js`
   (`applyBackground`) adds `.has-bg` to `<body>` and sets `--bg-image` and
   `--bg-dim`.
 - With a background active the panels become frosted glass, gaining a
@@ -490,7 +490,7 @@ effect.
   browser, and **Clear saved** removes them. A value set by the URL can't be
   overridden there; the view says so.
 - Adding an effect: an entry in `FX_SETTINGS` and a value in each of
-  `FX_PRESETS` in `app.js`. The Display view and URL parameter come with it.
+  `FX_PRESETS` in `js/effects.js`. The Display view and URL parameter come with it.
 Arrow keys scroll the sheet body when open.
 
 ### Cache headers

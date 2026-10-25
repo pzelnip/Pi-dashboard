@@ -93,8 +93,30 @@ def load_local_config() -> dict:
 def save_local_config(cfg: dict) -> None:
     """Atomically write config.local.json (thread-safe)."""
     with _local_config_lock:
-        tmp = LOCAL_CONFIG_PATH + ".tmp"
-        with open(tmp, "w") as f:
-            json.dump(cfg, f, indent=2)
-            f.write("\n")
-        os.replace(tmp, LOCAL_CONFIG_PATH)
+        _write_local_config(cfg)
+
+
+def _write_local_config(cfg: dict) -> None:
+    tmp = LOCAL_CONFIG_PATH + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(cfg, f, indent=2)
+        f.write("\n")
+    os.replace(tmp, LOCAL_CONFIG_PATH)
+
+
+def update_countdowns(change) -> list[dict]:
+    """Apply *change* to the effective countdown list and save the result to
+    config.local.json, which then replaces any base list.
+
+    The read, the change and the write all happen under one lock, so two
+    concurrent edits can't each start from the same list and lose the other's
+    change. *change* takes the current list and returns the new one; it may
+    raise ValueError to abort without writing anything.
+    """
+    with _local_config_lock:
+        countdowns = list(load_config().get("countdowns", []) or [])
+        new_list = change(countdowns)
+        local_cfg = load_local_config()
+        local_cfg["countdowns"] = new_list
+        _write_local_config(local_cfg)
+    return new_list

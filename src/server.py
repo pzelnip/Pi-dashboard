@@ -29,13 +29,12 @@ from config import (
     HERE,
     background_settings,
     load_config,
-    load_local_config,
     resolve_background_image,
-    save_local_config,
+    update_countdowns,
 )
 from parsers.calendar import fetch_calendar
 from parsers.nhl import fetch_nhl, nhl_overview
-from parsers.rss import fetch_rss, fetch_rss_aggregated, mark_stale_feeds
+from parsers.rss import fetch_rss_aggregated, mark_stale_feeds
 from parsers.weather import fetch_weather
 from sysinfo import system_health
 
@@ -213,259 +212,256 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_error_json(f"config error: {e}")
             return
 
-        if path == "/api/debug":
-            now = time.time()
-            cal_url_set = set((cfg.get("calendar") or {}).get("urls") or [])
-            with cache._cache_lock:
-                cache_entries = [
-                    {"url": u, "ttlRemaining": round(exp - now, 1)}
-                    for u, (exp, _body) in cache._cache.items()
-                    if u not in cal_url_set
-                ]
-            cache_entries.sort(key=lambda e: e["url"])
+        handler = self._GET_ROUTES.get(path)
+        if handler:
+            handler(self, cfg, query)
+        else:
+            self._serve_static(path)
+
+    def _get_debug(self, cfg, query):
+        now = time.time()
+        cal_url_set = set((cfg.get("calendar") or {}).get("urls") or [])
+        with cache._cache_lock:
+            cache_entries = [
+                {"url": u, "ttlRemaining": round(exp - now, 1)}
+                for u, (exp, _body) in cache._cache.items()
+                if u not in cal_url_set
+            ]
+        cache_entries.sort(key=lambda e: e["url"])
+        self._send_json(
+            {
+                "version": VERSION,
+                "versionShort": VERSION[:7],
+                "serverStartedAt": SERVER_STARTED_AT,
+                "latestCommitAt": LATEST_COMMIT_AT,
+                "latestCommitSubject": LATEST_COMMIT_SUBJECT,
+                "pythonVersion": platform.python_version(),
+                "platform": platform.platform(),
+                "rssFeedCount": len(cfg.get("rss", []) or []),
+                "calendarUrlCount": len(cal_url_set),
+                # Both the raw setting and the resolved path: when a
+                # background doesn't show up, the usual cause is a path
+                # typo, and seeing "configured but unresolved" says so.
+                "backgroundConfigured": (cfg.get("background") or {}).get("image") or "",
+                "backgroundImage": resolve_background_image(cfg) or "",
+                "cache": cache_entries,
+                "system": system_health(),
+            }
+        )
+
+    def _get_logs(self, cfg, query):
+        which = (query.get("which", [""])[0] or "").lower()
+        if which not in ("service", "update"):
+            self._send_error_json("which must be 'service' or 'update'")
+            return
+        try:
+            lines_arg = int(query.get("lines", ["200"])[0])
+        except ValueError:
+            lines_arg = 200
+        lines_arg = max(1, min(lines_arg, 2000))
+
+        if which == "service":
+            # No shell — argv list keeps `lines_arg` from being injected.
+            try:
+                out = subprocess.run(
+                    [
+                        "journalctl",
+                        "-u",
+                        "dashboard.service",
+                        "-n",
+                        str(lines_arg),
+                        "--no-pager",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+            except FileNotFoundError:
+                self._send_error_json("journalctl not available on this host")
+                return
+            except subprocess.TimeoutExpired:
+                self._send_error_json("journalctl timed out")
+                return
+            if out.returncode != 0:
+                self._send_error_json(
+                    f"journalctl failed: {out.stderr.strip() or 'unknown error'}"
+                )
+                return
+            lines = out.stdout.splitlines()
             self._send_json(
                 {
-                    "version": VERSION,
-                    "versionShort": VERSION[:7],
-                    "serverStartedAt": SERVER_STARTED_AT,
-                    "latestCommitAt": LATEST_COMMIT_AT,
-                    "latestCommitSubject": LATEST_COMMIT_SUBJECT,
-                    "pythonVersion": platform.python_version(),
-                    "platform": platform.platform(),
-                    "rssFeedCount": len(cfg.get("rss", []) or []),
-                    "calendarUrlCount": len(cal_url_set),
-                    # Both the raw setting and the resolved path: when a
-                    # background doesn't show up, the usual cause is a path
-                    # typo, and seeing "configured but unresolved" says so.
-                    "backgroundConfigured": (cfg.get("background") or {}).get("image") or "",
-                    "backgroundImage": resolve_background_image(cfg) or "",
-                    "cache": cache_entries,
-                    "system": system_health(),
+                    "lines": lines[-lines_arg:],
+                    "source": "journalctl -u dashboard.service",
+                    "truncated": False,
                 }
             )
             return
 
-        if path == "/api/logs":
-            which = (query.get("which", [""])[0] or "").lower()
-            if which not in ("service", "update"):
-                self._send_error_json("which must be 'service' or 'update'")
-                return
-            try:
-                lines_arg = int(query.get("lines", ["200"])[0])
-            except ValueError:
-                lines_arg = 200
-            lines_arg = max(1, min(lines_arg, 2000))
-
-            if which == "service":
-                # No shell — argv list keeps `lines_arg` from being injected.
-                try:
-                    out = subprocess.run(
-                        [
-                            "journalctl",
-                            "-u",
-                            "dashboard.service",
-                            "-n",
-                            str(lines_arg),
-                            "--no-pager",
-                        ],
-                        capture_output=True,
-                        text=True,
-                        timeout=5,
-                    )
-                except FileNotFoundError:
-                    self._send_error_json("journalctl not available on this host")
-                    return
-                except subprocess.TimeoutExpired:
-                    self._send_error_json("journalctl timed out")
-                    return
-                if out.returncode != 0:
-                    self._send_error_json(
-                        f"journalctl failed: {out.stderr.strip() or 'unknown error'}"
-                    )
-                    return
-                lines = out.stdout.splitlines()
-                self._send_json(
-                    {
-                        "lines": lines[-lines_arg:],
-                        "source": "journalctl -u dashboard.service",
-                        "truncated": False,
-                    }
-                )
-                return
-
-            # which == "update"
-            if not os.path.isfile(UPDATE_LOG_PATH):
-                self._send_json(
-                    {
-                        "lines": [],
-                        "source": f"file:{UPDATE_LOG_PATH}",
-                        "truncated": False,
-                        "note": "no log yet",
-                    }
-                )
-                return
-            try:
-                with open(UPDATE_LOG_PATH, "rb") as f:
-                    # Cheap tail: read last 256KB and split. update.log is
-                    # plain text and grows slowly so this is fine.
-                    f.seek(0, os.SEEK_END)
-                    size = f.tell()
-                    chunk = 256 * 1024
-                    f.seek(max(0, size - chunk))
-                    raw = f.read()
-                text = raw.decode("utf-8", errors="replace")
-                lines = text.splitlines()
-                truncated = size > chunk
-                self._send_json(
-                    {
-                        "lines": lines[-lines_arg:],
-                        "source": f"file:{UPDATE_LOG_PATH}",
-                        "truncated": truncated,
-                    }
-                )
-            except Exception as e:
-                self._send_error_json(f"failed to read update log: {e}")
-            return
-
-        if path == "/api/config":
-            # Expose only the client-relevant subset of config.
-            cal_urls = (cfg.get("calendar") or {}).get("urls") or []
+        # which == "update"
+        if not os.path.isfile(UPDATE_LOG_PATH):
             self._send_json(
                 {
-                    "rotation": cfg.get("rotation", {"rssSeconds": 30}),
-                    "calendar": {"enabled": bool(cal_urls)},
-                    "countdowns": cfg.get("countdowns", []) or [],
-                    "background": background_settings(cfg),
-                    # Visual-effects defaults (effects.preset); per-browser
-                    # overrides live in the frontend (URL / localStorage).
-                    "effects": cfg.get("effects") or {},
+                    "lines": [],
+                    "source": f"file:{UPDATE_LOG_PATH}",
+                    "truncated": False,
+                    "note": "no log yet",
                 }
             )
             return
-
-        if path == "/api/background":
-            # The wallpaper behind the whole layout. Lives outside public/ —
-            # it's a file on the Pi named by config, not a checked-in asset.
-            img = resolve_background_image(cfg)
-            if not img:
-                self.send_error(404, "Not Found")
-                return
-            self._send_file(img)
-            return
-
-        if path == "/api/nhl":
-            date_override = query.get("date", [None])[0]
-            favorites = cfg.get("nhl", {}).get("favorites", []) or []
-            try:
-                if date_override:
-                    # Debug override: single-day response, no yesterday view.
-                    games = fetch_nhl(date_override, favorites)
-                    has_live = any(g["state"] in ("LIVE", "CRIT") for g in games)
-                    self._send_json(
-                        {
-                            "today": {"date": date_override, "games": games},
-                            "yesterday": None,
-                            "hasLiveToday": has_live,
-                        }
-                    )
-                else:
-                    season_start = cfg.get("nhl", {}).get("seasonStart") or None
-                    self._send_json(nhl_overview(favorites, season_start))
-            except Exception as e:
-                self._send_error_json(str(e))
-            return
-
-        if path == "/api/weather":
-            w = cfg.get("weather", {})
-            lat, lon = w.get("latitude"), w.get("longitude")
-            if lat is None or lon is None:
-                self._send_error_json("weather lat/lon missing in config.json")
-                return
-            try:
-                payload = {
-                    "label": w.get("label", ""),
-                    "latitude": lat,
-                    "longitude": lon,
-                    **fetch_weather(lat, lon),
+        try:
+            with open(UPDATE_LOG_PATH, "rb") as f:
+                # Cheap tail: read last 256KB and split. update.log is
+                # plain text and grows slowly so this is fine.
+                f.seek(0, os.SEEK_END)
+                size = f.tell()
+                chunk = 256 * 1024
+                f.seek(max(0, size - chunk))
+                raw = f.read()
+            text = raw.decode("utf-8", errors="replace")
+            lines = text.splitlines()
+            truncated = size > chunk
+            self._send_json(
+                {
+                    "lines": lines[-lines_arg:],
+                    "source": f"file:{UPDATE_LOG_PATH}",
+                    "truncated": truncated,
                 }
-                self._send_json(payload)
-            except Exception as e:
-                self._send_error_json(str(e))
-            return
+            )
+        except Exception as e:
+            self._send_error_json(f"failed to read update log: {e}")
 
-        if path == "/api/rss":
-            feeds = cfg.get("rss", []) or []
-            if not feeds:
-                self._send_error_json("no rss feeds configured")
-                return
-            # 4 items per page, and the 4 * N most recent articles across all
-            # N feeds — so there are still N pages, but each can mix feeds.
-            page_size = 4
-            try:
-                page = int(query.get("page", ["0"])[0])
-            except ValueError:
-                page = 0
-            try:
-                all_items = fetch_rss_aggregated(feeds, items_per_feed=page_size)
-                all_items = mark_stale_feeds(all_items)
-                total_pages = max(1, -(-len(all_items) // page_size))  # ceil division
-                page = page % total_pages if total_pages else 0
-                page_items = all_items[page * page_size:(page + 1) * page_size]
+    def _get_config(self, cfg, query):
+        # Expose only the client-relevant subset of config.
+        cal_urls = (cfg.get("calendar") or {}).get("urls") or []
+        self._send_json(
+            {
+                "rotation": cfg.get("rotation", {"rssSeconds": 30}),
+                "calendar": {"enabled": bool(cal_urls)},
+                "countdowns": cfg.get("countdowns", []) or [],
+                "background": background_settings(cfg),
+                # Visual-effects defaults (effects.preset); per-browser
+                # overrides live in the frontend (URL / localStorage).
+                "effects": cfg.get("effects") or {},
+            }
+        )
+
+    def _get_background(self, cfg, query):
+        # The wallpaper behind the whole layout. Lives outside public/ —
+        # it's a file on the Pi named by config, not a checked-in asset.
+        img = resolve_background_image(cfg)
+        if not img:
+            self.send_error(404, "Not Found")
+            return
+        self._send_file(img)
+
+    def _get_nhl(self, cfg, query):
+        date_override = query.get("date", [None])[0]
+        favorites = cfg.get("nhl", {}).get("favorites", []) or []
+        try:
+            if date_override:
+                # Debug override: single-day response, no yesterday view.
+                games = fetch_nhl(date_override, favorites)
+                has_live = any(g["state"] in ("LIVE", "CRIT") for g in games)
                 self._send_json(
                     {
-                        "page": page,
-                        "totalPages": total_pages,
-                        "items": page_items,
+                        "today": {"date": date_override, "games": games},
+                        "yesterday": None,
+                        "hasLiveToday": has_live,
                     }
                 )
-            except Exception as e:
-                self._send_error_json(str(e))
-            return
-
-        if path == "/api/calendar":
-            cal_urls = (cfg.get("calendar") or {}).get("urls") or []
-            if not cal_urls:
-                self._send_json(
-                    {
-                        "enabled": False,
-                        "events": [],
-                        "date": dt.date.today().isoformat(),
-                    }
-                )
-                return
-            try:
-                events = fetch_calendar(cal_urls)
-                self._send_json(
-                    {
-                        "enabled": True,
-                        "events": events,
-                        "date": dt.date.today().isoformat(),
-                    }
-                )
-            except Exception as e:
-                self._send_error_json(str(e))
-            return
-
-        if path == "/api/countdowns":
-            # Return merged countdowns with source info for the debug UI.
-            import config as _cfg_mod
-            with open(_cfg_mod.CONFIG_PATH) as f:
-                base_cfg = json.load(f)
-            base_countdowns = base_cfg.get("countdowns", []) or []
-            local_cfg = load_local_config()
-            local_countdowns = local_cfg.get("countdowns", []) or []
-            # If local overrides exist, those replace base entirely (merge
-            # semantics: lists replace). Show the effective list.
-            if local_countdowns:
-                effective = local_countdowns
             else:
-                effective = base_countdowns
-            effective = sorted(effective, key=_countdown_sort_key)
-            self._send_json({"countdowns": effective})
-            return
+                season_start = cfg.get("nhl", {}).get("seasonStart") or None
+                self._send_json(nhl_overview(favorites, season_start))
+        except Exception as e:
+            self._send_error_json(str(e))
 
-        # static
-        self._serve_static(path)
+    def _get_weather(self, cfg, query):
+        w = cfg.get("weather", {})
+        lat, lon = w.get("latitude"), w.get("longitude")
+        if lat is None or lon is None:
+            self._send_error_json("weather lat/lon missing in config.json")
+            return
+        try:
+            payload = {
+                "label": w.get("label", ""),
+                "latitude": lat,
+                "longitude": lon,
+                **fetch_weather(lat, lon),
+            }
+            self._send_json(payload)
+        except Exception as e:
+            self._send_error_json(str(e))
+
+    def _get_rss(self, cfg, query):
+        feeds = cfg.get("rss", []) or []
+        if not feeds:
+            self._send_error_json("no rss feeds configured")
+            return
+        # 4 items per page, and the 4 * N most recent articles across all
+        # N feeds — so there are still N pages, but each can mix feeds.
+        page_size = 4
+        try:
+            page = int(query.get("page", ["0"])[0])
+        except ValueError:
+            page = 0
+        try:
+            all_items = fetch_rss_aggregated(feeds, items_per_feed=page_size)
+            all_items = mark_stale_feeds(all_items)
+            total_pages = max(1, -(-len(all_items) // page_size))  # ceil division
+            page = page % total_pages if total_pages else 0
+            page_items = all_items[page * page_size:(page + 1) * page_size]
+            self._send_json(
+                {
+                    "page": page,
+                    "totalPages": total_pages,
+                    "items": page_items,
+                }
+            )
+        except Exception as e:
+            self._send_error_json(str(e))
+
+    def _get_calendar(self, cfg, query):
+        cal_urls = (cfg.get("calendar") or {}).get("urls") or []
+        if not cal_urls:
+            self._send_json(
+                {
+                    "enabled": False,
+                    "events": [],
+                    "date": dt.date.today().isoformat(),
+                }
+            )
+            return
+        try:
+            events = fetch_calendar(cal_urls)
+            self._send_json(
+                {
+                    "enabled": True,
+                    "events": events,
+                    "date": dt.date.today().isoformat(),
+                }
+            )
+        except Exception as e:
+            self._send_error_json(str(e))
+
+    def _get_countdowns(self, cfg, query):
+        # The effective (merged) list for the debug UI: the same one the
+        # dashboard shows, since a local list replaces the base one.
+        effective = sorted(cfg.get("countdowns", []) or [], key=_countdown_sort_key)
+        self._send_json({"countdowns": effective})
+
+    # GET /api/* path -> handler(self, cfg, query); anything else is a static
+    # file. /api/version is answered before config loads (see do_GET).
+    _GET_ROUTES = {
+        "/api/debug": _get_debug,
+        "/api/logs": _get_logs,
+        "/api/config": _get_config,
+        "/api/background": _get_background,
+        "/api/nhl": _get_nhl,
+        "/api/weather": _get_weather,
+        "/api/rss": _get_rss,
+        "/api/calendar": _get_calendar,
+        "/api/countdowns": _get_countdowns,
+    }
 
     def do_POST(self):
         # No CSRF token / auth: dashboard runs LAN-only with no users beyond
@@ -560,23 +556,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_error_json(f"icon must be {_MAX_ICON_LEN} characters or fewer")
             return
 
-        # Read effective countdowns from merged config, add entry, save to local.
-        cfg = load_config()
-        countdowns = list(cfg.get("countdowns", []) or [])
         new_entry = {"date": date_str, "title": title}
         if icon:
             new_entry["icon"] = icon
-        # Avoid exact duplicates
-        if any(c.get("date") == date_str and c.get("title") == title for c in countdowns):
-            self._send_error_json("countdown already exists")
-            return
-        countdowns.append(new_entry)
-        countdowns.sort(key=_countdown_sort_key)
-        # Persist full list to config.local.json (replaces any base list)
-        local_cfg = load_local_config()
-        local_cfg["countdowns"] = countdowns
-        save_local_config(local_cfg)
-        self._send_json({"ok": True, "countdowns": countdowns})
+
+        def add(countdowns):
+            # Avoid exact duplicates
+            if any(c.get("date") == date_str and c.get("title") == title for c in countdowns):
+                raise ValueError("countdown already exists")
+            return sorted(countdowns + [new_entry], key=_countdown_sort_key)
+
+        self._save_countdowns(add)
 
     def _handle_delete_countdown(self):
         try:
@@ -593,17 +583,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_error_json("both 'date' and 'title' are required")
             return
 
-        cfg = load_config()
-        countdowns = list(cfg.get("countdowns", []) or [])
-        new_list = [c for c in countdowns
-                    if not (c.get("date") == date_str and c.get("title") == title)]
-        if len(new_list) == len(countdowns):
-            self._send_error_json("countdown not found")
-            return
-        local_cfg = load_local_config()
-        local_cfg["countdowns"] = new_list
-        save_local_config(local_cfg)
-        self._send_json({"ok": True, "countdowns": new_list})
+        def delete(countdowns):
+            new_list = [c for c in countdowns
+                        if not (c.get("date") == date_str and c.get("title") == title)]
+            if len(new_list) == len(countdowns):
+                raise ValueError("countdown not found")
+            return new_list
+
+        self._save_countdowns(delete)
 
     def _handle_edit_countdown(self):
         try:
@@ -634,25 +621,27 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_error_json(f"icon must be {_MAX_ICON_LEN} characters or fewer")
             return
 
-        cfg = load_config()
-        countdowns = list(cfg.get("countdowns", []) or [])
-        found = False
-        for i, c in enumerate(countdowns):
-            if c.get("date") == old_date and c.get("title") == old_title:
-                entry = {"date": new_date, "title": new_title}
-                # Empty icon clears any previous one (revert to default glyph).
-                if new_icon:
-                    entry["icon"] = new_icon
-                countdowns[i] = entry
-                found = True
-                break
-        if not found:
-            self._send_error_json("original countdown not found")
+        def edit(countdowns):
+            for i, c in enumerate(countdowns):
+                if c.get("date") == old_date and c.get("title") == old_title:
+                    entry = {"date": new_date, "title": new_title}
+                    # Empty icon clears any previous one (revert to default glyph).
+                    if new_icon:
+                        entry["icon"] = new_icon
+                    countdowns[i] = entry
+                    return sorted(countdowns, key=_countdown_sort_key)
+            raise ValueError("original countdown not found")
+
+        self._save_countdowns(edit)
+
+    def _save_countdowns(self, change):
+        """Apply a countdown change via config.update_countdowns and reply with
+        the new list, or with the change's ValueError as an inline error."""
+        try:
+            countdowns = update_countdowns(change)
+        except ValueError as e:
+            self._send_error_json(str(e))
             return
-        countdowns.sort(key=_countdown_sort_key)
-        local_cfg = load_local_config()
-        local_cfg["countdowns"] = countdowns
-        save_local_config(local_cfg)
         self._send_json({"ok": True, "countdowns": countdowns})
 
 

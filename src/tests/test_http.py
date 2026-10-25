@@ -1,6 +1,7 @@
-"""Tests for static-file caching headers: ETag + no-cache, 304 on revalidation."""
+"""HTTP-level tests: GET routing, and static-file caching (ETag + no-cache, 304)."""
 
 import io
+import json
 import threading
 import unittest
 import urllib.error
@@ -13,7 +14,7 @@ from tests import helpers  # ensures repo root is on sys.path
 import server
 
 
-class StaticCachingTests(unittest.TestCase):
+class _ServerTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.DashboardHandler)
@@ -38,6 +39,35 @@ class StaticCachingTests(unittest.TestCase):
         except urllib.error.HTTPError as e:
             return e.code, e.headers, e.read()
 
+
+class RoutingTests(_ServerTestCase):
+    def test_version_route(self):
+        status, _, body = self._get("/api/version")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), {"version": server.VERSION})
+
+    def test_api_route_dispatches_to_handler(self):
+        cfg = {"countdowns": [{"date": "2027-01-01", "title": "B"},
+                              {"date": "2026-12-25", "title": "A"}]}
+        with patch.object(server, "load_config", return_value=cfg):
+            status, _, body = self._get("/api/countdowns")
+
+        self.assertEqual(status, 200)
+        self.assertEqual([c["title"] for c in json.loads(body)["countdowns"]], ["A", "B"])
+
+    def test_unknown_path_falls_through_to_static(self):
+        status, _, _ = self._get("/no-such-file.txt")
+
+        self.assertEqual(status, 404)
+
+    def test_every_route_is_a_handler_method(self):
+        for path, handler in server.DashboardHandler._GET_ROUTES.items():
+            self.assertTrue(path.startswith("/api/"), path)
+            self.assertIs(getattr(server.DashboardHandler, handler.__name__), handler)
+
+
+class StaticCachingTests(_ServerTestCase):
     def test_static_file_has_etag_and_revalidates(self):
         status, headers, body = self._get("/style.css")
 
