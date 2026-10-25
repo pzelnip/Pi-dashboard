@@ -206,6 +206,65 @@ function fxSourceText(key, entry) {
   }
 }
 
+// Frame-cost readout for the Display view, so "measure on the Pi" has a number:
+// frame rate and the worst gap between frames from requestAnimationFrame, and
+// long tasks (main-thread work over 50ms) from a PerformanceObserver, over a
+// rolling window. It only runs while the Display view is showing.
+const PERF_WINDOW_MS = 10000;
+let _perfMeter = null;
+
+function startPerfMeter(el) {
+  stopPerfMeter();
+  const started = performance.now();
+  const frames = [];
+  const longTasks = [];
+  let running = true;
+  const onFrame = t => {
+    if (!running) return;
+    frames.push(t);
+    requestAnimationFrame(onFrame);
+  };
+  requestAnimationFrame(onFrame);
+  let observer = null;
+  try {
+    observer = new PerformanceObserver(list => {
+      for (const e of list.getEntries()) longTasks.push({ start: e.startTime, duration: e.duration });
+    });
+    observer.observe({ type: "longtask" });
+  } catch (e) {
+    observer = null;  // long tasks aren't reported in this browser
+  }
+  const report = () => {
+    const now = performance.now();
+    const from = now - PERF_WINDOW_MS;
+    while (frames.length && frames[0] < from) frames.shift();
+    while (longTasks.length && longTasks[0].start < from) longTasks.shift();
+    let worst = 0;
+    for (let i = 1; i < frames.length; i++) worst = Math.max(worst, frames[i] - frames[i - 1]);
+    const seconds = Math.min(PERF_WINDOW_MS, now - started) / 1000;
+    const fps = seconds > 0 ? frames.length / seconds : 0;
+    const blocked = Math.round(longTasks.reduce((sum, t) => sum + t.duration, 0));
+    const tasks = observer
+      ? `${longTasks.length} long task${longTasks.length === 1 ? "" : "s"} (${blocked} ms blocked)`
+      : "long tasks not reported by this browser";
+    el.textContent = `${fps.toFixed(1)} fps · worst frame ${Math.round(worst)} ms · ${tasks}`
+      + ` — last ${Math.round(seconds)} s`;
+  };
+  const timer = setInterval(report, 1000);
+  _perfMeter = {
+    stop() {
+      running = false;
+      clearInterval(timer);
+      if (observer) observer.disconnect();
+    },
+  };
+}
+
+function stopPerfMeter() {
+  if (_perfMeter) _perfMeter.stop();
+  _perfMeter = null;
+}
+
 // The Display view: one row per effect plus the preset. Inputs show what's
 // saved in this browser (blank = not saved); "Now" shows the effective value
 // and its source, since a URL parameter can override the saved one.
@@ -246,6 +305,9 @@ function renderDisplaySettings(message, isError) {
     <p class="debug-fx-intro">Visual effects for <strong>this browser only</strong>. A saved value overrides the
       server config, and a URL parameter (<code>?fx=lite</code>, <code>?fade=150</code>) overrides both.
       Leave a field blank to not save it.</p>
+    <p class="debug-fx-intro"><strong>Performance:</strong> <span id="debug-perf">measuring…</span><br>
+      The dashboard keeps rotating behind this sheet; leave it open through a few rotations
+      to see what the views and effects cost.</p>
     <form class="debug-fx-form" data-debug-action="display-form">
       ${rows.join("")}
       <div class="debug-fx-actions">
@@ -328,6 +390,7 @@ function initDebugOverlay(openNow) {
 
   async function showFields() {
     mode = "fields";
+    stopPerfMeter();
     body.innerHTML = "Loading…";
     try {
       const data = await fetchJson("/api/debug");
@@ -343,6 +406,7 @@ function initDebugOverlay(openNow) {
 
   async function showLog(which) {
     mode = "log";
+    stopPerfMeter();
     const title = which === "service" ? "Service log" : "Update log";
     body.innerHTML = `<p style="color:var(--text-muted)">Loading ${title.toLowerCase()}…</p>`;
     if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
@@ -365,6 +429,7 @@ function initDebugOverlay(openNow) {
     mode = "display";
     if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
     body.innerHTML = renderDisplaySettings(message, isError);
+    startPerfMeter(document.getElementById("debug-perf"));
   }
 
   function saveDisplay(form) {
@@ -407,6 +472,7 @@ function initDebugOverlay(openNow) {
 
   async function showCountdowns() {
     mode = "countdowns";
+    stopPerfMeter();
     body.innerHTML = `<p style="color:var(--text-muted)">Loading countdowns…</p>`;
     if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
     try {
@@ -486,6 +552,7 @@ function initDebugOverlay(openNow) {
 
   function showEditCountdown(oldDate, oldTitle, oldIcon) {
     mode = "countdowns";
+    stopPerfMeter();
     const isAnnual = /^\d{2}-\d{2}$/.test(oldDate);
     const toggleLabel = isAnnual ? "Full date (YYYY-MM-DD)" : "Annual (MM-DD)";
 
@@ -700,6 +767,7 @@ function initDebugOverlay(openNow) {
     if (!open) return;
     open = false;
     mode = "fields";
+    stopPerfMeter();
     sheet.classList.remove("open");
     backdrop.classList.remove("open");
     sheet.setAttribute("aria-hidden", "true");
