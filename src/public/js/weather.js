@@ -332,9 +332,9 @@ function clockSpan(timeEl, cls, text, roll) {
 // holding a smaller accent meridiem (AM/PM) over the seconds (when the
 // clockSeconds effect isn't off), so CSS can style them independently. The en-US 12-hour format ("8:03 PM") always splits
 // cleanly on the space; if a locale ever omits the meridiem the whole string
-// falls into the digits span.
+// falls into the digits span. `now` comes from piWallClock(), so it's read in UTC.
 function renderClockTime(timeEl, now) {
-  const [digits, meridiem] = formatTime(now).split(" ");
+  const [digits, meridiem] = now.toLocaleTimeString("en-US", { ...TIME_FMT, timeZone: "UTC" }).split(" ");
   const side = document.createElement("span");
   side.className = "clk-side";
   if (meridiem) {
@@ -344,7 +344,7 @@ function renderClockTime(timeEl, now) {
     side.append(mer);
   }
   if (fxOn.clockSeconds !== "off") {
-    const seconds = String(now.getSeconds()).padStart(2, "0");
+    const seconds = String(now.getUTCSeconds()).padStart(2, "0");
     side.append(clockSpan(timeEl, "clk-sec", seconds, fxOn.clockSeconds === "full"));
   }
   timeEl.replaceChildren(clockSpan(timeEl, "clk-hm", digits, fxOn.clockRoll), side);
@@ -361,17 +361,45 @@ function ordinalSuffix(n) {
   }
 }
 
+// The clock shows the Pi's time on every device, whatever the viewer's own
+// clock, time zone, or zone rules (Chromium bundles its own, which went stale
+// when BC dropped DST). /api/time gives the server's clock and UTC offset;
+// until it first answers, the device's clock stands in.
+let piClock = null;  // { skewMs, offsetMinutes, nextChange }
+
+async function syncPiClock() {
+  try {
+    const sent = Date.now();
+    const t = await fetchJson("/api/time");
+    // Assume the server read its clock halfway through the round trip.
+    const skewMs = t.now - (sent + Date.now()) / 2;
+    piClock = { skewMs, offsetMinutes: t.offsetMinutes, nextChange: t.nextChange };
+    renderClock(); scheduleClockTick();
+  } catch { /* keep the last sync (or the device clock); retry next poll */ }
+}
+
+const piEpochMs = () => Date.now() + (piClock?.skewMs ?? 0);
+
+// The Pi's wall-clock time, as a Date whose UTC fields read as Pi local time.
+function piWallClock() {
+  const now = piEpochMs();
+  if (!piClock) return new Date(now - new Date(now).getTimezoneOffset() * 60000);
+  const { offsetMinutes, nextChange } = piClock;
+  const offset = nextChange && now >= nextChange.at ? nextChange.offsetMinutes : offsetMinutes;
+  return new Date(now + offset * 60000);
+}
+
 // Render the clock into a view built from the clock template (the weather
 // panel's clock view, or the NHL panel's off-season one).
 function renderClockView(view) {
   const timeEl = view?.querySelector(".clock-time");
   const dateEl = view?.querySelector(".clock-date");
   if (!timeEl || !dateEl) return;
-  const now = new Date();
-  const weekday = now.toLocaleDateString("en-US", { weekday: "long" });
-  const month = now.toLocaleDateString("en-US", { month: "long" });
-  const day = now.getDate();
-  const year = now.getFullYear();
+  const now = piWallClock();
+  const weekday = now.toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" });
+  const month = now.toLocaleDateString("en-US", { month: "long", timeZone: "UTC" });
+  const day = now.getUTCDate();
+  const year = now.getUTCFullYear();
   renderClockTime(timeEl, now);
   dateEl.textContent = `${weekday}, ${month} ${day}${ordinalSuffix(day)}, ${year}`;
 }
@@ -381,15 +409,15 @@ function renderClock() {
   if (nhlDeepOffSeason) renderNhlClock();
 }
 
-// Re-armed every tick (rather than setInterval) so it stays on the second (or,
-// without seconds, the minute) boundary instead of whatever moment the page
+// Re-armed every tick (rather than setInterval) so it stays on the Pi's second
+// (or, without seconds, minute) boundary instead of whatever moment the page
 // loaded, and recovers after sleep. Re-arming cancels any pending tick, so the
 // clockSeconds effect can switch the cadence.
 let _clockTimer = null;
 function scheduleClockTick() {
   clearTimeout(_clockTimer);
   const period = fxOn.clockSeconds === "off" ? 60000 : 1000;
-  _clockTimer = setTimeout(() => { renderClock(); scheduleClockTick(); }, period - Date.now() % period);
+  _clockTimer = setTimeout(() => { renderClock(); scheduleClockTick(); }, period - piEpochMs() % period);
 }
 
 // ---------- Countdown ----------

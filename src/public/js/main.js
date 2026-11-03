@@ -139,7 +139,9 @@ async function start() {
   }
 
   // Clock ticks on each minute boundary; render immediately so it's ready when rotation lands on it.
+  // The Pi-time sync re-renders once it lands, and repeats to track clock drift.
   renderClock(); scheduleClockTick();
+  syncPiClock(); setInterval(syncPiClock, 10 * 60 * 1000);
 
   // "Puck Drop" countdown ticks every second while its view is on-screen.
   setInterval(tickNhlSeason, 1000);
@@ -200,6 +202,7 @@ function refreshAllPanels() {
   if (calendarEnabled) refreshCalendar();
   if (countdowns.length) renderCountdown();
   renderClock();
+  syncPiClock();
 }
 
 function onWake() {

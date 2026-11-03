@@ -49,6 +49,13 @@ class RoutingTests(_ServerTestCase):
         self.assertEqual(status, 200)
         self.assertEqual(json.loads(body), {"version": server.VERSION})
 
+    def test_time_route_answers_without_config(self):
+        with patch.object(server, "load_config", side_effect=ValueError("broken")):
+            status, _, body = self._get("/api/time")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(set(json.loads(body)), {"now", "offsetMinutes", "nextChange"})
+
     def test_api_route_dispatches_to_handler(self):
         cfg = {"countdowns": [{"date": "2027-01-01", "title": "B"},
                               {"date": "2026-12-25", "title": "A"}]}

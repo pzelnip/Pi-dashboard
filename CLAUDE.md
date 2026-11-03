@@ -41,6 +41,7 @@ curl -s http://localhost:8080/api/rss | jq            # every page of the merged
 curl -s http://localhost:8080/api/calendar | jq
 curl -s http://localhost:8080/api/config | jq          # rotation intervals + feature flags
 curl -s http://localhost:8080/api/version | jq         # git SHA, for kiosk auto-reload
+curl -s http://localhost:8080/api/time | jq            # server clock + UTC offset, for the clock view
 ```
 
 To see what the Pi actually renders, use `pi-screenshot.sh` (details in
@@ -80,6 +81,8 @@ Python 3 stdlib server. Three concerns are layered:
    The NHL handler does *not* call `/schedule/now` upstream. That endpoint lags the calendar rollover (still returns yesterday's slate hours into the user's morning), so `fetch_nhl` always anchors on the Pi's local date and hits `/schedule/<YYYY-MM-DD>` instead. Each such page covers seven days, so `games_on` reads every date from a page anchored on yesterday ± whole weeks: one page answers yesterday through today+5, and the off-season look-back/look-ahead costs at most two more. `nhl_overview` builds the `{today, yesterday, hasLiveToday, offSeason, deepOffSeason, seasonStart, openingNight}` envelope; the frontend rotates between the two views when no live game is in progress, and pins to today only when one is. If you "fix" `fetch_nhl` to use `/schedule/now`, you will reintroduce a real bug.
 
 3. **HTTP handler** (`DashboardHandler`): `do_GET` answers `/api/version` first (before config loads, so a broken config can't stop auto-update), then dispatches `/api/*` through the `_GET_ROUTES` table to one `_get_<name>(self, cfg, query)` method per endpoint — add new GET endpoints there. Everything else falls through to a sandboxed static-file server (the path is `realpath`'d and must stay inside `public/`). Countdown edits go through `config.update_countdowns`, which holds the local-config lock across the whole read-modify-write. Errors are returned as HTTP 200 with `{error: "..."}` so the frontend can render an inline message without losing what's on screen — the actual stale-data fallback happens transparently in `fetch_cached`.
+
+`/api/time` returns the server's clock and UTC offset (plus any offset change in the next two days); the clock view renders from it, so every browser shows the Pi's time rather than its own.
 
 `/api/version` returns the current git SHA (computed once at startup); the frontend polls it and reloads on change. This is how the kiosk auto-updates after a deploy.
 

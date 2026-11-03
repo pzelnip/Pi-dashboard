@@ -85,6 +85,32 @@ UPDATE_LOG_PATH = os.path.join(REPO_ROOT, "update.log")
 UPDATE_SCRIPT_PATH = os.path.join(REPO_ROOT, "update-dashboard.sh")
 
 
+# ---------- Server time ----------
+
+
+def pi_time(now: float | None = None) -> dict:
+    """The server's clock and UTC offset, for the frontend clock.
+
+    The clock shows the Pi's time on every device, so it can't trust the
+    browser's clock or time-zone rules (Chromium bundles its own, which went
+    stale when BC dropped DST). `nextChange` is the first offset change in the
+    next two days, so a browser between polls still flips at the right moment.
+    """
+    if now is None:
+        now = time.time()
+    offset = time.localtime(now).tm_gmtoff
+    next_change = None
+    # Offset changes fall on quarter-hour boundaries: check each one.
+    start = (int(now) // 900 + 1) * 900
+    for t in range(start, start + 2 * 86400, 900):
+        later = time.localtime(t).tm_gmtoff
+        if later != offset:
+            next_change = {"at": t * 1000, "offsetMinutes": later // 60}
+            break
+    return {"now": round(now * 1000), "offsetMinutes": offset // 60,
+            "nextChange": next_change}
+
+
 # ---------- Countdown date validation ----------
 
 
@@ -204,6 +230,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         if path == "/api/version":
             self._send_json({"version": VERSION})
+            return
+        if path == "/api/time":
+            self._send_json(pi_time())
             return
 
         try:
@@ -439,7 +468,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self._send_json({"countdowns": effective})
 
     # GET /api/* path -> handler(self, cfg, query); anything else is a static
-    # file. /api/version is answered before config loads (see do_GET).
+    # file. /api/version and /api/time are answered before config loads (see
+    # do_GET).
     _GET_ROUTES = {
         "/api/debug": _get_debug,
         "/api/logs": _get_logs,

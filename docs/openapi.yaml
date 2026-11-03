@@ -57,6 +57,45 @@ paths:
                     description: Git SHA of HEAD at server start, or a unix-timestamp fallback if `git` is unavailable.
                     example: "f0536eaa1b2c3d4e5f6789abcdef0123456789ab"
 
+  /api/time:
+    get:
+      tags: [meta]
+      summary: Server clock and UTC offset
+      description: |
+        The dashboard host's current time and UTC offset, which the clock view
+        renders so every browser shows the Pi's time regardless of its own
+        clock or time-zone rules. Answered before config loads, like
+        `/api/version`.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [now, offsetMinutes, nextChange]
+                properties:
+                  now:
+                    type: integer
+                    description: Server time, in milliseconds since the Unix epoch.
+                    example: 1793734447733
+                  offsetMinutes:
+                    type: integer
+                    description: Current local UTC offset in minutes (negative west of UTC).
+                    example: -420
+                  nextChange:
+                    type: object
+                    nullable: true
+                    description: The first UTC-offset change within the next two days, or null if none.
+                    required: [at, offsetMinutes]
+                    properties:
+                      at:
+                        type: integer
+                        description: When the new offset takes effect, in epoch milliseconds.
+                      offsetMinutes:
+                        type: integer
+                        description: The offset from then on.
+
   /api/config:
     get:
       tags: [meta]

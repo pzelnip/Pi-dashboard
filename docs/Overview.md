@@ -213,6 +213,11 @@ Source: one or more public iCalendar (`.ics`) URLs (`src/parsers/calendar.py`).
   (`off` / `simple` / `full`; off in `lite`, see
   [Visual effects](#visual-effects)). Re-renders every second while shown,
   every minute otherwise.
+- **Shows the Pi's time on every device** — the time and date come from the
+  dashboard host's clock and UTC offset (`/api/time`, re-synced every 10
+  minutes and after a wake), not the viewing browser's. A laptop in another
+  time zone, a device with a drifting clock, or a Chromium with stale bundled
+  zone rules all show the same time as the kiosk.
 - Always present (no config flag).
 
 ### Countdown view
