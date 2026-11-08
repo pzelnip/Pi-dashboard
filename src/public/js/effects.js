@@ -20,7 +20,11 @@
 // even small continuous animations cost it a sizeable share of a core.
 const FX_PRESETS = {
   full: {
-    fade: 400, transition: "rise", liveGlass: true, weather: true,
+    // liveGlass is off even here: combined with any continuous animation it
+    // makes the browser re-blur every panel each frame (Firefox on a Retina
+    // Mac: ~15-20 points of GPU-process CPU), and the pre-blurred copy looks
+    // practically the same. Still available per browser.
+    fade: 400, transition: "rise", liveGlass: false, weather: true,
     stagger: true, goals: true, clockRoll: true, clockSeconds: "full",
     progress: true, newStories: true, timeOfDay: true, glassPolish: true,
     finals: true, livePulse: true,

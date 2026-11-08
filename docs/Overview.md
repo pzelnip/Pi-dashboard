@@ -468,7 +468,7 @@ effect.
   | --- | --- | --- | --- | --- |
   | Fade length | `fade` | 400 ms | 150 ms | Cross-fade between views, `0` = instant; the news fade is half this. Measured on the Pi: 150 ms costs a few points of a core over none, 400 ms roughly 18. |
   | View transition | `transition` | `rise` | `fade` | How views swap: `fade`, `rise` (fade + lift), `zoom`, or `blur`. Uses the fade length. |
-  | Live glass | `liveGlass` | on | off | Panels blur the wallpaper live (`backdrop-filter`) instead of the pre-blurred copy. Very expensive on the Pi. |
+  | Live glass | `liveGlass` | off | off | Panels blur the wallpaper live (`backdrop-filter`) instead of the pre-blurred copy. Off in both presets: alone it's cheap, but with any continuous animation (progress bar, live pulse, weather scenes, clock seconds) every panel is re-blurred each frame — measured at roughly 15–20 points of GPU-process CPU in Firefox on a Retina Mac, and very expensive on the Pi. Turn it on per browser (`?liveGlass=1` or the Display view) if you want it. |
   | Weather scenes | `weather` | on | off | Animated layer in the weather backdrop keyed to conditions: sun rays, drifting clouds, rain, storm rain with lightning, snow, fog bands, twinkling stars at night. Paused while the weather view is hidden. |
   | Staggered entrances | `stagger` | on | off | Game cards, forecast days, calendar events and headlines slide in one after another when a view appears. |
   | Goal celebrations | `goals` | on | off | When a live game's score goes up, its card glows gold, the scoring side's score bumps and a GOAL! badge pops. |
