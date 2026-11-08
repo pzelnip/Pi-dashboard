@@ -20,14 +20,14 @@
 // even small continuous animations cost it a sizeable share of a core.
 const FX_PRESETS = {
   full: {
-    fade: 400, transition: "rise", liveGlass: true, drift: true, weather: true,
-    stagger: true, goals: true, clockRoll: true, clockSeconds: "full", tilt: true,
+    fade: 400, transition: "rise", liveGlass: true, weather: true,
+    stagger: true, goals: true, clockRoll: true, clockSeconds: "full",
     progress: true, newStories: true, timeOfDay: true, glassPolish: true,
     finals: true, livePulse: true,
   },
   lite: {
-    fade: 150, transition: "fade", liveGlass: false, drift: false, weather: false,
-    stagger: false, goals: false, clockRoll: false, clockSeconds: "off", tilt: false,
+    fade: 150, transition: "fade", liveGlass: false, weather: false,
+    stagger: false, goals: false, clockRoll: false, clockSeconds: "off",
     progress: false, newStories: false, timeOfDay: false, glassPolish: false,
     finals: false, livePulse: false,
   },
@@ -75,8 +75,6 @@ const FX_SETTINGS = {
   },
   liveGlass: fxToggle("Live glass",
     "Panels blur the wallpaper live (backdrop-filter) instead of a pre-blurred copy.", "live-glass"),
-  drift: fxToggle("Drifting wallpaper",
-    "The wallpaper slowly pans and zooms. Uses live glass so the panels follow it.", "drift"),
   weather: fxToggle("Weather scenes",
     "Animated rain, snow, stars, clouds, fog and lightning behind the weather.", "weather",
     () => { if (_lastWeatherData) { renderWeather(_lastWeatherData); renderNhlWeather(); } }),
@@ -97,8 +95,6 @@ const FX_SETTINGS = {
       if (_clockTimer) { renderClock(); scheduleClockTick(); }
     },
   },
-  tilt: fxToggle("Panel tilt",
-    "Panels tilt toward the pointer with a glossy sheen (mouse only).", "tilt", setupPanelTilt),
   progress: fxToggle("Rotation progress",
     "A thin bar under the dots fills up as the view's time runs out, so you can see the next change coming.", "progress"),
   newStories: fxToggle("New-story highlights",
@@ -186,33 +182,6 @@ function applyEffects() {
 }
 
 // ---- Effect helpers ----
-
-// Panel tilt: panels lean a few degrees toward the pointer, and a soft sheen
-// follows it. Pointer devices only; listeners stay attached once added and
-// simply do nothing while the effect is off.
-let _tiltReady = false;
-function setupPanelTilt(on) {
-  if (!on || _tiltReady || !matchMedia("(hover: hover) and (pointer: fine)").matches) return;
-  _tiltReady = true;
-  document.querySelectorAll(".panel").forEach(panel => {
-    panel.addEventListener("pointermove", (e) => {
-      if (!fxOn.tilt) return;
-      const r = panel.getBoundingClientRect();
-      const x = (e.clientX - r.left) / r.width;
-      const y = (e.clientY - r.top) / r.height;
-      panel.style.setProperty("--tilt-x", `${((0.5 - y) * 4).toFixed(2)}deg`);
-      panel.style.setProperty("--tilt-y", `${((x - 0.5) * 4).toFixed(2)}deg`);
-      panel.style.setProperty("--sheen-x", `${(x * 100).toFixed(1)}%`);
-      panel.style.setProperty("--sheen-y", `${(y * 100).toFixed(1)}%`);
-      panel.classList.add("fx-tilting");
-    });
-    panel.addEventListener("pointerleave", () => {
-      panel.classList.remove("fx-tilting");
-      panel.style.setProperty("--tilt-x", "0deg");
-      panel.style.setProperty("--tilt-y", "0deg");
-    });
-  });
-}
 
 // Weather scene layer for the .wx-sky backdrop: a handful of absolutely
 // positioned spans the CSS animates (rain streaks, flakes, stars, clouds, fog

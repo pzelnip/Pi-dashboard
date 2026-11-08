@@ -2209,9 +2209,8 @@ body[data-fx-transition="blur"] #rss.fading .panel-body { filter: blur(8px); }
 
 /* ---- Live glass (.fx-live-glass) ----
    The original frosted look: blur whatever is behind the panel, live. Cheap on
-   a GPU, ruinous on the Pi. Drift needs it too, since a moving wallpaper
-   would slide out from under the pre-blurred copies. */
-body.has-bg:is(.fx-live-glass, .fx-drift) .panel {
+   a GPU, ruinous on the Pi. */
+body.has-bg.fx-live-glass .panel {
   background: rgba(16, 19, 23, 0.46);
   -webkit-backdrop-filter: blur(var(--bg-blur, 18px)) saturate(135%);
   backdrop-filter: blur(var(--bg-blur, 18px)) saturate(135%);
@@ -2220,31 +2219,6 @@ body.has-bg:is(.fx-live-glass, .fx-drift) .panel {
    copy). Live blur like the panels above, so it rides on the same toggle. */
 body.fx-live-glass .wx-daily {
   backdrop-filter: blur(2px);
-}
-
-/* ---- Drifting wallpaper (.fx-drift) ----
-   The photo moves to a fixed layer behind everything and slowly pans and
-   zooms. The body goes transparent so the layer shows through. */
-body.has-bg.fx-drift {
-  background: transparent;
-}
-body.has-bg.fx-drift::before {
-  content: "";
-  position: fixed;
-  inset: -6%;
-  z-index: -1;
-  background-image:
-    linear-gradient(rgba(0, 0, 0, var(--bg-dim, 0.45)), rgba(0, 0, 0, var(--bg-dim, 0.45))),
-    var(--bg-image);
-  background-size: cover;
-  background-position: center;
-  animation: fx-drift 90s ease-in-out infinite alternate;
-  will-change: transform;
-}
-@keyframes fx-drift {
-  0%   { transform: scale(1) translate(0, 0); }
-  50%  { transform: scale(1.06) translate(-1.5%, 1%); }
-  100% { transform: scale(1.1) translate(1.5%, -1%); }
 }
 
 /* ---- Weather scenes (.wx-fx, built by buildWeatherFx) ---- */
@@ -2421,38 +2395,11 @@ body[data-fx-clock-seconds="full"] .clk-sec .fx-roll {
   to   { opacity: 1; transform: none; filter: none; }
 }
 
-/* ---- Panel tilt + sheen (.fx-tilt; .fx-tilting while the pointer is over a
-   panel). The tilt itself only applies with live glass, drift or no
-   wallpaper: the default pre-blurred panels use a viewport-fixed background,
-   which a transform would knock out of line with the photo. The sheen works
-   everywhere. ---- */
-body.fx-tilt .panel {
-  position: relative;
-  transition: transform 450ms cubic-bezier(0.2, 0.7, 0.2, 1);
-}
-body.fx-tilt:is(.fx-live-glass, .fx-drift, :not(.has-bg)) .panel.fx-tilting {
-  transform: perspective(1400px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
-  transition: transform 120ms linear;
-}
-body.fx-tilt .panel::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 300ms ease;
-  background: radial-gradient(520px circle at var(--sheen-x, 50%) var(--sheen-y, 50%), rgba(255, 255, 255, 0.08), transparent 45%);
-}
-body.fx-tilt .panel.fx-tilting::after { opacity: 1; }
-
 /* Respect a viewer's "reduce motion" setting for the continuous effects. */
 @media (prefers-reduced-motion: reduce) {
-  body.has-bg.fx-drift::before,
   .wx-fx > span,
   body.fx-goals .game.fx-goal,
   .fx-goal-badge { animation: none; }
-  body.fx-tilt .panel.fx-tilting { transform: none; }
 }
 
 /* ---- Rotation progress (.fx-progress; .rot-run on the dots row) ----
@@ -2515,21 +2462,15 @@ body.fx-new-stories #rss-title.fx-news-arrived > :first-child {
 
 /* ---- Time-of-day tint (.fx-tod; --tod-tint set by updateTimeOfDay) ----
    An extra colour layer over the wallpaper's scrim, in every place the
-   wallpaper is painted: the page, the drifting layer and the pre-blurred
-   panel copies (live glass sees the page's layer through backdrop-filter). */
-body.has-bg.fx-tod:not(.fx-drift) {
+   wallpaper is painted: the page and the pre-blurred panel copies (live glass
+   sees the page's layer through backdrop-filter). */
+body.has-bg.fx-tod {
   background-image:
     linear-gradient(var(--tod-tint, transparent), var(--tod-tint, transparent)),
     linear-gradient(rgba(0, 0, 0, var(--bg-dim, 0.45)), rgba(0, 0, 0, var(--bg-dim, 0.45))),
     var(--bg-image);
 }
-body.has-bg.fx-drift.fx-tod::before {
-  background-image:
-    linear-gradient(var(--tod-tint, transparent), var(--tod-tint, transparent)),
-    linear-gradient(rgba(0, 0, 0, var(--bg-dim, 0.45)), rgba(0, 0, 0, var(--bg-dim, 0.45))),
-    var(--bg-image);
-}
-body.has-bg.has-bg-blur.fx-tod:not(.fx-live-glass):not(.fx-drift) .panel {
+body.has-bg.has-bg-blur.fx-tod:not(.fx-live-glass) .panel {
   background:
     linear-gradient(rgba(16, 19, 23, 0.46), rgba(16, 19, 23, 0.46)),
     linear-gradient(var(--tod-tint, transparent), var(--tod-tint, transparent)),

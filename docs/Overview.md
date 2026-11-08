@@ -469,13 +469,11 @@ effect.
   | Fade length | `fade` | 400 ms | 150 ms | Cross-fade between views, `0` = instant; the news fade is half this. Measured on the Pi: 150 ms costs a few points of a core over none, 400 ms roughly 18. |
   | View transition | `transition` | `rise` | `fade` | How views swap: `fade`, `rise` (fade + lift), `zoom`, or `blur`. Uses the fade length. |
   | Live glass | `liveGlass` | on | off | Panels blur the wallpaper live (`backdrop-filter`) instead of the pre-blurred copy. Very expensive on the Pi. |
-  | Drifting wallpaper | `drift` | on | off | The wallpaper slowly pans and zooms (90 s cycle); uses live glass so the panels follow it. |
   | Weather scenes | `weather` | on | off | Animated layer in the weather backdrop keyed to conditions: sun rays, drifting clouds, rain, storm rain with lightning, snow, fog bands, twinkling stars at night. Paused while the weather view is hidden. |
   | Staggered entrances | `stagger` | on | off | Game cards, forecast days, calendar events and headlines slide in one after another when a view appears. |
   | Goal celebrations | `goals` | on | off | When a live game's score goes up, its card glows gold, the scoring side's score bumps and a GOAL! badge pops. |
   | Rolling clock | `clockRoll` | on | off | Clock digits roll into place when they change. |
   | Clock seconds | `clockSeconds` | `full` | `off` | Seconds under the clock's AM/PM: `off`, `simple` (no animation), or `full` (they roll in). With `off` the clock ticks once a minute. |
-  | Panel tilt | `tilt` | on | off | Panels lean toward the mouse with a glossy sheen (pointer devices only; the lean needs live glass or drift). |
   | Rotation progress | `progress` | on | off | A thin bar under the rotation dots fills over the view's display time, so the next change is visible coming; restarts when you click the dots or arrows. The selected dot stays solid. |
   | New-story highlights | `newStories` | on | off | Headlines this browser hasn't shown before flare their accent stripe and get a light sweep, and the news icon glows. Seen stories are remembered in `localStorage` (`dashboard.seenStories`, last 600); the first run only records them. |
   | Time-of-day tint | `timeOfDay` | on | off | A colour wash over the wallpaper that drifts through the day (deep-blue night, warm dawn, cool morning, neutral midday, golden afternoon, orange sunset, purple dusk), recomputed every 5 minutes. |
@@ -484,7 +482,7 @@ effect.
   | Live pulse | `livePulse` | on | off | The red dot on LIVE pills pulses, as does the live game's pill in the game-details series row. Off in lite because a continuous animation keeps the Pi redrawing for the whole game. |
 
   Toggles take `1`/`0`, `on`/`off` or `true`/`false` in the URL (e.g.
-  `?drift=0`). Continuous effects (drift, weather scenes, goal glow) also
+  `?weather=0`). Continuous effects (weather scenes, goal glow) also
   stop for viewers whose OS asks for reduced motion.
 
 - **Where a setting comes from** — the first of these that sets it wins:
@@ -492,7 +490,7 @@ effect.
   2. saved in this browser, from the debug panel's Display view
      (`localStorage`, key `dashboard.fx`),
   3. the server config (`effects.preset`, `effects.<effect>` such as
-     `effects.drift: false`, and `rotation.fade` for the fade length),
+     `effects.weather: false`, and `rotation.fade` for the fade length),
   4. the active preset's value.
 
   The preset itself resolves the same way (URL `fx` → saved → config →
