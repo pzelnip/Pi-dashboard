@@ -171,6 +171,42 @@ def _countdown_sort_key(c: dict[str, str]) -> tuple[int, str]:
 # ---------- HTTP handler ----------
 
 
+# 4 items per page, and the 4 * N most recent articles across all N feeds —
+# so there are still N pages, but each can mix feeds. Every page goes out in
+# one /api/rss response; the browser pages through them itself, so rotating
+# needs no request.
+RSS_PAGE_SIZE = 4
+
+
+def select_rss_items(feeds: list[dict], stats: dict[str, dict] | None = None) -> list[dict]:
+    """The articles the RSS panel shows. /api/debug calls this too, with
+    *stats* (see ``fetch_rss_aggregated``), so its counts match the panel."""
+    items = fetch_rss_aggregated(feeds, items_per_feed=RSS_PAGE_SIZE, stats=stats)
+    return mark_stale_feeds(items)
+
+
+def rss_feed_report(feeds: list[dict]) -> dict[str, dict]:
+    """Per feed URL: how many articles the feed has and how many of them the
+    panel shows, plus why it shows none (fetch failed / hidden as stale)."""
+    stats: dict[str, dict] = {}
+    items = select_rss_items(feeds, stats)
+    shown: dict[str, int] = {}
+    for it in items:
+        if not it.get("stale"):  # the synthetic warning isn't an article
+            shown[it["feedName"]] = shown.get(it["feedName"], 0) + 1
+    report = {}
+    for feed in feeds:
+        s = stats.get(feed["url"]) or {"articles": None, "hidden": False, "newestDays": None}
+        report[feed["url"]] = {
+            "name": feed.get("name", feed["url"]),
+            "articles": s["articles"],
+            "shown": shown.get(feed.get("name", feed["url"]), 0),
+            "hidden": s["hidden"],
+            "newestDays": s["newestDays"],
+        }
+    return report
+
+
 class DashboardHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         sys.stderr.write(f"[{self.log_date_time_string()}] {fmt % args}\n")
@@ -256,6 +292,20 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 for u, (exp, _body) in cache._cache.items()
                 if u not in cal_url_set
             ]
+        # RSS feeds get article counts in place of their TTL. A feed whose
+        # fetch failed has no cache entry, so it's added here — otherwise the
+        # feed most in need of explaining would be missing from the list.
+        try:
+            rss_report = rss_feed_report(cfg.get("rss", []) or [])
+        except Exception:
+            rss_report = {}
+        cached_urls = {e["url"] for e in cache_entries}
+        for e in cache_entries:
+            if e["url"] in rss_report:
+                e["rss"] = rss_report[e["url"]]
+        for url, info in rss_report.items():
+            if url not in cached_urls:
+                cache_entries.append({"url": url, "ttlRemaining": None, "rss": info})
         cache_entries.sort(key=lambda e: e["url"])
         self._send_json(
             {
@@ -426,15 +476,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not feeds:
             self._send_error_json("no rss feeds configured")
             return
-        # 4 items per page, and the 4 * N most recent articles across all
-        # N feeds — so there are still N pages, but each can mix feeds. Every
-        # page goes out in one response; the browser pages through them
-        # itself, so rotating needs no request.
-        page_size = 4
         try:
-            all_items = fetch_rss_aggregated(feeds, items_per_feed=page_size)
-            all_items = mark_stale_feeds(all_items)
-            self._send_json({"pageSize": page_size, "items": all_items})
+            self._send_json({"pageSize": RSS_PAGE_SIZE, "items": select_rss_items(feeds)})
         except Exception as e:
             self._send_error_json(str(e))
 

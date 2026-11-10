@@ -1,5 +1,6 @@
 """HTTP-level tests: GET routing, and static-file caching (ETag + no-cache, 304)."""
 
+import datetime as dt
 import io
 import json
 import threading
@@ -74,6 +75,44 @@ class RoutingTests(_ServerTestCase):
 
         self.assertEqual(status, 200)
         self.assertEqual(json.loads(body), {"pageSize": 4, "items": items})
+
+    def test_debug_reports_rss_article_counts_per_feed(self):
+        cfg = {"rss": [{"name": "Busy", "url": "https://example.com/busy"},
+                       {"name": "Dead", "url": "https://example.com/dead"},
+                       {"name": "Down", "url": "https://example.com/down"}]}
+        today = dt.datetime.now(dt.timezone.utc)
+        feeds = {
+            "https://example.com/busy": ("", [
+                {"title": f"b{i}", "link": "", "image": "",
+                 "published": (today - dt.timedelta(hours=i)).isoformat()}
+                for i in range(20)
+            ]),
+            "https://example.com/dead": ("", [
+                {"title": "d", "link": "", "image": "",
+                 "published": (today - dt.timedelta(days=40)).isoformat()},
+            ]),
+        }
+
+        def fake_fetch(url, limit=4):
+            if url not in feeds:
+                raise OSError("down")
+            return feeds[url]
+
+        with patch.object(server, "load_config", return_value=cfg), \
+                patch("parsers.rss.fetch_rss", side_effect=fake_fetch):
+            status, _, body = self._get("/api/debug")
+
+        self.assertEqual(status, 200)
+        rss = {e["url"]: e["rss"] for e in json.loads(body)["cache"] if "rss" in e}
+        # 3 feeds x 4 = 12 slots; Dead is hidden, Down failed, Busy takes all.
+        self.assertEqual(rss["https://example.com/busy"],
+                         {"name": "Busy", "articles": 20, "shown": 12,
+                          "hidden": False, "newestDays": 0})
+        self.assertEqual(rss["https://example.com/dead"],
+                         {"name": "Dead", "articles": 1, "shown": 0,
+                          "hidden": True, "newestDays": 40})
+        self.assertIsNone(rss["https://example.com/down"]["articles"])
+        self.assertEqual(rss["https://example.com/down"]["shown"], 0)
 
     def test_unknown_path_falls_through_to_static(self):
         status, _, _ = self._get("/no-such-file.txt")

@@ -27,6 +27,16 @@ class ParsePublishedDateTests(unittest.TestCase):
         self.assertEqual(d.year, 2026)
         self.assertIsNone(d.tzinfo)
 
+    def test_iso8601_date_with_fractional_seconds(self):
+        # natemeyvis.com's feed: unparsed, its newest posts sorted last and
+        # an older parseable one got the whole feed hidden as stale.
+        d = _parse_published_date("2026-11-08T19:39:08.960920+00:00")
+        self.assertEqual(d, dt.datetime(2026, 11, 8, 19, 39, 8, 960920))
+
+    def test_iso8601_offset_normalized_to_utc(self):
+        d = _parse_published_date("2026-05-01T13:00:00-07:00")
+        self.assertEqual(d, dt.datetime(2026, 5, 1, 20, 0, 0))
+
     def test_all_results_are_naive_and_comparable(self):
         """Verify no TypeError when sorting mixed date formats."""
         import datetime as dt

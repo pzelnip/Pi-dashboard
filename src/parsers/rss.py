@@ -169,16 +169,17 @@ def _parse_published_date(published: str) -> dt.datetime:
         return d
     except Exception:
         pass
-    # ISO 8601 / Atom (e.g. 2026-05-01T13:00:00Z)
-    for fmt in ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%d %H:%M:%S"):
-        try:
-            d = dt.datetime.strptime(published, fmt)
-            if d.tzinfo is not None:
-                d = d.astimezone(dt.timezone.utc).replace(tzinfo=None)
-            return d
-        except ValueError:
-            continue
-    return dt.datetime.min
+    # ISO 8601 / Atom (e.g. 2026-05-01T13:00:00Z), including fractional
+    # seconds (2026-11-08T19:39:08.960920+00:00), which a strptime format
+    # list misses — and an unparsed newest post can get a whole feed hidden
+    # as stale, since staleness is judged from its newest *parseable* date.
+    try:
+        d = dt.datetime.fromisoformat(published.strip())
+    except ValueError:
+        return dt.datetime.min
+    if d.tzinfo is not None:
+        d = d.astimezone(dt.timezone.utc).replace(tzinfo=None)
+    return d
 
 
 def fetch_rss_aggregated(
@@ -187,6 +188,7 @@ def fetch_rss_aggregated(
     max_items: int | None = None,
     now: dt.datetime | None = None,
     hide_days: int | None = None,
+    stats: dict[str, dict] | None = None,
 ) -> list[dict]:
     """Fetch all *feeds* and select the *max_items* most recent articles.
 
@@ -215,6 +217,12 @@ def fetch_rss_aggregated(
     per-item source info and an age-tinted background. *now* is injectable
     for tests and defaults to the current time (naive UTC, matching
     ``_parse_published_date``).
+
+    Pass a dict as *stats* to have it filled, keyed by feed URL, with
+    ``{"articles": int | None, "hidden": bool, "newestDays": int | None}``
+    — articles is ``None`` when the fetch failed, and newestDays is the age
+    of the newest parseable article. The debug panel uses it to explain a
+    feed that gets no slots.
     """
     if max_items is None:
         max_items = len(feeds) * items_per_feed
@@ -232,6 +240,12 @@ def fetch_rss_aggregated(
 
     all_articles: list[dict] = []
     for feed_cfg, fetched in zip(feeds, fetch_many(fetch_feed, feeds)):
+        if stats is not None:
+            stats[feed_cfg["url"]] = {
+                "articles": None if fetched is None else len(fetched[1]),
+                "hidden": False,
+                "newestDays": None,
+            }
         if fetched is None:
             continue
         feed_image, items = fetched
@@ -259,6 +273,7 @@ def fetch_rss_aggregated(
     # Each feed's first article in the sorted list is its newest; judge
     # hidden-tier staleness from it and drop the whole feed if so.
     hidden_feeds: set[str] = set()
+    newest_days: dict[str, int] = {}
     seen_feeds: set[str] = set()
     for article in all_articles:
         name = article["feedName"]
@@ -266,9 +281,19 @@ def fetch_rss_aggregated(
             continue
         seen_feeds.add(name)
         d = _parse_published_date(article.get("published", ""))
-        if d != dt.datetime.min and (now - d).days >= hide_days:
+        if d == dt.datetime.min:
+            continue
+        if stats is not None:
+            newest_days[name] = (now - d).days
+        if (now - d).days >= hide_days:
             hidden_feeds.add(name)
     all_articles = [a for a in all_articles if a["feedName"] not in hidden_feeds]
+    if stats is not None:
+        for feed_cfg in feeds:
+            name = feed_cfg.get("name", feed_cfg["url"])
+            entry = stats[feed_cfg["url"]]
+            entry["hidden"] = name in hidden_feeds
+            entry["newestDays"] = newest_days.get(name)
 
     # 3. Each feed's newest article (its first in the sorted list) is guaranteed.
     seen_feeds = set()

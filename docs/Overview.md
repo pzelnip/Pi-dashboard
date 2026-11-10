@@ -441,7 +441,10 @@ keyboard shortcut) opens a debug side-sheet showing:
 - **Background** — resolved background image path, `(not set)`, or a red
   "not found" line when `background.image` is set but doesn't resolve.
 - **Cache table** — every entry currently held in `fetch_cached` with
-  remaining TTL.
+  remaining TTL. RSS feeds show `N articles · M shown` instead: how many
+  articles the feed has and how many the RSS panel displays. A feed showing
+  none is amber, with the reason when known (`hidden, newest is 43d old`),
+  and a feed whose fetch failed is listed in red even though it isn't cached.
 - **Display** — the effective visual-effects settings (e.g. `lite preset ·
   fade length 150 ms`) and a **settings ›** view to change them for this
   browser; see [Visual effects](#visual-effects) below.

@@ -71,6 +71,19 @@ function renderCpuTemp(tempC) {
   return levelSpan(`${tempC.toFixed(1)} °C`, tempC >= 80 ? "bad" : tempC >= 60 ? "warn" : "");
 }
 
+// An RSS feed's cache row: how many articles it has and how many of them
+// the panel shows. A feed that shows none is flagged, with the reason when
+// the server knows it, since "added a feed but can't see it" is the usual
+// reason to look here.
+function renderRssCounts(r) {
+  if (r.articles == null) return levelSpan("fetch failed", "bad");
+  const counts = `${r.articles} articles · ${r.shown} shown`;
+  if (r.shown > 0) return counts;
+  const why = r.hidden ? ` — hidden, newest is ${r.newestDays}d old`
+    : r.articles === 0 ? "" : " — crowded out";
+  return levelSpan(counts + why, "warn");
+}
+
 function renderDebugFields(data) {
   const now = Date.now();
   const uptime = formatUptime(now - data.serverStartedAt * 1000);
@@ -80,10 +93,10 @@ function renderDebugFields(data) {
     : "(unavailable)";
   const cache = data.cache.length
     ? data.cache.map(c => {
-        const ttl = c.ttlRemaining > 60
-          ? `${Math.round(c.ttlRemaining / 60)}m left`
+        const note = c.rss ? renderRssCounts(c.rss)
+          : c.ttlRemaining > 60 ? `${Math.round(c.ttlRemaining / 60)}m left`
           : `${Math.max(0, Math.round(c.ttlRemaining))}s left`;
-        return `<div class="mono">${escapeHtml(shortUrl(c.url))} <span style="color:var(--text-muted)">(${ttl})</span></div>`;
+        return `<div class="mono">${escapeHtml(shortUrl(c.url))} <span style="color:var(--text-muted)">(${note})</span></div>`;
       }).join("")
     : '<span style="color:var(--text-muted)">(empty)</span>';
 

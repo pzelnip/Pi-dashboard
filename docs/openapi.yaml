@@ -554,7 +554,7 @@ components:
           description: Resolved absolute path, or empty string when the setting is unset or doesn't resolve to an existing image.
         cache:
           type: array
-          description: Snapshot of cached upstream URLs and their remaining TTL (calendar URLs excluded).
+          description: Snapshot of cached upstream URLs and their remaining TTL (calendar URLs excluded), plus every configured RSS feed with its article counts.
           items:
             type: object
             properties:
@@ -563,7 +563,28 @@ components:
                 format: uri
               ttlRemaining:
                 type: number
-                description: Seconds until the cached entry expires (negative when stale).
+                nullable: true
+                description: Seconds until the cached entry expires (negative when stale). Null for a configured RSS feed with no cache entry (its fetch failed).
+              rss:
+                type: object
+                description: Present on configured RSS feed URLs only.
+                properties:
+                  name:
+                    type: string
+                  articles:
+                    type: integer
+                    nullable: true
+                    description: Articles in the feed; null when the fetch failed.
+                  shown:
+                    type: integer
+                    description: Articles from this feed the RSS panel displays.
+                  hidden:
+                    type: boolean
+                    description: Hidden as stale (newest article 30+ days old).
+                  newestDays:
+                    type: integer
+                    nullable: true
+                    description: Age in days of the feed's newest parseable article.
         system:
           type: object
           description: Host health; each part is null where it can't be read (e.g. not on Linux).
